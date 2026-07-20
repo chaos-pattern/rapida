@@ -197,10 +197,12 @@ var eventsByComponent = map[ComponentName][]EventName{
 		ConversationResume,
 		ConversationInitializing,
 		ConversationInitialized,
+		ConversationAuthenticationStarted,
 		ConversationCompleted,
 		ConversationCleanup,
 		ConversationError,
 		ConversationAgentStateChanged,
+		ConversationModeSwitchFailed,
 	},
 	ComponentTurn: {
 		TurnChange,

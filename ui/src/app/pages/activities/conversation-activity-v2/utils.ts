@@ -434,6 +434,329 @@ export const getDocumentComponent = (doc: TimelineDocument): string => {
   ).toLowerCase();
 };
 
+export type TraceFilterSource = 'facet' | 'query';
+
+export type TraceFilterToken = {
+  criteriaKey: string;
+  fieldKey: string;
+  label: string;
+  logic: '=';
+  rawText?: string;
+  source: TraceFilterSource;
+  value: string;
+};
+
+type TraceFilterField = {
+  aliases?: string[];
+  criteriaKey: string;
+  getDocumentValue?: (doc: TimelineDocument) => string | number | undefined;
+  key: string;
+  label: string;
+  match?: (doc: TimelineDocument, value: string) => boolean;
+};
+
+export type ParsedTraceFilterQuery = {
+  filters: TraceFilterToken[];
+  freeText: string;
+};
+
+const getMetricNames = (doc: TimelineDocument): string[] => {
+  const metrics = doc.data?.metrics as
+    | Array<{ name?: string; value?: string | number }>
+    | undefined;
+  return [doc.name, ...(metrics || []).map(metric => metric.name || '')].filter(
+    Boolean,
+  );
+};
+
+const getScopeAttribute = (
+  doc: TimelineDocument,
+  attributeKey: string,
+): string | number | undefined => {
+  if (attributeKey === 'assistantId') return doc.assistantId;
+  if (attributeKey === 'assistantConversationId') {
+    return doc.assistantConversationId;
+  }
+  if (attributeKey === 'messageId') return doc.messageId;
+  if (attributeKey === 'messageRole') return doc.messageRole;
+
+  return (doc.data?.scopeAttributes as Record<string, string> | undefined)?.[
+    attributeKey
+  ];
+};
+
+const getDateMs = (value: string): number | null => {
+  const ms = new Date(value).getTime();
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const TRACE_FILTER_FIELD_DEFINITIONS: TraceFilterField[] = [
+  {
+    key: 'id',
+    label: 'Record ID',
+    criteriaKey: 'id',
+    getDocumentValue: doc => doc.id,
+  },
+  {
+    key: 'trace',
+    label: 'traceID',
+    criteriaKey: 'traceId',
+    aliases: ['traceId', 'traceID', 'trace_id'],
+    getDocumentValue: doc => doc.traceId,
+  },
+  {
+    key: 'kind',
+    label: 'Record type',
+    criteriaKey: 'kind',
+    getDocumentValue: doc => doc.kind,
+  },
+  {
+    key: 'level',
+    label: 'Level',
+    criteriaKey: 'level',
+    getDocumentValue: doc => doc.level,
+  },
+  {
+    key: 'scope',
+    label: 'Record scope',
+    criteriaKey: 'scope',
+    getDocumentValue: doc => doc.scope,
+  },
+  {
+    key: 'assistant',
+    label: 'Assistant ID',
+    criteriaKey: 'assistantId',
+    aliases: ['assistantId', 'assistant_id'],
+    getDocumentValue: doc => doc.assistantId,
+  },
+  {
+    key: 'conversation',
+    label: 'Conversation ID',
+    criteriaKey: 'assistantConversationId',
+    aliases: [
+      'assistantConversationId',
+      'assistant_conversation_id',
+      'conversationId',
+      'conversation_id',
+    ],
+    getDocumentValue: doc => doc.assistantConversationId,
+  },
+  {
+    key: 'message',
+    label: 'Message ID',
+    criteriaKey: 'messageId',
+    aliases: ['messageId', 'message_id'],
+    getDocumentValue: doc => doc.messageId,
+  },
+  {
+    key: 'role',
+    label: 'Message role',
+    criteriaKey: 'messageRole',
+    aliases: ['messageRole', 'message_role'],
+    getDocumentValue: doc => doc.messageRole,
+  },
+  {
+    key: 'event',
+    label: 'Event',
+    criteriaKey: 'event',
+    getDocumentValue: doc => doc.name,
+  },
+  {
+    key: 'name',
+    label: 'Name',
+    criteriaKey: 'name',
+    getDocumentValue: doc => doc.name,
+  },
+  {
+    key: 'component',
+    label: 'Component',
+    criteriaKey: 'component',
+    getDocumentValue: getDocumentComponent,
+  },
+  {
+    key: 'metric',
+    label: 'Metric name',
+    criteriaKey: 'name',
+    aliases: ['metricName', 'metric_name'],
+    match: (doc, value) => getMetricNames(doc).includes(value),
+  },
+  {
+    key: 'from',
+    label: 'From',
+    criteriaKey: 'occurredAtFrom',
+    aliases: ['start', 'occurredAtFrom'],
+    match: (doc, value) => {
+      const docMs = getDateMs(doc.occurredAt);
+      const valueMs = getDateMs(value);
+      return docMs !== null && valueMs !== null && docMs >= valueMs;
+    },
+  },
+  {
+    key: 'to',
+    label: 'To',
+    criteriaKey: 'occurredAtTo',
+    aliases: ['end', 'occurredAtTo'],
+    match: (doc, value) => {
+      const docMs = getDateMs(doc.occurredAt);
+      const valueMs = getDateMs(value);
+      return docMs !== null && valueMs !== null && docMs <= valueMs;
+    },
+  },
+];
+
+const TRACE_FILTER_FIELD_LOOKUP = TRACE_FILTER_FIELD_DEFINITIONS.reduce(
+  (lookup, field) => {
+    [field.key, ...(field.aliases || [])].forEach(key => {
+      lookup.set(key.toLowerCase(), field);
+    });
+    return lookup;
+  },
+  new Map<string, TraceFilterField>(),
+);
+
+const getDynamicTraceFilterField = (
+  key: string,
+): TraceFilterField | undefined => {
+  if (key.startsWith('attributes.')) {
+    const attributeKey = key.slice('attributes.'.length);
+    return {
+      key,
+      label: key,
+      criteriaKey: key,
+      getDocumentValue: doc => doc.attributes?.[attributeKey],
+    };
+  }
+
+  if (key.startsWith('scopeAttributes.')) {
+    const attributeKey = key.slice('scopeAttributes.'.length);
+    return {
+      key,
+      label: key,
+      criteriaKey: key,
+      getDocumentValue: doc => getScopeAttribute(doc, attributeKey),
+    };
+  }
+
+  if (key.startsWith('context.')) {
+    const contextKey = key.slice('context.'.length);
+    return {
+      key,
+      label: key,
+      criteriaKey: key,
+      getDocumentValue: doc =>
+        (doc.data?.context as Record<string, string> | undefined)?.[contextKey],
+    };
+  }
+
+  return undefined;
+};
+
+export const getTraceFilterField = (
+  key: string,
+): TraceFilterField | undefined =>
+  TRACE_FILTER_FIELD_LOOKUP.get(key.toLowerCase()) ||
+  getDynamicTraceFilterField(key);
+
+export const createTraceFilter = (
+  key: string,
+  value: string | number | undefined,
+  source: TraceFilterSource,
+): TraceFilterToken | null => {
+  const normalizedValue = String(value ?? '').trim();
+  if (!normalizedValue) return null;
+
+  const field = getTraceFilterField(key);
+  if (!field) return null;
+
+  return {
+    criteriaKey: field.criteriaKey,
+    fieldKey: field.key,
+    label: field.label,
+    logic: '=',
+    source,
+    value: normalizedValue,
+  };
+};
+
+const unquoteTraceFilterValue = (value: string): string => {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+};
+
+const TRACE_FILTER_PATTERN =
+  /(^|\s)([A-Za-z][\w.]*)(:|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)/g;
+
+export const parseTraceFilterQuery = (
+  query: string,
+): ParsedTraceFilterQuery => {
+  const filters: TraceFilterToken[] = [];
+  const freeTextParts: string[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = TRACE_FILTER_PATTERN.exec(query)) !== null) {
+    const [rawMatch, prefix, key, , rawValue] = match;
+    const matchStart = match.index + prefix.length;
+    const before = query.slice(lastIndex, matchStart).trim();
+    if (before) freeTextParts.push(before);
+
+    const filter = createTraceFilter(
+      key,
+      unquoteTraceFilterValue(rawValue),
+      'query',
+    );
+
+    if (filter) {
+      filters.push({ ...filter, rawText: rawMatch.trim() });
+    } else {
+      freeTextParts.push(rawMatch.trim());
+    }
+
+    lastIndex = match.index + rawMatch.length;
+  }
+
+  const tail = query.slice(lastIndex).trim();
+  if (tail) freeTextParts.push(tail);
+
+  return {
+    filters: dedupeTraceFilters(filters),
+    freeText: freeTextParts.join(' ').trim(),
+  };
+};
+
+export const dedupeTraceFilters = (
+  filters: TraceFilterToken[],
+): TraceFilterToken[] => {
+  const seen = new Set<string>();
+  return filters.filter(filter => {
+    const key = `${filter.criteriaKey}\u0000${filter.logic}\u0000${filter.value}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+export const formatTraceFilterToken = (filter: TraceFilterToken): string =>
+  `${filter.fieldKey}:${filter.value}`;
+
+export const matchesTraceFilters = (
+  doc: TimelineDocument,
+  filters: TraceFilterToken[],
+): boolean =>
+  filters.every(filter => {
+    const field = getTraceFilterField(filter.fieldKey);
+    if (!field) return true;
+    if (field.match) return field.match(doc, filter.value);
+    const value = field.getDocumentValue?.(doc);
+    return String(value ?? '') === filter.value;
+  });
+
 export const getDocumentColor = (doc: TimelineDocument): string => {
   if (doc.level === 'error' || doc.outcome === 'failure') {
     return COMPONENT_COLORS.error;
