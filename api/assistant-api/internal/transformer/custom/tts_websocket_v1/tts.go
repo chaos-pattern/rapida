@@ -120,16 +120,9 @@ func (transformer *textToSpeech) Transform(ctx context.Context, in internal_type
 	switch input := in.(type) {
 	case internal_type.TextToSpeechTextPacket:
 		return transformer.handleText(input.ContextID, input.Text)
-	case internal_type.LLMResponseDeltaPacket:
-		return transformer.handleText(input.ContextID, input.Text)
 	case internal_type.TextToSpeechDonePacket:
 		return transformer.handleDone(input.ContextID, input.Text)
-	case internal_type.LLMResponseDonePacket:
-		return transformer.handleDone(input.ContextID, input.Text)
 	case internal_type.TextToSpeechInterruptPacket:
-		transformer.handleInterrupt(input.ContextID)
-		return nil
-	case internal_type.InterruptionDetectedPacket:
 		transformer.handleInterrupt(input.ContextID)
 		return nil
 	default:
@@ -480,10 +473,12 @@ func (transformer *textToSpeech) writeRequests(conn *websocket.Conn, requests []
 			if !ok {
 				return fmt.Errorf("expected text payload")
 			}
+			// transformer.logger.Debugf("custom-tts websocket_v1: sending text payload: %s", payload)
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(payload)); err != nil {
 				return err
 			}
 		case frameTypeJSON:
+			// transformer.logger.Debugf("custom-tts websocket_v1: sending JSON payload: %s", request.Body)
 			if err := conn.WriteJSON(request.Body); err != nil {
 				return err
 			}

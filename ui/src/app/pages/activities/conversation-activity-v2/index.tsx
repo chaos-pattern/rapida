@@ -11,17 +11,10 @@ import {
   TableRow,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Tag,
   Loading,
 } from '@carbon/react';
-import {
-  Activity,
-  Close,
-  Filter,
-  Renew,
-  WarningAlt,
-} from '@carbon/icons-react';
+import { Activity, Close, Renew, WarningAlt } from '@carbon/icons-react';
 import {
   ConnectionConfig,
   Criteria,
@@ -39,7 +32,7 @@ import { CopyButton } from '@/app/components/carbon/button/copy-button';
 import { connectionConfig } from '@/configs';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { ConversationWaterfall } from './components/conversation-waterfall';
-import { ExplorerFilter } from './components/explorer-filter';
+import { TraceQuerySearch } from './components/trace-query-search';
 import {
   ALL_EVENT_OPTION,
   FilterOption,
@@ -55,11 +48,16 @@ import {
   formatDateTime,
   formatDurationMs,
   formatTime,
+  createTraceFilter,
+  dedupeTraceFilters,
   getDocumentComponent,
   groupTimelineItems,
+  matchesTraceFilters,
   matchesTimelineSearch,
+  parseTraceFilterQuery,
   telemetryRecordToTimelineDocument,
 } from './utils';
+import type { TraceFilterToken } from './utils';
 
 type MetricValue = {
   description?: string;
@@ -110,12 +108,6 @@ const getQueryValue = (
   return '';
 };
 
-const getFilterOption = (
-  options: FilterOption[],
-  id: string,
-  fallback: FilterOption,
-): FilterOption => options.find(option => option.id === id) || fallback;
-
 const getTraceFiltersFromSearchParams = (
   searchParams: URLSearchParams,
 ): TraceFilterState => {
@@ -131,59 +123,38 @@ const getTraceFiltersFromSearchParams = (
   ]);
   const messageId = getQueryValue(searchParams, ['message_id', 'messageId']);
   const scopeQuery = getQueryValue(searchParams, ['scope']);
-
-  let selectedScope = getFilterOption(
-    SCOPE_OPTIONS,
-    scopeQuery,
-    DEFAULT_TRACE_FILTERS.selectedScope,
-  );
-
-  if (!scopeQuery) {
-    if (messageId)
-      selectedScope = getFilterOption(
-        SCOPE_OPTIONS,
-        'message',
-        SCOPE_OPTIONS[0],
-      );
-    else if (conversationId)
-      selectedScope = getFilterOption(
-        SCOPE_OPTIONS,
-        'conversation',
-        SCOPE_OPTIONS[0],
-      );
-    else if (assistantId)
-      selectedScope = getFilterOption(
-        SCOPE_OPTIONS,
-        'assistant',
-        SCOPE_OPTIONS[0],
-      );
-  }
+  const queryText = getQueryValue(searchParams, ['query']);
+  const roleQuery = getQueryValue(searchParams, [
+    'message_role',
+    'messageRole',
+    'role',
+  ]);
+  const traceId = getQueryValue(searchParams, [
+    'trace_id',
+    'traceId',
+    'traceID',
+  ]);
+  const from = getQueryValue(searchParams, ['occurredAtFrom', 'from', 'start']);
+  const to = getQueryValue(searchParams, ['occurredAtTo', 'to', 'end']);
+  const legacySearchText = [
+    assistantId ? `assistant:${assistantId}` : '',
+    conversationId
+      ? `scopeAttributes.assistantConversationId:${conversationId}`
+      : '',
+    messageId ? `message:${messageId}` : '',
+    scopeQuery ? `scope:${scopeQuery}` : '',
+    roleQuery ? `role:${roleQuery}` : '',
+    traceId ? `trace:${traceId}` : '',
+    from ? `from:${from}` : '',
+    to ? `to:${to}` : '',
+    getQueryValue(searchParams, ['q', 'search']),
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return {
     ...DEFAULT_TRACE_FILTERS,
-    assistantIdInput: selectedScope.id === 'assistant' ? assistantId : '',
-    conversationIdInput:
-      selectedScope.id === 'conversation' ? conversationId : '',
-    messageIdInput: selectedScope.id === 'message' ? messageId : '',
-    searchText: getQueryValue(searchParams, ['q', 'search']),
-    selectedRole:
-      selectedScope.id === 'message'
-        ? getFilterOption(
-            ROLE_OPTIONS,
-            getQueryValue(searchParams, [
-              'message_role',
-              'messageRole',
-              'role',
-            ]),
-            DEFAULT_TRACE_FILTERS.selectedRole,
-          )
-        : DEFAULT_TRACE_FILTERS.selectedRole,
-    selectedScope,
-    traceIdInput: getQueryValue(searchParams, [
-      'trace_id',
-      'traceId',
-      'traceID',
-    ]),
+    searchText: queryText || legacySearchText,
   };
 };
 
@@ -194,6 +165,44 @@ const getTelemetryErrorMessage = (error: unknown): string => {
   if (typeof error === 'string' && error.trim()) return error;
   return TRACE_LOAD_ERROR_MESSAGE;
 };
+
+const compactFilters = (
+  filters: Array<TraceFilterToken | null>,
+): TraceFilterToken[] =>
+  filters.filter((filter): filter is TraceFilterToken => Boolean(filter));
+
+const getFacetTraceFilters = (filters: TraceFilterState): TraceFilterToken[] =>
+  compactFilters([
+    createTraceFilter('trace', filters.traceIdInput, 'facet'),
+    filters.selectedKind.id !== KIND_OPTIONS[0].id
+      ? createTraceFilter('kind', filters.selectedKind.id, 'facet')
+      : null,
+    filters.selectedKind.id === 'log' &&
+    filters.selectedLevel.id !== LEVEL_OPTIONS[0].id
+      ? createTraceFilter('level', filters.selectedLevel.id, 'facet')
+      : null,
+    filters.selectedKind.id === 'event' &&
+    filters.selectedEvent.id !== ALL_EVENT_OPTION.id
+      ? createTraceFilter('event', filters.selectedEvent.id, 'facet')
+      : null,
+    filters.selectedKind.id === 'event' && filters.selectedComponents.length > 0
+      ? createTraceFilter('component', filters.selectedComponents[0], 'facet')
+      : null,
+    filters.selectedKind.id === 'metric' &&
+    filters.metricNameInput &&
+    filters.metricNameInput !== METRIC_NAME_OPTIONS[0].id
+      ? createTraceFilter('metric', filters.metricNameInput, 'facet')
+      : null,
+    filters.selectedScope.id !== SCOPE_OPTIONS[0].id
+      ? createTraceFilter('scope', filters.selectedScope.id, 'facet')
+      : null,
+    createTraceFilter('assistant', filters.assistantIdInput, 'facet'),
+    createTraceFilter('conversation', filters.conversationIdInput, 'facet'),
+    createTraceFilter('message', filters.messageIdInput, 'facet'),
+    filters.selectedRole.id !== ROLE_OPTIONS[0].id
+      ? createTraceFilter('role', filters.selectedRole.id, 'facet')
+      : null,
+  ]);
 
 const getMetricValues = (document: TimelineDocument): MetricValue[] =>
   (
@@ -435,7 +444,7 @@ const TelemetryStreamTable = ({
               <Tag type="cool-gray">{document.kind}</Tag>
             </TableCell>
             <TableCell>
-              <Tag type="purple">{document.scope}</Tag>
+              <Tag type="blue">{document.scope}</Tag>
             </TableCell>
             <TableCell>
               <div className="max-w-[520px]">
@@ -513,7 +522,7 @@ const TraceInspectorPanel = ({
                 {document.outcome || 'unknown'}
               </Tag>
               <Tag type="cool-gray">{document.kind}</Tag>
-              <Tag type="purple">{document.scope}</Tag>
+              <Tag type="blue">{document.scope}</Tag>
             </div>
             <h2 className="truncate text-base font-medium text-gray-900 dark:text-gray-100">
               {document.title || document.name}
@@ -655,7 +664,6 @@ export const ListingPage = () => {
   const [pageSize, setPageSize] = useState(50);
   const [totalItem, setTotalItem] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedContextId, setSelectedContextId] = useState('');
   const [selectedDocument, setSelectedDocument] =
     useState<TimelineDocument | null>(null);
@@ -700,6 +708,47 @@ export const ListingPage = () => {
     ],
   );
 
+  const appliedQuery = useMemo(
+    () => parseTraceFilterQuery(appliedFilters.searchText),
+    [appliedFilters.searchText],
+  );
+
+  const appliedTraceFilters = useMemo(
+    () =>
+      dedupeTraceFilters([
+        ...appliedQuery.filters,
+        ...getFacetTraceFilters(appliedFilters),
+      ]),
+    [appliedFilters, appliedQuery.filters],
+  );
+
+  const setFilterState = (nextFilters: TraceFilterState) => {
+    setSearchText(nextFilters.searchText);
+    setSelectedKind(nextFilters.selectedKind);
+    setSelectedLevel(nextFilters.selectedLevel);
+    setSelectedScope(nextFilters.selectedScope);
+    setSelectedRole(nextFilters.selectedRole);
+    setSelectedComponents(nextFilters.selectedComponents);
+    setSelectedEvent(nextFilters.selectedEvent);
+    setMetricNameInput(nextFilters.metricNameInput);
+    setAssistantIdInput(nextFilters.assistantIdInput);
+    setConversationIdInput(nextFilters.conversationIdInput);
+    setMessageIdInput(nextFilters.messageIdInput);
+    setTraceIdInput(nextFilters.traceIdInput);
+    setDateRange(nextFilters.dateRange);
+  };
+
+  const applyFilterState = (nextFilters: TraceFilterState) => {
+    setFilterState(nextFilters);
+    setAppliedFilters(nextFilters);
+    setPage(1);
+    setRefreshKey(key => key + 1);
+  };
+
+  const applyQuerySearch = (nextSearchText: string) => {
+    applyFilterState({ ...currentFilters, searchText: nextSearchText });
+  };
+
   useEffect(() => {
     if (lastSearchParamsKey.current === searchParamsKey) return;
     lastSearchParamsKey.current = searchParamsKey;
@@ -733,50 +782,10 @@ export const ListingPage = () => {
       next.push(criteria);
     };
 
-    addCriteria('search', appliedFilters.searchText.trim(), 'match');
-    addCriteria('traceId', appliedFilters.traceIdInput.trim());
-    if (appliedFilters.selectedKind.id !== KIND_OPTIONS[0].id) {
-      addCriteria('kind', appliedFilters.selectedKind.id);
-    }
-    if (
-      appliedFilters.selectedKind.id === 'log' &&
-      appliedFilters.selectedLevel.id !== LEVEL_OPTIONS[0].id
-    ) {
-      addCriteria('level', appliedFilters.selectedLevel.id);
-    }
-    if (appliedFilters.selectedKind.id === 'event') {
-      if (appliedFilters.selectedEvent.id !== ALL_EVENT_OPTION.id) {
-        addCriteria('event', appliedFilters.selectedEvent.id);
-      }
-      if (appliedFilters.selectedComponents.length > 0) {
-        addCriteria('component', appliedFilters.selectedComponents[0]);
-      }
-    }
-    if (
-      appliedFilters.selectedKind.id === 'metric' &&
-      appliedFilters.metricNameInput &&
-      appliedFilters.metricNameInput !== METRIC_NAME_OPTIONS[0].id
-    ) {
-      addCriteria('name', appliedFilters.metricNameInput.trim());
-    }
-    if (appliedFilters.selectedScope.id !== SCOPE_OPTIONS[0].id) {
-      addCriteria('scope', appliedFilters.selectedScope.id);
-    }
-    if (appliedFilters.selectedScope.id === 'assistant') {
-      addCriteria('assistantId', appliedFilters.assistantIdInput.trim());
-    }
-    if (appliedFilters.selectedScope.id === 'conversation') {
-      addCriteria(
-        'assistantConversationId',
-        appliedFilters.conversationIdInput.trim(),
-      );
-    }
-    if (appliedFilters.selectedScope.id === 'message') {
-      addCriteria('messageId', appliedFilters.messageIdInput.trim());
-      if (appliedFilters.selectedRole.id !== ROLE_OPTIONS[0].id) {
-        addCriteria('messageRole', appliedFilters.selectedRole.id);
-      }
-    }
+    addCriteria('search', appliedQuery.freeText, 'match');
+    appliedTraceFilters.forEach(filter => {
+      addCriteria(filter.criteriaKey, filter.value, filter.logic);
+    });
     if (appliedFilters.dateRange) {
       addCriteria(
         'occurredAtFrom',
@@ -789,7 +798,7 @@ export const ListingPage = () => {
     }
 
     return next;
-  }, [appliedFilters]);
+  }, [appliedFilters.dateRange, appliedQuery.freeText, appliedTraceFilters]);
 
   useEffect(() => {
     if (selectedKind.id !== 'log') setSelectedLevel(LEVEL_OPTIONS[0]);
@@ -801,29 +810,6 @@ export const ListingPage = () => {
       setMetricNameInput(METRIC_NAME_OPTIONS[0].id);
     }
   }, [selectedKind]);
-
-  useEffect(() => {
-    if (selectedScope.id === 'all' || selectedScope.id === 'project') {
-      setAssistantIdInput('');
-      setConversationIdInput('');
-      setMessageIdInput('');
-      setSelectedRole(ROLE_OPTIONS[0]);
-    }
-    if (selectedScope.id === 'assistant') {
-      setConversationIdInput('');
-      setMessageIdInput('');
-      setSelectedRole(ROLE_OPTIONS[0]);
-    }
-    if (selectedScope.id === 'conversation') {
-      setAssistantIdInput('');
-      setMessageIdInput('');
-      setSelectedRole(ROLE_OPTIONS[0]);
-    }
-    if (selectedScope.id === 'message') {
-      setAssistantIdInput('');
-      setConversationIdInput('');
-    }
-  }, [selectedScope]);
 
   useEffect(() => {
     let active = true;
@@ -898,48 +884,17 @@ export const ListingPage = () => {
               appliedFilters.dateRange[1].getTime() + 24 * 60 * 60 * 1000);
 
         return (
-          matchesTimelineSearch(document, appliedFilters.searchText) &&
+          matchesTimelineSearch(document, appliedQuery.freeText) &&
           matchesDate &&
-          (!appliedFilters.traceIdInput.trim() ||
-            document.traceId === appliedFilters.traceIdInput.trim()) &&
-          (appliedFilters.selectedKind.id === KIND_OPTIONS[0].id ||
-            document.kind === appliedFilters.selectedKind.id) &&
-          (appliedFilters.selectedKind.id !== 'log' ||
-            appliedFilters.selectedLevel.id === LEVEL_OPTIONS[0].id ||
-            document.level === appliedFilters.selectedLevel.id) &&
-          (appliedFilters.selectedKind.id !== 'event' ||
-            appliedFilters.selectedComponents.length === 0 ||
-            appliedFilters.selectedComponents.includes(
-              getDocumentComponent(document),
-            )) &&
-          (appliedFilters.selectedKind.id !== 'event' ||
-            appliedFilters.selectedEvent.id === ALL_EVENT_OPTION.id ||
-            document.name === appliedFilters.selectedEvent.id) &&
-          (appliedFilters.selectedKind.id !== 'metric' ||
-            !appliedFilters.metricNameInput ||
-            appliedFilters.metricNameInput === METRIC_NAME_OPTIONS[0].id ||
-            (document.data?.metrics as Array<{ name: string }> | undefined)
-              ?.map(metric => metric.name)
-              .includes(appliedFilters.metricNameInput) ||
-            document.name === appliedFilters.metricNameInput) &&
-          (appliedFilters.selectedScope.id === SCOPE_OPTIONS[0].id ||
-            document.scope === appliedFilters.selectedScope.id) &&
-          (appliedFilters.selectedScope.id !== 'assistant' ||
-            !appliedFilters.assistantIdInput.trim() ||
-            String(document.assistantId) ===
-              appliedFilters.assistantIdInput.trim()) &&
-          (appliedFilters.selectedScope.id !== 'conversation' ||
-            !appliedFilters.conversationIdInput.trim() ||
-            String(document.assistantConversationId) ===
-              appliedFilters.conversationIdInput.trim()) &&
-          (appliedFilters.selectedScope.id !== 'message' ||
-            ((!appliedFilters.messageIdInput.trim() ||
-              document.messageId === appliedFilters.messageIdInput.trim()) &&
-              (appliedFilters.selectedRole.id === ROLE_OPTIONS[0].id ||
-                document.messageRole === appliedFilters.selectedRole.id)))
+          matchesTraceFilters(document, appliedTraceFilters)
         );
       }),
-    [appliedFilters, documents],
+    [
+      appliedFilters.dateRange,
+      appliedQuery.freeText,
+      appliedTraceFilters,
+      documents,
+    ],
   );
 
   const selectedTimelineDocuments = useMemo(
@@ -962,22 +917,6 @@ export const ListingPage = () => {
     setSelectedDocument(null);
   }, [filteredDocuments, selectedContextId]);
 
-  const resetExplorerFilters = () => {
-    setSearchText(DEFAULT_TRACE_FILTERS.searchText);
-    setSelectedKind(DEFAULT_TRACE_FILTERS.selectedKind);
-    setSelectedLevel(DEFAULT_TRACE_FILTERS.selectedLevel);
-    setSelectedScope(DEFAULT_TRACE_FILTERS.selectedScope);
-    setSelectedRole(DEFAULT_TRACE_FILTERS.selectedRole);
-    setSelectedComponents([]);
-    setSelectedEvent(DEFAULT_TRACE_FILTERS.selectedEvent);
-    setMetricNameInput(DEFAULT_TRACE_FILTERS.metricNameInput);
-    setAssistantIdInput(DEFAULT_TRACE_FILTERS.assistantIdInput);
-    setConversationIdInput(DEFAULT_TRACE_FILTERS.conversationIdInput);
-    setMessageIdInput(DEFAULT_TRACE_FILTERS.messageIdInput);
-    setTraceIdInput(DEFAULT_TRACE_FILTERS.traceIdInput);
-    setDateRange(DEFAULT_TRACE_FILTERS.dateRange);
-  };
-
   useEffect(() => {
     if (
       selectedEvent.id !== ALL_EVENT_OPTION.id &&
@@ -999,12 +938,10 @@ export const ListingPage = () => {
       <div className="relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <TableToolbar>
           <TableToolbarContent>
-            <TableToolbarSearch
-              placeholder="Search traces, spans, context IDs, and events"
+            <TraceQuerySearch
               value={searchText}
-              onChange={(event: any) =>
-                setSearchText(event.target?.value || '')
-              }
+              onChange={setSearchText}
+              onApply={applyQuerySearch}
             />
             <Button
               hasIconOnly
@@ -1014,64 +951,8 @@ export const ListingPage = () => {
               tooltipPosition="bottom"
               onClick={() => setRefreshKey(key => key + 1)}
             />
-            <Button
-              hasIconOnly
-              kind="ghost"
-              renderIcon={Filter}
-              iconDescription="Filter"
-              tooltipPosition="bottom"
-              className={isFilterOpen ? 'cds--btn--selected' : ''}
-              aria-pressed={isFilterOpen}
-              onClick={() => setIsFilterOpen(open => !open)}
-            />
           </TableToolbarContent>
         </TableToolbar>
-
-        <div
-          className={[
-            'absolute bottom-0 right-0 top-12 z-20 w-[440px] transform transition-transform duration-200 ease-out',
-            isFilterOpen
-              ? 'translate-x-0 shadow-xl'
-              : 'pointer-events-none translate-x-full',
-          ].join(' ')}
-        >
-          <ExplorerFilter
-            assistantId={assistantIdInput}
-            conversationId={conversationIdInput}
-            dateRange={dateRange}
-            eventOptions={eventFilterOptions}
-            level={selectedLevel}
-            messageId={messageIdInput}
-            metricName={metricNameInput}
-            role={selectedRole}
-            selectedComponentId={selectedComponentId}
-            selectedEvent={selectedEvent}
-            selectedKind={selectedKind}
-            selectedScope={selectedScope}
-            traceId={traceIdInput}
-            onAssistantIdChange={setAssistantIdInput}
-            onComponentChange={componentId =>
-              setSelectedComponents(componentId === 'all' ? [] : [componentId])
-            }
-            onConversationIdChange={setConversationIdInput}
-            onDateRangeChange={setDateRange}
-            onEventChange={setSelectedEvent}
-            onKindChange={setSelectedKind}
-            onLevelChange={setSelectedLevel}
-            onMessageIdChange={setMessageIdInput}
-            onMetricNameChange={setMetricNameInput}
-            onApply={() => {
-              setAppliedFilters(currentFilters);
-              setPage(1);
-              setRefreshKey(key => key + 1);
-              setIsFilterOpen(false);
-            }}
-            onReset={resetExplorerFilters}
-            onRoleChange={setSelectedRole}
-            onScopeChange={setSelectedScope}
-            onTraceIdChange={setTraceIdInput}
-          />
-        </div>
 
         <div className="flex min-h-0 flex-1">
           {isLoading ? (

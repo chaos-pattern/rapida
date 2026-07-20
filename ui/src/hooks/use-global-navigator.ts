@@ -168,16 +168,14 @@ export const useGlobalNavigation = () => {
 
   const goToConversationTelemetry = (conversationId: string) => {
     const params = new URLSearchParams({
-      scope: 'conversation',
-      conversation_id: conversationId,
+      query: `scopeAttributes.assistantConversationId:${conversationId}`,
     });
     navigate(`/logs/traces?${params.toString()}`);
   };
 
   const goToMessageTelemetry = (messageId: string) => {
     const params = new URLSearchParams({
-      scope: 'message',
-      message_id: messageId,
+      query: `message:${messageId}`,
     });
     navigate(`/logs/traces?${params.toString()}`);
   };

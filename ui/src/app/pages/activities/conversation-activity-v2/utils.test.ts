@@ -7,9 +7,14 @@ import {
   getEventOptionsForComponent,
 } from './constants';
 import {
+  createTraceFilter,
+  dedupeTraceFilters,
   getDocumentComponent,
+  matchesTraceFilters,
+  parseTraceFilterQuery,
   telemetryRecordToTimelineDocument,
 } from './utils';
+import type { TimelineDocument } from './types';
 
 const mapFromEntries = (entries: Array<[string, string]> = []) => ({
   toArray: () => entries,
@@ -117,6 +122,7 @@ describe('conversation activity v2 telemetry utilities', () => {
 
   it('uses current backend observability components and events', () => {
     const componentIds = COMPONENT_OPTIONS.map(option => option.id);
+    expect(componentIds).toContain('agentflow');
     expect(componentIds).toContain('sip');
     expect(componentIds).toContain('webrtc');
     expect(componentIds).not.toContain('session');
@@ -128,6 +134,11 @@ describe('conversation activity v2 telemetry utilities', () => {
     expect(EVENTS_BY_COMPONENT.stt).not.toContain('stt.final');
     expect(EVENTS_BY_COMPONENT.tts).toContain('tts.discarded');
     expect(EVENTS_BY_COMPONENT.tts).not.toContain('tts.first_audio');
+    expect(EVENTS_BY_COMPONENT.agentflow).toEqual([
+      'agentflow.transition.triggered',
+      'agentflow.transition.matched',
+      'agentflow.transition.missing_edge',
+    ]);
     expect(EVENTS_BY_COMPONENT.conversation).toContain(
       'conversation.authentication_started',
     );
@@ -156,5 +167,79 @@ describe('conversation activity v2 telemetry utilities', () => {
       'webrtc.negotiation_retry_sent',
       'webrtc.ice_restart_deferred',
     ]);
+  });
+
+  it('parses Sentry-style query filters and leaves unmatched text as search', () => {
+    const parsed = parseTraceFilterQuery(
+      'refund conversation:2340105440068632576 component:tts event:tts.speaking role:assistant',
+    );
+
+    expect(parsed.freeText).toBe('refund');
+    expect(
+      parsed.filters.map(filter => [
+        filter.fieldKey,
+        filter.criteriaKey,
+        filter.value,
+      ]),
+    ).toEqual([
+      ['conversation', 'assistantConversationId', '2340105440068632576'],
+      ['component', 'component', 'tts'],
+      ['event', 'event', 'tts.speaking'],
+      ['role', 'messageRole', 'assistant'],
+    ]);
+  });
+
+  it('filters conversation attributes across message-scope records', () => {
+    const document: TimelineDocument = {
+      id: 'evt-tts-speaking',
+      kind: 'event',
+      name: 'tts.speaking',
+      category: 'tts',
+      level: 'info',
+      outcome: 'success',
+      title: 'TTS speaking',
+      projectId: 2,
+      organizationId: 1,
+      scope: 'message',
+      assistantId: '2337454103765975040',
+      assistantConversationId: '2340105440068632576',
+      messageId: 'a49f2845-68ec-4a59-a30d-5e2b30df87bf',
+      messageRole: 'user',
+      traceId: 'trace-1',
+      contextId: 'a49f2845-68ec-4a59-a30d-5e2b30df87bf',
+      occurredAt: '2026-06-04T03:10:00.000Z',
+      receivedAt: '2026-06-04T03:10:00.000Z',
+      attributes: { component: 'tts' },
+      data: {
+        scopeAttributes: {
+          assistantConversationId: '2340105440068632576',
+        },
+      },
+    };
+
+    const conversationFilters = parseTraceFilterQuery(
+      'conversation:2340105440068632576 component:tts',
+    ).filters;
+    const attributeFilters = parseTraceFilterQuery(
+      'scopeAttributes.assistantConversationId:2340105440068632576 component:tts',
+    ).filters;
+    const conversationScopeFilters = parseTraceFilterQuery(
+      'conversation:2340105440068632576 scope:conversation',
+    ).filters;
+
+    expect(matchesTraceFilters(document, conversationFilters)).toBe(true);
+    expect(matchesTraceFilters(document, attributeFilters)).toBe(true);
+    expect(matchesTraceFilters(document, conversationScopeFilters)).toBe(false);
+  });
+
+  it('deduplicates query and facet filters that map to the same criteria', () => {
+    const parsed = parseTraceFilterQuery('conversation:234');
+    const filters = dedupeTraceFilters([
+      ...parsed.filters,
+      createTraceFilter('assistantConversationId', '234', 'facet'),
+    ]);
+
+    expect(filters).toHaveLength(1);
+    expect(filters[0]?.criteriaKey).toBe('assistantConversationId');
   });
 });

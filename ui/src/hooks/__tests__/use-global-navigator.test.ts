@@ -43,7 +43,10 @@ describe('useGlobalNavigation', () => {
     result.current.goToConfigureDebuggerTTS('a-1');
     result.current.goToCreateAssistantTool('a-1');
 
-    expect(mockNavigate).toHaveBeenNthCalledWith(1, '/deployment/assistant/a-1');
+    expect(mockNavigate).toHaveBeenNthCalledWith(
+      1,
+      '/deployment/assistant/a-1',
+    );
     expect(mockNavigate).toHaveBeenNthCalledWith(
       2,
       '/deployment/assistant/a-1/version-history',
@@ -108,12 +111,18 @@ describe('useGlobalNavigation', () => {
       2,
       '/knowledge/k-1/add-knowledge-file',
     );
-    expect(mockNavigate).toHaveBeenNthCalledWith(3, '/knowledge/k-1/add-cloud-file');
+    expect(mockNavigate).toHaveBeenNthCalledWith(
+      3,
+      '/knowledge/k-1/add-cloud-file',
+    );
     expect(mockNavigate).toHaveBeenNthCalledWith(
       4,
       '/knowledge/k-1/add-structure-file',
     );
-    expect(mockNavigate).toHaveBeenNthCalledWith(5, '/integration/models/openai');
+    expect(mockNavigate).toHaveBeenNthCalledWith(
+      5,
+      '/integration/models/openai',
+    );
   });
 
   it('opens preview windows for chat and call routes', () => {
@@ -130,5 +139,21 @@ describe('useGlobalNavigation', () => {
     expect(openSpy).toHaveBeenNthCalledWith(2, '/preview/call/assistant-1');
 
     openSpy.mockRestore();
+  });
+
+  it('builds telemetry routes with visible query filters', () => {
+    const { result } = renderHook(() => useGlobalNavigation());
+
+    result.current.goToConversationTelemetry('2340105440068632576');
+    result.current.goToMessageTelemetry('a49f2845-68ec-4a59-a30d-5e2b30df87bf');
+
+    expect(mockNavigate).toHaveBeenNthCalledWith(
+      1,
+      '/logs/traces?query=scopeAttributes.assistantConversationId%3A2340105440068632576',
+    );
+    expect(mockNavigate).toHaveBeenNthCalledWith(
+      2,
+      '/logs/traces?query=message%3Aa49f2845-68ec-4a59-a30d-5e2b30df87bf',
+    );
   });
 });
