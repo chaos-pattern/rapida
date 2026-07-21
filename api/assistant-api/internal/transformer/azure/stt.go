@@ -18,6 +18,7 @@ import (
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/common"
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/speech"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	azure_internal "github.com/rapidaai/api/assistant-api/internal/transformer/azure/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -308,7 +309,7 @@ func (s *azureSpeechToText) OnRecognized(event speech.SpeechRecognitionEventArgs
 
 	if len(result.NBest) > 0 {
 		confidence = result.NBest[0].Confidence
-		if threshold, err := s.mdlOpts.GetFloat64("listen.threshold"); err == nil {
+		if threshold, err := s.mdlOpts.GetFloat64(internal_options.ListenOptionThreshold); err == nil {
 			if confidence < threshold {
 				s.logger.Debugf("confidence %.4f below threshold %.4f, skipping", confidence, threshold)
 				s.mu.Lock()

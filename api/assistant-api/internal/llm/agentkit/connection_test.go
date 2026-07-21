@@ -9,6 +9,8 @@ import (
 	"time"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
+	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -100,6 +102,57 @@ func TestAgentConnectionOption_UsesProviderOverrides(t *testing.T) {
 		"maxRecvMessageBytes":        uint32(4096),
 		"maxSendMessageBytes":        uint32(8192),
 	}, option.GetOption())
+}
+
+func TestAgentConnectionOption_UsesConversationOverrides(t *testing.T) {
+	provider := &internal_assistant_entity.AssistantProviderAgentkit{
+		Certificate:         "saved-certificate",
+		Metadata:            map[string]string{"x-saved": "saved", "x-override": "saved"},
+		TransportSecurity:   connectionStringPtr(TransportSecurityTLS),
+		TLSVerification:     connectionStringPtr(TLSVerificationVerify),
+		TLSServerName:       connectionStringPtr("saved.local"),
+		ConnectTimeoutMs:    connectionUint32Ptr(1500),
+		KeepaliveTimeMs:     connectionUint32Ptr(20000),
+		KeepaliveTimeoutMs:  connectionUint32Ptr(2500),
+		MaxRecvMessageBytes: connectionUint32Ptr(4096),
+		MaxSendMessageBytes: connectionUint32Ptr(8192),
+	}
+	resolved, _ := withAgentkitOverrides(provider, utils.Option{
+		internal_options.AgentkitOptionTransportSecurity:   TransportSecurityPlaintext,
+		internal_options.AgentkitOptionTLSVerification:     TLSVerificationSkipVerify,
+		internal_options.AgentkitOptionTLSServerName:       "override.local",
+		internal_options.AgentkitOptionCertificate:         "override-certificate",
+		internal_options.AgentkitOptionConnectTimeoutMs:    "3000",
+		internal_options.AgentkitOptionKeepaliveTimeMs:     float64(40000),
+		internal_options.AgentkitOptionKeepaliveTimeoutMs:  uint32(5000),
+		internal_options.AgentkitOptionMaxRecvMessageBytes: uint64(16384),
+		internal_options.AgentkitOptionMaxSendMessageBytes: uint32(32768),
+		internal_options.AgentkitOptionMetadata:            `{"x-override":"conversation","x-extra":"extra"}`,
+	})
+	option := NewAgentConnectionOption(resolved)
+
+	assert.Equal(t, 3000*time.Millisecond, option.DialTimeout())
+	assert.Equal(t, map[string]interface{}{
+		"transportSecurity":          TransportSecurityPlaintext,
+		"tlsVerification":            TLSVerificationSkipVerify,
+		"tlsServerName":              "override.local",
+		"caCertificatePemConfigured": true,
+		"connectTimeoutMs":           uint32(3000),
+		"keepaliveTimeMs":            uint32(40000),
+		"keepaliveTimeoutMs":         uint32(5000),
+		"maxRecvMessageBytes":        uint32(16384),
+		"maxSendMessageBytes":        uint32(32768),
+	}, option.GetOption())
+	connection := NewAgentkitConnection(resolved)
+	assert.Equal(t, map[string]string{
+		"x-saved":    "saved",
+		"x-override": "conversation",
+		"x-extra":    "extra",
+	}, connection.metadata)
+	assert.Equal(t, "saved-certificate", provider.Certificate)
+	assert.Equal(t, "saved.local", *provider.TLSServerName)
+	assert.Equal(t, uint32(1500), *provider.ConnectTimeoutMs)
+	assert.Equal(t, map[string]string{"x-saved": "saved", "x-override": "saved"}, map[string]string(provider.Metadata))
 }
 
 func TestAgentConnectionOption_GetGrpcOptionsReturnsTypedErrors(t *testing.T) {

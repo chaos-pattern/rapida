@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"net/url"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -54,7 +55,7 @@ func (ro *sarvamOption) GetKey() string {
 func (ro *sarvamOption) textToSpeechUrl() string {
 	params := url.Values{}
 	params.Set("send_completion_event", "true") // required: triggers "event" response after flush
-	if model, err := ro.modelOpts.GetString("speak.model"); err == nil {
+	if model, err := ro.modelOpts.GetString(internal_options.SpeakOptionModel); err == nil {
 		params.Set("model", model)
 	}
 	return fmt.Sprintf("%s?%s", TEXT_TO_SPEECH_URL, params.Encode())
@@ -72,10 +73,10 @@ func (ro *sarvamOption) configureTextToSpeech() map[string]interface{} {
 	}
 
 	// Dynamically update configMsg based on options
-	if language, err := ro.modelOpts.GetString("speak.language"); err == nil {
+	if language, err := ro.modelOpts.GetString(internal_options.SpeakOptionLanguage); err == nil {
 		configMsg["data"].(map[string]interface{})["target_language_code"] = language
 	}
-	if speaker, err := ro.modelOpts.GetString("speak.voice.id"); err == nil {
+	if speaker, err := ro.modelOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		configMsg["data"].(map[string]interface{})["speaker"] = speaker
 	}
 	return configMsg
@@ -102,10 +103,10 @@ func (ro *sarvamOption) speechToTextUrl() string {
 	params.Add("sample_rate", "16000")
 	params.Add("input_audio_codec", "pcm_s16le")
 
-	if language, err := ro.modelOpts.GetString("listen.language"); err == nil {
+	if language, err := ro.modelOpts.GetString(internal_options.ListenOptionLanguage); err == nil {
 		params.Add("language-code", language)
 	}
-	if model, err := ro.modelOpts.GetString("listen.model"); err == nil {
+	if model, err := ro.modelOpts.GetString(internal_options.ListenOptionModel); err == nil {
 		params.Add("model", model)
 	}
 	return fmt.Sprintf("%s?%s", SPEECH_TO_TEXT_URL, params.Encode())

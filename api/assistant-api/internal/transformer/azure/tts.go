@@ -17,6 +17,7 @@ import (
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/common"
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/speech"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	azure_internal "github.com/rapidaai/api/assistant-api/internal/transformer/azure/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -264,11 +265,11 @@ func (azure *azureTextToSpeech) Transform(ctx context.Context, in internal_type.
 		var res speech.SpeechSynthesisOutcome
 		if strings.Contains(normalizedText, "<break ") {
 			language := "en-US"
-			if configuredLanguage, err := azure.mdlOpts.GetString("speak.language"); err == nil && configuredLanguage != "" {
+			if configuredLanguage, err := azure.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil && configuredLanguage != "" {
 				language = configuredLanguage
 			}
 			voiceName := ""
-			if configuredVoice, err := azure.mdlOpts.GetString("speak.voice.id"); err == nil && configuredVoice != "" {
+			if configuredVoice, err := azure.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && configuredVoice != "" {
 				voiceName = configuredVoice
 			}
 			textForAzure := fmt.Sprintf(`<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="%s">%s</speak>`, language, normalizedText)

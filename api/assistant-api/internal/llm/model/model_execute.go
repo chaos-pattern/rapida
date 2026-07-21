@@ -510,13 +510,9 @@ func (e *modelAssistantExecutor) buildStreamChatInput(
 	if err != nil {
 		return nil, err
 	}
-	mergedOptions := utils.MergeMaps(
-		assistant.AssistantProviderModel.GetOptions(),
-		communication.GetOptions(),
-	)
-	modelOptions := make(map[string]interface{}, len(mergedOptions))
-	for key, value := range mergedOptions {
-		if key == "rapida.credential_id" || strings.HasPrefix(key, "connection.") {
+	modelOptions := make(map[string]interface{}, len(e.providerOptions))
+	for key, value := range e.providerOptions {
+		if key == modelOptionCredentialID || strings.HasPrefix(key, modelOptionConnectionPrefix) {
 			continue
 		}
 		modelOptions[key] = value

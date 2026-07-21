@@ -2129,7 +2129,7 @@ func (h requestorDispatchHandler) HandleInitializeSpeechToText(ctx context.Conte
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	credentialId, err := options.GetUint64("rapida.credential_id")
 	if err != nil {
 		h.r.OnPacket(ctx, internal_type.InitializationFailedPacket{
@@ -2185,7 +2185,7 @@ func (h requestorDispatchHandler) HandleInitializeDenoise(ctx context.Context, p
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	denoise, err := internal_denoiser.New(
 		internal_denoiser.WithContext(ctx),
 		internal_denoiser.WithLogger(h.r.logger),
@@ -2212,7 +2212,7 @@ func (h requestorDispatchHandler) HandleInitializeTextToSpeech(ctx context.Conte
 		})
 		return
 	}
-	speakerOpts := utils.MergeMaps(h.r.options, outputTransformer.GetOptions())
+	speakerOpts := utils.MergeMaps(outputTransformer.GetOptions(), h.r.options)
 	credentialId, err := speakerOpts.GetUint64("rapida.credential_id")
 	if err != nil {
 		h.r.OnPacket(ctx, internal_type.InitializationFailedPacket{
@@ -2269,7 +2269,7 @@ func (h requestorDispatchHandler) HandleInitializeVoiceActivityDetection(ctx con
 			return
 		}
 
-		options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+		options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 		vad, err := internal_vad.New(
 			internal_vad.WithContext(ctx),
 			internal_vad.WithLogger(h.r.logger),
@@ -2298,7 +2298,7 @@ func (h requestorDispatchHandler) HandleInitializeEndOfSpeech(ctx context.Contex
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	endOfSpeech, err := internal_end_of_speech.New(
 		internal_end_of_speech.WithContext(ctx),
 		internal_end_of_speech.WithLogger(h.r.logger),
@@ -2485,7 +2485,7 @@ func (h requestorDispatchHandler) HandleModeSwitchInitializeSpeechToText(ctx con
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	credentialId, err := options.GetUint64("rapida.credential_id")
 	if err != nil {
 		h.r.OnPacket(ctx, internal_type.ModeSwitchErrorPacket{
@@ -2539,7 +2539,7 @@ func (h requestorDispatchHandler) HandleModeSwitchInitializeTextToSpeech(ctx con
 		})
 		return
 	}
-	speakerOpts := utils.MergeMaps(h.r.options, outputTransformer.GetOptions())
+	speakerOpts := utils.MergeMaps(outputTransformer.GetOptions(), h.r.options)
 	credentialId, err := speakerOpts.GetUint64("rapida.credential_id")
 	if err != nil {
 		h.r.OnPacket(ctx, internal_type.ModeSwitchErrorPacket{
@@ -2590,7 +2590,7 @@ func (h requestorDispatchHandler) HandleModeSwitchInitializeVoiceActivityDetecti
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	vad, err := internal_vad.New(
 		internal_vad.WithContext(ctx),
 		internal_vad.WithLogger(h.r.logger),
@@ -2619,7 +2619,7 @@ func (h requestorDispatchHandler) HandleModeSwitchInitializeDenoise(ctx context.
 		return
 	}
 
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	denoise, err := internal_denoiser.New(
 		internal_denoiser.WithContext(ctx),
 		internal_denoiser.WithLogger(h.r.logger),
@@ -2647,7 +2647,7 @@ func (h requestorDispatchHandler) HandleModeSwitchInitializeEndOfSpeech(ctx cont
 		})
 		return
 	}
-	options := utils.MergeMaps(h.r.options, cfg.GetOptions())
+	options := utils.MergeMaps(cfg.GetOptions(), h.r.options)
 	endOfSpeech, err := internal_end_of_speech.New(
 		internal_end_of_speech.WithContext(ctx),
 		internal_end_of_speech.WithLogger(h.r.logger),

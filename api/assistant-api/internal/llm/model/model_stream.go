@@ -14,7 +14,6 @@ import (
 
 	"github.com/rapidaai/api/assistant-api/internal/observability"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
-	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/pkg/validator"
 	"github.com/rapidaai/protos"
 )
@@ -28,17 +27,6 @@ func (e *modelAssistantExecutor) sendStreamConfiguration(
 	if err != nil {
 		return err
 	}
-	mergedOptions := utils.MergeMaps(
-		assistant.AssistantProviderModel.GetOptions(),
-		communication.GetOptions(),
-	)
-	connectionOptions := make(map[string]string)
-	for key, value := range mergedOptions {
-		if !strings.HasPrefix(key, "connection.") || value == nil {
-			continue
-		}
-		connectionOptions[key] = fmt.Sprintf("%v", value)
-	}
 
 	done := make(chan error, 1)
 	go func() {
@@ -47,7 +35,7 @@ func (e *modelAssistantExecutor) sendStreamConfiguration(
 				Configuration: &protos.StreamChatConfiguration{
 					Credential:        &protos.Credential{Id: e.providerCredential.GetId(), Value: e.providerCredential.GetValue()},
 					ProviderName:      strings.ToLower(assistant.AssistantProviderModel.ModelProviderName),
-					ConnectionOptions: connectionOptions,
+					ConnectionOptions: modelConnectionOptions(e.providerOptions),
 				},
 			},
 		})

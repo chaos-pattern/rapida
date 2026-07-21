@@ -8,8 +8,10 @@ import (
 	"time"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	gorm_models "github.com/rapidaai/pkg/models/gorm"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/require"
@@ -49,19 +51,25 @@ func TestModel_Listen_RecvError_EmitsSystemPanic(t *testing.T) {
 
 func TestModel_SendStreamConfiguration_IncludesConnectionOptions(t *testing.T) {
 	e, comm, stream, _ := newModelTestEnv(t)
-	comm.options = utils.Option{
-		"connection.transport": "websocket",
-		"model.temperature":    "0.4",
+	comm.assistant.AssistantProviderModel.AssistantModelOptions = []*internal_assistant_entity.AssistantProviderModelOption{
+		{Metadata: gorm_models.Metadata{Key: "connection.transport", Value: "websocket"}},
 	}
+	comm.options = utils.Option{
+		internal_options.ModelOptionConnectionTransport: "chat_complete",
+		"model.temperature":                             "0.4",
+	}
+	e.providerOptions = withModelOverrides(comm.assistant.AssistantProviderModel.GetOptions(), comm.GetOptions())
 
 	require.NoError(t, e.sendStreamConfiguration(context.Background(), e.connection, comm))
 	require.Len(t, stream.sendCalls, 1)
 
 	cfg := stream.sendCalls[0].GetConfiguration()
 	require.NotNil(t, cfg)
-	require.Equal(t, "websocket", cfg.GetConnectionOptions()["connection.transport"])
+	require.Equal(t, "chat_complete", cfg.GetConnectionOptions()["connection.transport"])
 	_, hasModelKey := cfg.GetConnectionOptions()["model.temperature"]
 	require.False(t, hasModelKey)
+	_, hasOverrideKey := cfg.GetConnectionOptions()[internal_options.ModelOptionConnectionTransport]
+	require.False(t, hasOverrideKey)
 }
 
 type listenErrorStream struct {

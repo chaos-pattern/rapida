@@ -17,6 +17,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	assemblyai_internal "github.com/rapidaai/api/assistant-api/internal/transformer/assembly-ai/internal"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -157,7 +158,7 @@ func (aai *assemblyaiSTT) readLoop(conn *websocket.Conn) {
 			}
 
 			threshold := 0.0
-			if v, err := aai.assemblyaiOption.mdlOpts.GetFloat64("listen.threshold"); err == nil {
+			if v, err := aai.assemblyaiOption.mdlOpts.GetFloat64(internal_options.ListenOptionThreshold); err == nil {
 				threshold = v
 			}
 			var filteredTranscript string

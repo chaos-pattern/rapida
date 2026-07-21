@@ -144,6 +144,7 @@ func newModelTestEnv(t *testing.T) (*modelAssistantExecutor, *testComm, *testStr
 		toolExecutor:       toolExec,
 		history:            NewConversationHistory(),
 		connection:         connection,
+		providerOptions:    withModelOverrides(comm.assistant.AssistantProviderModel.GetOptions(), comm.GetOptions()),
 		providerCredential: &protos.VaultCredential{Id: 9, Value: &structpb.Struct{}},
 	}
 	return e, comm, stream, toolExec

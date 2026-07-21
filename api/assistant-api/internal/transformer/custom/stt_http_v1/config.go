@@ -14,6 +14,7 @@ import (
 	"math"
 	"strings"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_transformer_custom_dsl "github.com/rapidaai/api/assistant-api/internal/transformer/custom/internal/dsl"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/pkg/validator"
@@ -32,13 +33,13 @@ const (
 )
 
 const (
-	optionKeyModel         = "listen.model"
-	optionKeyLanguage      = "listen.language"
-	optionKeyEncoding      = "listen.audio.encoding"
-	optionKeySampleRate    = "listen.audio.sample_rate"
-	optionKeyQueryParams   = "listen.query_params"
-	optionKeyRequestRules  = "listen.request_rules"
-	optionKeyResponseRules = "listen.response_rules"
+	optionKeyModel         = internal_options.ListenOptionModel
+	optionKeyLanguage      = internal_options.ListenOptionLanguage
+	optionKeyEncoding      = internal_options.ListenOptionAudioEncoding
+	optionKeySampleRate    = internal_options.ListenOptionAudioSampleRate
+	optionKeyQueryParams   = internal_options.ListenOptionQueryParams
+	optionKeyRequestRules  = internal_options.ListenOptionRequestRules
+	optionKeyResponseRules = internal_options.ListenOptionResponseRules
 )
 
 const (

@@ -14,8 +14,10 @@ import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	internal_conversation_entity "github.com/rapidaai/api/assistant-api/internal/entity/conversations"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
+	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,6 +113,7 @@ type mockCommunication struct {
 	collector                   *packetCollector
 	assistant                   *internal_assistant_entity.Assistant
 	conversation                *internal_conversation_entity.AssistantConversation
+	options                     utils.Option
 }
 
 func (m *mockCommunication) Assistant() (*internal_assistant_entity.Assistant, error) {
@@ -123,6 +126,10 @@ func (m *mockCommunication) Conversation() (*internal_conversation_entity.Assist
 
 func (m *mockCommunication) OnPacket(ctx context.Context, pkts ...internal_type.Packet) error {
 	return m.collector.collect(ctx, pkts...)
+}
+
+func (m *mockCommunication) GetOptions() utils.Option {
+	return m.options
 }
 
 type testAgentKitServer struct {
@@ -340,6 +347,24 @@ func TestNew_SendsInitializationAndEmitsInitializedEvent(t *testing.T) {
 	e.stateMu.RLock()
 	defer e.stateMu.RUnlock()
 	assert.NotNil(t, e.connection)
+}
+
+func TestAgentkitInitializationOptions_MergesConversationOptionsAndFiltersLocalAgentkitOptions(t *testing.T) {
+	_, initializationOptions := withAgentkitOverrides(&internal_assistant_entity.AssistantProviderAgentkit{}, utils.Option{
+		"existing":    "conversation",
+		"customer_id": "cust-123",
+		internal_options.AgentkitOptionTransportSecurity: TransportSecurityPlaintext,
+		internal_options.AgentkitOptionCertificate:       "certificate",
+		internal_options.AgentkitOptionMetadata:          `{"x-agentkit":"metadata"}`,
+	})
+
+	decoded, err := utils.AnyMapToInterfaceMap(initializationOptions)
+	require.NoError(t, err)
+	assert.Equal(t, "conversation", decoded["existing"])
+	assert.Equal(t, "cust-123", decoded["customer_id"])
+	assert.NotContains(t, decoded, internal_options.AgentkitOptionCertificate)
+	assert.NotContains(t, decoded, internal_options.AgentkitOptionTransportSecurity)
+	assert.NotContains(t, decoded, internal_options.AgentkitOptionMetadata)
 }
 
 func TestNew_UsesMaxSendMessageBytes(t *testing.T) {

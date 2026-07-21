@@ -9,6 +9,7 @@ package internal_transformer_resembleai
 import (
 	"fmt"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -43,7 +44,7 @@ func (co *resembleaiOption) GetKey() string {
 }
 
 func (co *resembleaiOption) GetVoiceUUID() string {
-	if voiceID, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voiceID != "" {
+	if voiceID, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voiceID != "" {
 		return voiceID
 	}
 	return RESEMBLEAI_DEFAULT_VOICE

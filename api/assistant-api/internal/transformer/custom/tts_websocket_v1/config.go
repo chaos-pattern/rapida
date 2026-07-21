@@ -13,6 +13,7 @@ import (
 	"io"
 	"strings"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_transformer_custom_dsl "github.com/rapidaai/api/assistant-api/internal/transformer/custom/internal/dsl"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/pkg/validator"
@@ -31,14 +32,14 @@ const (
 )
 
 const (
-	optionKeyVoiceID       = "speak.voice.id"
-	optionKeyModel         = "speak.model"
-	optionKeyLanguage      = "speak.language"
-	optionKeyEncoding      = "speak.audio.encoding"
-	optionKeySampleRate    = "speak.audio.sample_rate"
-	optionKeyQueryParams   = "speak.query_params"
-	optionKeyRequestRules  = "speak.request_rules"
-	optionKeyResponseRules = "speak.response_rules"
+	optionKeyVoiceID       = internal_options.SpeakOptionVoiceID
+	optionKeyModel         = internal_options.SpeakOptionModel
+	optionKeyLanguage      = internal_options.SpeakOptionLanguage
+	optionKeyEncoding      = internal_options.SpeakOptionAudioEncoding
+	optionKeySampleRate    = internal_options.SpeakOptionAudioSampleRate
+	optionKeyQueryParams   = internal_options.SpeakOptionQueryParams
+	optionKeyRequestRules  = internal_options.SpeakOptionRequestRules
+	optionKeyResponseRules = internal_options.SpeakOptionResponseRules
 )
 
 const (

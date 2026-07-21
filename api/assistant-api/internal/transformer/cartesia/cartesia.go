@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	cartesia_internal "github.com/rapidaai/api/assistant-api/internal/transformer/cartesia/internal"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
@@ -68,22 +69,22 @@ func (co *cartesiaOption) GetTextToSpeechInput(
 		AddTimestamps: false,
 	}
 
-	if speed, err := co.mdlOpts.GetString("speak.__experimental_controls.speed"); err == nil {
+	if speed, err := co.mdlOpts.GetString(internal_options.SpeakOptionExperimentalControlsSpeed); err == nil {
 		opts.ExperimentalControls.Speed = speed
 	}
 
-	if emotion, err := co.mdlOpts.GetString("speak.__experimental_controls.emotion"); err == nil {
+	if emotion, err := co.mdlOpts.GetString(internal_options.SpeakOptionExperimentalControlsEmotion); err == nil {
 		opts.ExperimentalControls.Emotion = strings.Split(emotion, commons.SEPARATOR)
 	}
 
-	if language, err := co.mdlOpts.GetString("speak.language"); err == nil {
+	if language, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil {
 		opts.Language = language
 	}
 
-	if model, err := co.mdlOpts.GetString("speak.model"); err == nil {
+	if model, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil {
 		opts.ModelID = model
 	}
-	if voice, err := co.mdlOpts.GetString("speak.voice.id"); err == nil {
+	if voice, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		opts.Voice = cartesia_internal.TextToSpeechVoice{
 			Mode: "id",
 			ID:   voice,
@@ -109,12 +110,12 @@ func (co *cartesiaOption) GetSpeechToTextConnectionString() string {
 	params.Add("encoding", co.GetEncoding())
 	params.Add("sample_rate", "16000")
 	// Check and add language
-	if language, err := co.mdlOpts.GetString("listen.language"); err == nil {
+	if language, err := co.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil {
 		params.Add("language", language)
 	}
 
 	// Check and add model
-	if model, err := co.mdlOpts.GetString("listen.model"); err == nil {
+	if model, err := co.mdlOpts.GetString(internal_options.ListenOptionModel); err == nil {
 		params.Add("model", model)
 	}
 	// Construct the final URL

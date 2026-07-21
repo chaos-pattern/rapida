@@ -9,6 +9,7 @@ package internal_transformer_aws
 import (
 	"fmt"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -66,24 +67,24 @@ func (co *awsOption) GetRegion() string {
 }
 
 func (co *awsOption) GetLanguage() string {
-	if lang, err := co.mdlOpts.GetString("listen.language"); err == nil && lang != "" {
+	if lang, err := co.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil && lang != "" {
 		return lang
 	}
-	if lang, err := co.mdlOpts.GetString("speak.language"); err == nil && lang != "" {
+	if lang, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil && lang != "" {
 		return lang
 	}
 	return AWS_DEFAULT_LANGUAGE
 }
 
 func (co *awsOption) GetVoice() string {
-	if voice, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voice != "" {
+	if voice, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voice != "" {
 		return voice
 	}
 	return AWS_DEFAULT_VOICE
 }
 
 func (co *awsOption) GetEngine() string {
-	if engine, err := co.mdlOpts.GetString("speak.model"); err == nil && engine != "" {
+	if engine, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil && engine != "" {
 		return engine
 	}
 	return AWS_DEFAULT_ENGINE

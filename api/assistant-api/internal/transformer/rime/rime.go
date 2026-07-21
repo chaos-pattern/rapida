@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -55,24 +56,24 @@ func (co *rimeOption) GetTextToSpeechConnectionString() string {
 	params.Add("segment", "never")
 
 	voice := RIME_DEFAULT_VOICE
-	if voiceIDValue, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voiceIDValue != "" {
+	if voiceIDValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voiceIDValue != "" {
 		voice = voiceIDValue
 	}
 	params.Add("speaker", voice)
 
 	model := RIME_DEFAULT_MODEL
-	if modelValue, err := co.mdlOpts.GetString("speak.model"); err == nil && modelValue != "" {
+	if modelValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil && modelValue != "" {
 		model = modelValue
 	}
 	params.Add("modelId", model)
 
 	lang := RIME_DEFAULT_LANG
-	if langValue, err := co.mdlOpts.GetString("speak.language"); err == nil && langValue != "" {
+	if langValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil && langValue != "" {
 		lang = langValue
 	}
 	params.Add("lang", lang)
 
-	if speedAlpha, err := co.mdlOpts.GetString("speak.speed_alpha"); err == nil && speedAlpha != "" {
+	if speedAlpha, err := co.mdlOpts.GetString(internal_options.SpeakOptionSpeedAlpha); err == nil && speedAlpha != "" {
 		params.Add("speedAlpha", speedAlpha)
 	}
 

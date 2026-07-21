@@ -93,7 +93,7 @@ func New(opts ...Option) (*websocketExecutor, error) {
 		return nil, errors.New("websocket: provider configuration is required")
 	}
 	executor := &websocketExecutor{logger: options.logger}
-	if err := executor.initialize(options.ctx, options.communication, options.configuration); err != nil {
+	if err := executor.initialize(options.ctx, options.communication); err != nil {
 		_ = executor.Close(options.ctx)
 		return nil, err
 	}
@@ -105,7 +105,7 @@ func (e *websocketExecutor) Name() string {
 	return "websocket"
 }
 
-func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.Communication, cfg *protos.ConversationInitialization) error {
+func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.Communication) error {
 	start := time.Now()
 	assistant, err := comm.Assistant()
 	if err != nil || assistant == nil {
@@ -125,7 +125,7 @@ func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.C
 				Attributes: observability.Attributes{
 					"component": observability.ComponentLLM.String(),
 					"provider":  e.Name(),
-					"options":   observability.AttributeValue(cfg.GetOptions()),
+					"options":   observability.AttributeValue(comm.GetOptions()),
 					"error":     "websocket provider is not enabled",
 				},
 				OccurredAt: time.Now(),
@@ -144,7 +144,7 @@ func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.C
 				Attributes: observability.Attributes{
 					"component":  observability.ComponentLLM.String(),
 					"provider":   e.Name(),
-					"options":    observability.AttributeValue(cfg.GetOptions()),
+					"options":    observability.AttributeValue(comm.GetOptions()),
 					"url":        provider.Url,
 					"error":      err.Error(),
 					"error_type": fmt.Sprintf("%T", err),
@@ -163,7 +163,7 @@ func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.C
 	})
 
 	// Send initial configuration
-	if err := e.sendConfiguration(provider.AssistantId, provider.Id, conversation.Id, cfg); err != nil {
+	if err := e.sendConfiguration(provider.AssistantId, conversation.Id); err != nil {
 		comm.OnPacket(ctx, internal_type.ObservabilityLogRecordPacket{
 			Scope: internal_type.ObservabilityRecordScopeConversation,
 			Record: observability.RecordLog{
@@ -172,7 +172,7 @@ func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.C
 				Attributes: observability.Attributes{
 					"component":  observability.ComponentLLM.String(),
 					"provider":   e.Name(),
-					"options":    observability.AttributeValue(cfg.GetOptions()),
+					"options":    observability.AttributeValue(comm.GetOptions()),
 					"url":        provider.Url,
 					"error":      err.Error(),
 					"error_type": fmt.Sprintf("%T", err),
@@ -196,7 +196,7 @@ func (e *websocketExecutor) initialize(ctx context.Context, comm internal_type.C
 					"component": observability.ComponentLLM.String(),
 					"provider":  e.Name(),
 					"url":       provider.Url,
-					"options":   observability.AttributeValue(cfg.GetOptions()),
+					"options":   observability.AttributeValue(comm.GetOptions()),
 				},
 				OccurredAt: time.Now(),
 			},
@@ -249,7 +249,7 @@ func (e *websocketExecutor) send(msg Request) error {
 }
 
 // sendConfiguration sends the initial configuration.
-func (e *websocketExecutor) sendConfiguration(assistantId uint64, assistantProviderID uint64, conversationID uint64, cfg *protos.ConversationInitialization) error {
+func (e *websocketExecutor) sendConfiguration(assistantId uint64, conversationID uint64) error {
 	return e.send(Request{
 		Type:      TypeConfiguration,
 		Timestamp: time.Now().UnixMilli(),

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -52,13 +53,13 @@ func (co *assemblyaiOption) GetSpeechToTextConnectionString() string {
 	params.Add("format_turns", "true")
 	// Check and add language
 	if language, err := co.mdlOpts.
-		GetString("listen.language"); err == nil {
+		GetString(internal_options.ListenOptionLanguage); err == nil {
 		params.Add("language", language)
 	}
 
 	// Check and add model
 	if model, err := co.mdlOpts.
-		GetString("listen.model"); err == nil {
+		GetString(internal_options.ListenOptionModel); err == nil {
 		params.Add("model", model)
 	}
 

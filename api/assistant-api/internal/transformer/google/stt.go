@@ -17,6 +17,7 @@ import (
 	speech "cloud.google.com/go/speech/apiv2"
 	"cloud.google.com/go/speech/apiv2/speechpb"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
@@ -273,7 +274,7 @@ func (g *googleSpeechToText) recvLoop(stream speechpb.Speech_StreamingRecognizeC
 			transcript := alt.GetTranscript()
 
 			if result.GetIsFinal() {
-				if v, err := g.mdlOpts.GetFloat64("listen.threshold"); err == nil {
+				if v, err := g.mdlOpts.GetFloat64(internal_options.ListenOptionThreshold); err == nil {
 					if alt.GetConfidence() < float32(v) {
 						g.onPacket(
 							internal_type.ObservabilityEventRecordPacket{

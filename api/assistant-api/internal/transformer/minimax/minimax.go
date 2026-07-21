@@ -9,6 +9,7 @@ package internal_transformer_minimax
 import (
 	"fmt"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -54,14 +55,14 @@ func (co *minimaxOption) GetGroupId() string {
 }
 
 func (co *minimaxOption) GetModel() string {
-	if model, err := co.mdlOpts.GetString("speak.model"); err == nil && model != "" {
+	if model, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil && model != "" {
 		return model
 	}
 	return MINIMAX_DEFAULT_MODEL
 }
 
 func (co *minimaxOption) GetVoice() string {
-	if voiceID, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voiceID != "" {
+	if voiceID, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voiceID != "" {
 		return voiceID
 	}
 	return MINIMAX_DEFAULT_VOICE

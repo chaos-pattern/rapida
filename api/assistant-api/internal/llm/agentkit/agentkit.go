@@ -86,6 +86,7 @@ func New(opts ...Option) (*agentkitExecutor, error) {
 	if assistant == nil {
 		return nil, ErrAgentkitAssistantRequired
 	}
+
 	conversation, err := options.communication.Conversation()
 	if err != nil {
 		return nil, err
@@ -93,10 +94,12 @@ func New(opts ...Option) (*agentkitExecutor, error) {
 	if conversation == nil {
 		return nil, errors.New("agentkit: conversation is required")
 	}
+
 	provider := assistant.AssistantProviderAgentkit
 	if provider == nil {
 		return nil, ErrAgentkitProviderConfigurationRequired
 	}
+	provider, initializationOptions := withAgentkitOverrides(provider, options.communication.GetOptions())
 
 	start := time.Now()
 	executorCtx, cancel := context.WithCancelCause(options.ctx)
@@ -107,8 +110,7 @@ func New(opts ...Option) (*agentkitExecutor, error) {
 		connection: NewAgentkitConnection(provider),
 	}
 
-	if provider.TLSVerification != nil &&
-		*provider.TLSVerification == TLSVerificationSkipVerify {
+	if executor.connection.option.tlsVerification == TLSVerificationSkipVerify {
 		executor.logger.Warnf("Using insecure TLS (skipping certificate verification)")
 	}
 
@@ -167,7 +169,8 @@ func New(opts ...Option) (*agentkitExecutor, error) {
 					Version:     utils.GetVersionString(provider.Id),
 				},
 				Args: options.configuration.GetArgs(), Metadata: options.configuration.GetMetadata(),
-				Options: options.configuration.GetOptions(), StreamMode: options.configuration.GetStreamMode(),
+				Options:      initializationOptions,
+				StreamMode:   options.configuration.GetStreamMode(),
 				UserIdentity: options.configuration.GetUserIdentity(), Time: timestamppb.Now(),
 			},
 		},
