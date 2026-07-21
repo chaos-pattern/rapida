@@ -9,6 +9,7 @@ package internal_transformer_groq
 import (
 	"fmt"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -47,28 +48,28 @@ func (co *groqOption) GetKey() string {
 }
 
 func (co *groqOption) GetSTTModel() string {
-	if model, err := co.mdlOpts.GetString("listen.model"); err == nil && model != "" {
+	if model, err := co.mdlOpts.GetString(internal_options.ListenOptionModel); err == nil && model != "" {
 		return model
 	}
 	return GROQ_DEFAULT_STT_MODEL
 }
 
 func (co *groqOption) GetTTSModel() string {
-	if model, err := co.mdlOpts.GetString("speak.model"); err == nil && model != "" {
+	if model, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil && model != "" {
 		return model
 	}
 	return GROQ_DEFAULT_TTS_MODEL
 }
 
 func (co *groqOption) GetVoice() string {
-	if voice, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voice != "" {
+	if voice, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voice != "" {
 		return voice
 	}
 	return GROQ_DEFAULT_VOICE
 }
 
 func (co *groqOption) GetLanguage() string {
-	if lang, err := co.mdlOpts.GetString("listen.language"); err == nil && lang != "" {
+	if lang, err := co.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil && lang != "" {
 		return lang
 	}
 	return GROQ_DEFAULT_LANGUAGE

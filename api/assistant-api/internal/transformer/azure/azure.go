@@ -13,6 +13,7 @@ import (
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/common"
 	cmmn "github.com/Microsoft/cognitive-services-speech-sdk-go/common"
 	"github.com/Microsoft/cognitive-services-speech-sdk-go/speech"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -48,7 +49,7 @@ func NewAzureOption(
 
 func (az *azureOption) SpeechToTextOption() (*speech.SpeechConfig, error) {
 	cfg, err := speech.NewSpeechConfigFromEndpointWithSubscription(az.endpoint, az.subscriptionKey)
-	if language, ok := az.mdlOpts.GetString("listen.language"); ok == nil {
+	if language, ok := az.mdlOpts.GetString(internal_options.ListenOptionLanguage); ok == nil {
 		cfg.SetSpeechRecognitionLanguage(language)
 	}
 	cfg.SetOutputFormat(cmmn.Detailed)
@@ -69,11 +70,11 @@ func (az *azureOption) TextToSpeechOption() (*speech.SpeechConfig, error) {
 	cfg.SetSpeechSynthesisOutputFormat(
 		az.GetSpeechSynthesisOutputFormat(),
 	)
-	if voiceIDValue, ok := az.mdlOpts.GetString("speak.voice.id"); ok == nil {
+	if voiceIDValue, ok := az.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); ok == nil {
 		az.logger.Debugf("azure options %v", voiceIDValue)
 		cfg.SetSpeechSynthesisVoiceName(voiceIDValue)
 	}
-	if language, ok := az.mdlOpts.GetString("speak.language"); ok == nil {
+	if language, ok := az.mdlOpts.GetString(internal_options.SpeakOptionLanguage); ok == nil {
 		cfg.SetSpeechSynthesisLanguage(language)
 		az.logger.Debugf("azure options %v", language)
 	}

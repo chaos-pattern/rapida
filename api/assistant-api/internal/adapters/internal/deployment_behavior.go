@@ -7,6 +7,7 @@ package adapter_internal
 
 import (
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/utils"
 )
 
@@ -19,25 +20,63 @@ func (r *genericRequestor) deploymentBehavior() (*internal_assistant_entity.Assi
 	switch r.source {
 	case utils.PhoneCall:
 		if assistant.AssistantPhoneDeployment != nil {
-			return &assistant.AssistantPhoneDeployment.AssistantDeploymentBehavior, nil
+			return r.withExperienceOverrides(&assistant.AssistantPhoneDeployment.AssistantDeploymentBehavior), nil
 		}
 	case utils.Whatsapp:
 		if assistant.AssistantWhatsappDeployment != nil {
-			return &assistant.AssistantWhatsappDeployment.AssistantDeploymentBehavior, nil
+			return r.withExperienceOverrides(&assistant.AssistantWhatsappDeployment.AssistantDeploymentBehavior), nil
 		}
 	case utils.SDK:
 		if assistant.AssistantApiDeployment != nil {
-			return &assistant.AssistantApiDeployment.AssistantDeploymentBehavior, nil
+			return r.withExperienceOverrides(&assistant.AssistantApiDeployment.AssistantDeploymentBehavior), nil
 		}
 	case utils.WebPlugin:
 		if assistant.AssistantWebPluginDeployment != nil {
-			return &assistant.AssistantWebPluginDeployment.AssistantDeploymentBehavior, nil
+			return r.withExperienceOverrides(&assistant.AssistantWebPluginDeployment.AssistantDeploymentBehavior), nil
 		}
 	case utils.Debugger:
 		if assistant.AssistantDebuggerDeployment != nil {
-			return &assistant.AssistantDebuggerDeployment.AssistantDeploymentBehavior, nil
+			return r.withExperienceOverrides(&assistant.AssistantDebuggerDeployment.AssistantDeploymentBehavior), nil
 		}
 	}
 
 	return nil, errDeploymentNotEnabled
+}
+
+func (r *genericRequestor) withExperienceOverrides(
+	behavior *internal_assistant_entity.AssistantDeploymentBehavior,
+) *internal_assistant_entity.AssistantDeploymentBehavior {
+	if behavior == nil {
+		return nil
+	}
+
+	resolved := *behavior
+	opts := r.GetOptions()
+	if len(opts) == 0 {
+		return &resolved
+	}
+
+	if value, err := opts.GetString(internal_options.ExperienceOptionGreeting); err == nil {
+		resolved.Greeting = &value
+	}
+	if value, err := opts.GetBool(internal_options.ExperienceOptionGreetingInterruptible); err == nil {
+		resolved.GreetingInterruptible = &value
+	}
+	if value, err := opts.GetString(internal_options.ExperienceOptionMistake); err == nil {
+		resolved.Mistake = &value
+	}
+	if value, err := opts.GetUint64(internal_options.ExperienceOptionIdleTimeout); err == nil {
+		resolved.IdleTimeout = &value
+	}
+	if value, err := opts.GetUint64(internal_options.ExperienceOptionIdleTimeoutBackoff); err == nil {
+		resolved.IdleTimeoutBackoff = &value
+	}
+	if value, err := opts.GetString(internal_options.ExperienceOptionIdleTimeoutMessage); err == nil {
+		resolved.IdleTimeoutMessage = &value
+	}
+	if value, err := opts.GetUint64(internal_options.ExperienceOptionMaxSessionDuration); err == nil {
+		resolved.MaxSessionDuration = &value
+	}
+
+	return &resolved
 }

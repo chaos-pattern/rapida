@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	commons "github.com/rapidaai/pkg/commons"
 	utils "github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -65,31 +66,31 @@ func (dgOpt *deepgramOption) SpeechToTextOptions() *interfaces.LiveTranscription
 		Multichannel:   false,
 	}
 
-	if language, err := dgOpt.mdlOpts.GetString("listen.language"); err == nil {
+	if language, err := dgOpt.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil {
 		opts.Language = language
 	}
 
-	if smartFormat, err := dgOpt.mdlOpts.GetBool("listen.smart_format"); err == nil {
+	if smartFormat, err := dgOpt.mdlOpts.GetBool(internal_options.ListenOptionSmartFormat); err == nil {
 		opts.SmartFormat = smartFormat
 	}
 
-	if fillerWords, err := dgOpt.mdlOpts.GetBool("listen.filler_words"); err == nil {
+	if fillerWords, err := dgOpt.mdlOpts.GetBool(internal_options.ListenOptionFillerWords); err == nil {
 		opts.FillerWords = fillerWords
 	}
-	if vadEvents, err := dgOpt.mdlOpts.GetBool("listen.vad_events"); err == nil {
+	if vadEvents, err := dgOpt.mdlOpts.GetBool(internal_options.ListenOptionVADEvents); err == nil {
 		opts.VadEvents = vadEvents
 	}
-	if endpointing, err := dgOpt.mdlOpts.GetString("listen.endpointing"); err == nil {
+	if endpointing, err := dgOpt.mdlOpts.GetString(internal_options.ListenOptionEndpointing); err == nil {
 		opts.Endpointing = endpointing
 	}
-	if multichannel, err := dgOpt.mdlOpts.GetBool("listen.multichannel"); err == nil {
+	if multichannel, err := dgOpt.mdlOpts.GetBool(internal_options.ListenOptionMultichannel); err == nil {
 		opts.Multichannel = multichannel
 	}
-	if model, err := dgOpt.mdlOpts.GetString("listen.model"); err == nil {
+	if model, err := dgOpt.mdlOpts.GetString(internal_options.ListenOptionModel); err == nil {
 		opts.Model = model
 	}
 
-	if keywordsRaw, exists := dgOpt.mdlOpts["listen.keyword"]; exists {
+	if keywordsRaw, exists := dgOpt.mdlOpts[internal_options.ListenOptionKeyword]; exists {
 		var keywords []string
 		switch v := keywordsRaw.(type) {
 		case string:
@@ -122,7 +123,7 @@ func (dgOpt *deepgramOption) GetTextToSpeechConnectionString() string {
 	params := url.Values{}
 	params.Add("encoding", dgOpt.GetEncoding())
 	params.Add("sample_rate", "16000")
-	if model, err := dgOpt.mdlOpts.GetString("speak.voice.id"); err == nil {
+	if model, err := dgOpt.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		params.Add("model", model)
 	}
 	return fmt.Sprintf("wss://api.deepgram.com/v1/speak?%s", params.Encode())

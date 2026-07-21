@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -51,16 +52,16 @@ func (co *elevenLabsOption) GetTextToSpeechConnectionString() string {
 	params.Add("output_format", co.GetEncoding())
 	params.Add("enable_ssml_parsing", "true")
 
-	if language, err := co.mdlOpts.GetString("speak.language"); err == nil {
+	if language, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil {
 		params.Add("language", language)
 	}
 
-	if model, err := co.mdlOpts.GetString("speak.model"); err == nil {
+	if model, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil {
 		params.Add("model_id", model)
 	}
 
 	voiceId := ELEVENLABS_VOICE_ID
-	if voiceIDValue, err := co.mdlOpts.GetString("speak.voice.id"); err == nil {
+	if voiceIDValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		voiceId = voiceIDValue
 	}
 

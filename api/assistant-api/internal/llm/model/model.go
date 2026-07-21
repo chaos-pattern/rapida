@@ -31,6 +31,7 @@ type modelAssistantExecutor struct {
 	inputBuilder       integration_client_builders.InputChatBuilder
 	history            *ConversationHistory
 	connection         *ModelConnection
+	providerOptions    utils.Option
 
 	currentPacket *internal_type.UserInputPacket
 	mu            sync.RWMutex
@@ -97,22 +98,24 @@ func New(opts ...Option) (*modelAssistantExecutor, error) {
 
 	start := time.Now()
 	providerConfig := assistant.AssistantProviderModel
+	providerOptions := withModelOverrides(providerConfig.GetOptions(), options.communication.GetOptions())
 	provider := providerConfig.ModelProviderName
 	executorCtx, cancel := context.WithCancel(context.Background())
 	executor := &modelAssistantExecutor{
-		logger:       options.logger,
-		history:      NewConversationHistory(),
-		inputBuilder: integration_client_builders.NewChatInputBuilder(options.logger),
-		connection:   NewModelConnection(provider),
-		ctx:          executorCtx,
-		ctxCancel:    cancel,
+		logger:          options.logger,
+		history:         NewConversationHistory(),
+		inputBuilder:    integration_client_builders.NewChatInputBuilder(options.logger),
+		connection:      NewModelConnection(provider),
+		providerOptions: providerOptions,
+		ctx:             executorCtx,
+		ctxCancel:       cancel,
 	}
 
 	g, gCtx := errgroup.WithContext(options.ctx)
 	var providerCredential *protos.VaultCredential
 	var toolExecutor internal_agent_tool.ToolExecutor
 	g.Go(func() error {
-		credentialID, err := providerConfig.GetOptions().GetUint64("rapida.credential_id")
+		credentialID, err := providerOptions.GetUint64(modelOptionCredentialID)
 		if err != nil {
 			return fmt.Errorf("failed to get credential ID: %w", err)
 		}
@@ -144,7 +147,7 @@ func New(opts ...Option) (*modelAssistantExecutor, error) {
 				Attributes: observability.Attributes{
 					"component":  observability.ComponentLLM.String(),
 					"provider":   provider,
-					"options":    observability.AttributeValue(providerConfig.GetOptions()),
+					"options":    observability.AttributeValue(providerOptions),
 					"error":      err.Error(),
 					"error_type": fmt.Sprintf("%T", err),
 				},
@@ -166,7 +169,7 @@ func New(opts ...Option) (*modelAssistantExecutor, error) {
 				Attributes: observability.Attributes{
 					"component":  observability.ComponentLLM.String(),
 					"provider":   provider,
-					"options":    observability.AttributeValue(providerConfig.GetOptions()),
+					"options":    observability.AttributeValue(providerOptions),
 					"error":      err.Error(),
 					"error_type": fmt.Sprintf("%T", err),
 				},
@@ -188,7 +191,7 @@ func New(opts ...Option) (*modelAssistantExecutor, error) {
 				Attributes: observability.Attributes{
 					"component":  observability.ComponentLLM.String(),
 					"provider":   provider,
-					"options":    observability.AttributeValue(providerConfig.GetOptions()),
+					"options":    observability.AttributeValue(providerOptions),
 					"error":      err.Error(),
 					"error_type": fmt.Sprintf("%T", err),
 				},
@@ -212,7 +215,7 @@ func New(opts ...Option) (*modelAssistantExecutor, error) {
 				Attributes: observability.Attributes{
 					"component": observability.ComponentLLM.String(),
 					"provider":  provider,
-					"options":   observability.AttributeValue(providerConfig.GetOptions()),
+					"options":   observability.AttributeValue(providerOptions),
 				},
 				OccurredAt: time.Now(),
 			},

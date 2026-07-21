@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/url"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -46,17 +47,17 @@ func (co *neuphonicOption) GetKey() string {
 
 func (co *neuphonicOption) GetTextToSpeechConnectionString() string {
 	lang := NEUPHONIC_DEFAULT_LANG
-	if langValue, err := co.mdlOpts.GetString("speak.language"); err == nil && langValue != "" {
+	if langValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil && langValue != "" {
 		lang = langValue
 	}
 
 	voice := NEUPHONIC_DEFAULT_VOICE
-	if voiceID, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voiceID != "" {
+	if voiceID, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voiceID != "" {
 		voice = voiceID
 	}
 
 	speed := NEUPHONIC_DEFAULT_SPEED
-	if speedValue, err := co.mdlOpts.GetString("speak.speed"); err == nil && speedValue != "" {
+	if speedValue, err := co.mdlOpts.GetString(internal_options.SpeakOptionSpeed); err == nil && speedValue != "" {
 		speed = speedValue
 	}
 

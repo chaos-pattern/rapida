@@ -9,6 +9,7 @@ package internal_transformer_nvidia
 import (
 	"fmt"
 
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -55,31 +56,31 @@ func (co *nvidiaOption) GetFunctionId() string {
 }
 
 func (co *nvidiaOption) GetLanguage() string {
-	if lang, err := co.mdlOpts.GetString("listen.language"); err == nil && lang != "" {
+	if lang, err := co.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil && lang != "" {
 		return lang
 	}
-	if lang, err := co.mdlOpts.GetString("speak.language"); err == nil && lang != "" {
+	if lang, err := co.mdlOpts.GetString(internal_options.SpeakOptionLanguage); err == nil && lang != "" {
 		return lang
 	}
 	return NVIDIA_DEFAULT_LANGUAGE
 }
 
 func (co *nvidiaOption) GetVoice() string {
-	if voice, err := co.mdlOpts.GetString("speak.voice.id"); err == nil && voice != "" {
+	if voice, err := co.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil && voice != "" {
 		return voice
 	}
 	return NVIDIA_DEFAULT_VOICE
 }
 
 func (co *nvidiaOption) GetSTTModel() string {
-	if model, err := co.mdlOpts.GetString("listen.model"); err == nil && model != "" {
+	if model, err := co.mdlOpts.GetString(internal_options.ListenOptionModel); err == nil && model != "" {
 		return model
 	}
 	return ""
 }
 
 func (co *nvidiaOption) GetTTSModel() string {
-	if model, err := co.mdlOpts.GetString("speak.model"); err == nil && model != "" {
+	if model, err := co.mdlOpts.GetString(internal_options.SpeakOptionModel); err == nil && model != "" {
 		return model
 	}
 	return ""

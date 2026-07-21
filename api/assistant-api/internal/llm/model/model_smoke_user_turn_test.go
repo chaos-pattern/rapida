@@ -6,6 +6,7 @@ import (
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	gorm_models "github.com/rapidaai/pkg/models/gorm"
 	"github.com/rapidaai/pkg/utils"
@@ -129,9 +130,11 @@ func TestModel_ExecuteUserTurn_FiltersConnectionAndCredentialFromModelParameters
 		{Metadata: gorm_models.Metadata{Key: "rapida.credential_id", Value: "9"}},
 	}
 	comm.options = utils.Option{
-		"model.top_p":          "0.8",
-		"connection.transport": "chat_complete",
+		"model.top_p":                                   "0.8",
+		internal_options.ModelOptionCredentialID:        "12",
+		internal_options.ModelOptionConnectionTransport: "chat_complete",
 	}
+	e.providerOptions = withModelOverrides(comm.assistant.AssistantProviderModel.GetOptions(), comm.GetOptions())
 
 	err := e.Execute(context.Background(), comm, internal_type.UserInputPacket{
 		ContextID: "ctx-1",
@@ -147,4 +150,8 @@ func TestModel_ExecuteUserTurn_FiltersConnectionAndCredentialFromModelParameters
 	require.False(t, hasTransport)
 	_, hasCredential := modelParameters["rapida.credential_id"]
 	require.False(t, hasCredential)
+	_, hasOverrideTransport := modelParameters[internal_options.ModelOptionConnectionTransport]
+	require.False(t, hasOverrideTransport)
+	_, hasOverrideCredential := modelParameters[internal_options.ModelOptionCredentialID]
+	require.False(t, hasOverrideCredential)
 }

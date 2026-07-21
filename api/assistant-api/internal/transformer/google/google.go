@@ -12,6 +12,7 @@ import (
 
 	"cloud.google.com/go/speech/apiv2/speechpb"
 	"cloud.google.com/go/texttospeech/apiv1/texttospeechpb"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
@@ -106,7 +107,7 @@ func (gog *googleOption) SpeechToTextOptions() *speechpb.StreamingRecognitionCon
 		},
 	}
 
-	if language, err := gog.mdlOpts.GetString("listen.language"); err == nil {
+	if language, err := gog.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil {
 		codes := strings.Split(language, commons.SEPARATOR)
 		nonEmptyCodes := []string{}
 		for _, code := range codes {
@@ -120,7 +121,7 @@ func (gog *googleOption) SpeechToTextOptions() *speechpb.StreamingRecognitionCon
 		gog.logger.Warn("Language not specified, defaulting to " + DefaultLanguageCode)
 	}
 
-	if model, err := gog.mdlOpts.GetString("listen.model"); err == nil {
+	if model, err := gog.mdlOpts.GetString(internal_options.ListenOptionModel); err == nil {
 		opts.Config.Model = model
 	} else {
 		gog.logger.Warn("Model not specified, defaulting to " + DefaultModel)
@@ -142,7 +143,7 @@ func (goog *googleOption) TextToSpeechOptions() *texttospeechpb.StreamingSynthes
 	}
 
 	// Override voice configuration if specified in options
-	if voice, err := goog.mdlOpts.GetString("speak.voice.id"); err == nil {
+	if voice, err := goog.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		options.Voice.Name = voice
 	} else {
 		goog.logger.Warn("Voice not specified, defaulting to " + DefaultVoice)
@@ -152,7 +153,7 @@ func (goog *googleOption) TextToSpeechOptions() *texttospeechpb.StreamingSynthes
 }
 
 func (gog *googleOption) GetRecognizer() string {
-	if region, err := gog.mdlOpts.GetString("listen.region"); err == nil {
+	if region, err := gog.mdlOpts.GetString(internal_options.ListenOptionRegion); err == nil {
 		if region != "global" {
 			return fmt.Sprintf("projects/%s/locations/%s/recognizers/_", gog.projectId, region)
 		}
@@ -161,7 +162,7 @@ func (gog *googleOption) GetRecognizer() string {
 }
 
 func (gog *googleOption) GetSpeechToTextClientOptions() []option.ClientOption {
-	if region, err := gog.mdlOpts.GetString("listen.region"); err == nil {
+	if region, err := gog.mdlOpts.GetString(internal_options.ListenOptionRegion); err == nil {
 		if region != "global" {
 			return append(gog.clientOptons, option.WithEndpoint(fmt.Sprintf("%s-speech.googleapis.com:443", region)))
 		}

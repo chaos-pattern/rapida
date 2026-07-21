@@ -10,7 +10,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	"net/http"
 	"sync"
 	"time"
@@ -98,7 +100,7 @@ func (st *speechmaticsSTT) Initialize() error {
 		"enable_partials": true,
 		"max_delay":       2.0,
 	}
-	if op, err := st.mdlOpts.GetString("listen.operating_point"); err == nil && op != "" {
+	if op, err := st.mdlOpts.GetString(internal_options.ListenOptionOperatingPoint); err == nil && op != "" {
 		transcriptionConfig["operating_point"] = op
 	}
 

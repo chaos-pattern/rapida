@@ -13,6 +13,7 @@ import (
 
 	msginterfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/api/listen/v1/websocket/interfaces"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
+	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/utils"
@@ -60,7 +61,7 @@ func (d *deepgramSttCallback) Message(mr *msginterfaces.MessageResponse) error {
 		lang := d.GetMostUsedLanguage(alternative.Languages)
 		confStr := fmt.Sprintf("%.4f", alternative.Confidence)
 
-		if v, err := d.options.GetFloat64("listen.threshold"); err == nil {
+		if v, err := d.options.GetFloat64(internal_options.ListenOptionThreshold); err == nil {
 			if alternative.Confidence < v {
 				ctxID := d.contextID()
 				d.onPacket(
