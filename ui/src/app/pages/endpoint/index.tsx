@@ -1,11 +1,11 @@
 import { lazyLoad } from '@/utils/loadable';
-import { PageLoader } from '@/app/components/loader/page-loader';
+import { PageLoading } from '@/app/components/carbon/loading';
 
 export const DeploymentEndpointPage = lazyLoad(
   () => import('./listing'),
   module => module.EndpointPage,
   {
-    fallback: <PageLoader />,
+    fallback: <PageLoading className="h-full" />,
   },
 );
 
@@ -13,7 +13,7 @@ export const DeploymentViewEndpointPage = lazyLoad(
   () => import('./view'),
   module => module.ViewEndpointPage,
   {
-    fallback: <PageLoader />,
+    fallback: <PageLoading className="h-full" />,
   },
 );
 
@@ -21,7 +21,7 @@ export const DeploymentCreateEndpointPage = lazyLoad(
   () => import('./actions/create-endpoint'),
   module => module.CreateEndpointPage,
   {
-    fallback: <PageLoader />,
+    fallback: <PageLoading className="h-full" />,
   },
 );
 
@@ -29,7 +29,7 @@ export const DeploymentConfigureEndpointPage = lazyLoad(
   () => import('./actions/configure-endpoint'),
   module => module.ConfigureEndpointPage,
   {
-    fallback: <PageLoader />,
+    fallback: <PageLoading className="h-full" />,
   },
 );
 
@@ -37,6 +37,6 @@ export const DeploymentCreateVersionEndpointPage = lazyLoad(
   () => import('./actions/create-endpoint-version'),
   module => module.CreateNewVersionEndpointPage,
   {
-    fallback: <PageLoader />,
+    fallback: <PageLoading className="h-full" />,
   },
 );

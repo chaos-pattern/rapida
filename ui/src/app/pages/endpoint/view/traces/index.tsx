@@ -160,7 +160,7 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
 
       <TableToolbar>
         <TableToolbarContent>
-          <TableToolbarSearch placeholder="Search endpoint traces" />
+          <TableToolbarSearch placeholder="Search endpoint logs" />
           <DateFilter
             onApply={(from, to) => onDateSelect(to, from)}
             onReset={() => addCriterias([])}
@@ -285,8 +285,8 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
       ) : (
         <EmptyState
           icon={Activity}
-          title="No endpoint traces found"
-          subtitle="API requests made to this endpoint will appear here as traces with latency, token usage, and status details."
+          title="No endpoint logs found"
+          subtitle="API requests made to this endpoint will appear here as logs with latency, token usage, and status details."
         />
       )}
 

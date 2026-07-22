@@ -1,4 +1,5 @@
 import { FC } from 'react';
+import { useLocation } from 'react-router-dom';
 import { cn } from '@/utils';
 import { SidePanelOpen, SidePanelClose } from '@carbon/icons-react';
 import {
@@ -7,22 +8,128 @@ import {
   SideNavLink,
   SideNavMenu,
   SideNavMenuItem,
+  SkeletonText,
 } from '@carbon/react';
-import { endpointNavSections } from './endpoint-nav-config';
+import {
+  endpointNavSections,
+  EndpointNavItem,
+  EndpointNavSection,
+} from './endpoint-nav-config';
+import { Endpoint } from '@rapidaai/react';
+
+const NavItemSkeleton: FC<{ itemKey: string }> = ({ itemKey }) => (
+  <div key={itemKey} className="flex h-8 items-center px-4 py-2">
+    <SkeletonText className="mb-0! flex-1" width="70%" />
+  </div>
+);
+
+const NavItem: FC<{
+  item: EndpointNavItem;
+  basePath: string;
+  isPathActive: (path: string, exact?: boolean) => boolean;
+  isLoading?: boolean;
+}> = ({ item, basePath, isPathActive, isLoading }) => {
+  if (isLoading) return <NavItemSkeleton itemKey={item.key} />;
+
+  if (item.children && item.children.length > 0) {
+    const isAnyChildActive = item.children.some(child =>
+      isPathActive(child.path, true),
+    );
+
+    return (
+      <SideNavMenu
+        key={item.key}
+        title={item.label}
+        renderIcon={item.icon}
+        isActive={isAnyChildActive}
+        defaultExpanded={isAnyChildActive}
+      >
+        {item.children.map(child => (
+          <SideNavMenuItem
+            key={child.key}
+            href={`${basePath}/${child.path}`}
+            isActive={isPathActive(child.path, true)}
+          >
+            {child.label}
+          </SideNavMenuItem>
+        ))}
+      </SideNavMenu>
+    );
+  }
+
+  return (
+    <SideNavLink
+      key={item.key}
+      renderIcon={item.icon}
+      href={`${basePath}/${item.path}`}
+      isActive={isPathActive(item.path, item.exact)}
+    >
+      {item.label}
+    </SideNavLink>
+  );
+};
+
+const NavSection: FC<{
+  section: EndpointNavSection;
+  basePath: string;
+  expanded: boolean;
+  isPathActive: (path: string, exact?: boolean) => boolean;
+  isLoading?: boolean;
+}> = ({ section, basePath, expanded, isPathActive, isLoading }) => {
+  if (section.items.length === 0) return null;
+
+  return (
+    <div>
+      {section.label && (
+        <li
+          className={cn(
+            'cds--switcher__item--divider transition-all duration-200',
+            !expanded &&
+              'opacity-0 h-0 overflow-hidden !py-0 !my-0 !border-none',
+          )}
+        >
+          {isLoading ? (
+            <SkeletonText className="!mb-0" width="50%" />
+          ) : (
+            <span className="uppercase!">{section.label}</span>
+          )}
+        </li>
+      )}
+      {section.items.map(item => (
+        <NavItem
+          key={item.key}
+          item={item}
+          basePath={basePath}
+          isPathActive={isPathActive}
+          isLoading={isLoading}
+        />
+      ))}
+    </div>
+  );
+};
 
 interface EndpointSideNavProps {
-  activeTab: string;
-  onChangeTab: (tab: string) => void;
+  endpointId?: string;
+  endpoint: Endpoint | null;
   expanded: boolean;
   onToggle: () => void;
 }
 
 export const EndpointSideNav: FC<EndpointSideNavProps> = ({
-  activeTab,
-  onChangeTab,
+  endpointId,
+  endpoint,
   expanded,
   onToggle,
 }) => {
+  const { pathname } = useLocation();
+  const isLoading = !endpoint;
+  const basePath = endpointId ? `/deployment/endpoint/${endpointId}` : '';
+
+  const isPathActive = (path: string, exact?: boolean) => {
+    const fullPath = `${basePath}/${path}`;
+    return exact ? pathname === fullPath : pathname.startsWith(fullPath);
+  };
+
   return (
     <div
       className={cn(
@@ -37,47 +144,18 @@ export const EndpointSideNav: FC<EndpointSideNavProps> = ({
         aria-label="Endpoint actions"
         expanded={expanded}
         isRail={!expanded}
-        className="!relative !inset-auto !h-auto flex-1 !w-full !border-none !z-0"
+        className="relative! inset-auto! h-auto! flex-1 w-full! border-none! z-0!"
       >
         <SideNavItems>
           {endpointNavSections.map((section, idx) => (
-            <div key={idx}>
-              {section.label && (
-                <li className="cds--switcher__item--divider">
-                  <span>{section.label}</span>
-                </li>
-              )}
-              {section.items.map(item =>
-                item.children ? (
-                  <SideNavMenu
-                    key={item.key}
-                    title={item.label}
-                    renderIcon={item.icon}
-                    isActive={item.children.some(c => activeTab === c.tabKey)}
-                    defaultExpanded={item.children.some(c => activeTab === c.tabKey)}
-                  >
-                    {item.children.map(child => (
-                      <SideNavMenuItem
-                        key={child.key}
-                        isActive={activeTab === child.tabKey}
-                        onClick={() => onChangeTab(child.tabKey)}
-                      >
-                        {child.label}
-                      </SideNavMenuItem>
-                    ))}
-                  </SideNavMenu>
-                ) : (
-                  <SideNavLink
-                    key={item.key}
-                    renderIcon={item.icon}
-                    isActive={activeTab === item.tabKey}
-                    onClick={() => onChangeTab(item.tabKey)}
-                  >
-                    {item.label}
-                  </SideNavLink>
-                ),
-              )}
-            </div>
+            <NavSection
+              key={idx}
+              section={section}
+              basePath={basePath}
+              expanded={expanded}
+              isPathActive={isPathActive}
+              isLoading={isLoading}
+            />
           ))}
         </SideNavItems>
       </SideNav>
@@ -95,7 +173,11 @@ export const EndpointSideNav: FC<EndpointSideNavProps> = ({
           aria-label={expanded ? 'Collapse nav' : 'Expand nav'}
         >
           <span className="shrink-0">
-            {expanded ? <SidePanelClose size={16} /> : <SidePanelOpen size={16} />}
+            {expanded ? (
+              <SidePanelClose size={16} />
+            ) : (
+              <SidePanelOpen size={16} />
+            )}
           </span>
           {expanded && <span className="text-xs truncate ml-3">Collapse</span>}
         </button>

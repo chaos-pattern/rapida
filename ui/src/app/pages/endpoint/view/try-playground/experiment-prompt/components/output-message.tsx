@@ -57,7 +57,12 @@ export const OutputMessage: FC<{
   }, [callerResponse]);
 
   return (
-    <div className="flex-col flex flex-1">
+    <div className="flex min-h-0 flex-col bg-white dark:bg-gray-900">
+      <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          Response
+        </p>
+      </div>
       <ExecuteMessage
         className="dark:border-gray-800  border-gray-200"
         apiError={error}
@@ -67,21 +72,20 @@ export const OutputMessage: FC<{
       />
       <Tab
         active="output"
-        className={cn('text-sm/6 bg-white dark:bg-gray-900')}
+        className={cn('min-h-0 text-sm/6 bg-white dark:bg-gray-900')}
         tabs={[
           {
             label: 'output',
             element: (
               <div className="flex-1 bg-white dark:bg-gray-900">
-                <div className="min-h-[250px] max-h-[450px] flex flex-col justify-start items-center relative">
+                <div className="flex min-h-[16rem] flex-col items-start justify-start overflow-auto">
                   {outputs ? (
                     outputs.map((out, i) => {
                       return <MarkdownViewer text={out.content} key={i} />;
                     })
                   ) : (
-                    <div className="opacity-60 w-full p-4">
-                      Output will be printed here after the completion of
-                      execution
+                    <div className="w-full p-4 text-sm text-gray-500 dark:text-gray-400">
+                      Output will appear after execution.
                     </div>
                   )}
                 </div>
@@ -89,7 +93,7 @@ export const OutputMessage: FC<{
             ),
           },
           {
-            label: 'metadatas',
+            label: 'metadata',
             element: (
               <div className="flex-1 bg-white dark:bg-gray-900">
                 {callerResponse ? (
@@ -98,9 +102,8 @@ export const OutputMessage: FC<{
                     code={JSON.stringify(callerResponse.getMeta(), null, 2)}
                   />
                 ) : (
-                  <div className="opacity-60 w-full p-4">
-                    Metadata will be available here after the completion of
-                    execution
+                  <div className="w-full p-4 text-sm text-gray-500 dark:text-gray-400">
+                    Metadata will appear after execution.
                   </div>
                 )}
               </div>
@@ -120,9 +123,8 @@ export const OutputMessage: FC<{
                     )}
                   />
                 ) : (
-                  <div className="opacity-60 w-full p-4">
-                    Metrics will be available here after the completion of
-                    execution
+                  <div className="w-full p-4 text-sm text-gray-500 dark:text-gray-400">
+                    Metrics will appear after execution.
                   </div>
                 )}
               </div>

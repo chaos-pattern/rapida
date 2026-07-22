@@ -24,9 +24,12 @@ import {
   Button,
   ClickableTile,
 } from '@carbon/react';
+import { PrimaryButton } from '@/app/components/carbon/button';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { Modal, ModalBody, ModalHeader } from '@/app/components/carbon/modal';
+
+const CREATE_ASSISTANT_LABEL = 'Create new assistant';
 
 export function AssistantPage() {
   const navigate = useNavigate();
@@ -82,7 +85,7 @@ export function AssistantPage() {
         <div className="flex items-center gap-3">
           <PageTitleBlock>Assistants</PageTitleBlock>
           <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-            {assistantAction.pageSize}/{assistantAction.totalCount}
+            {assistantAction.assistants.length}/{assistantAction.totalCount}
           </span>
         </div>
       </PageHeaderBlock>
@@ -97,12 +100,13 @@ export function AssistantPage() {
             onClick={() => getAssistants(projectId, token, userId)}
             tooltipPosition="bottom"
           />
-          <Button
+          <PrimaryButton
+            size="md"
             renderIcon={Add}
             onClick={() => setCreateAssistantModalOpen(true)}
           >
-            Create new Assistant
-          </Button>
+            {CREATE_ASSISTANT_LABEL}
+          </PrimaryButton>
         </TableToolbarContent>
       </TableToolbar>
 
@@ -119,9 +123,10 @@ export function AssistantPage() {
       ) : assistantAction.criteria.length > 0 ? (
         <div className="h-full flex justify-center items-center">
           <EmptyState
-            title="No Assistant"
+            icon={Bot}
+            title="No assistants found"
             subtitle="No assistants match your current filters."
-            action="Create new Assistant"
+            action={CREATE_ASSISTANT_LABEL}
             actionIcon={Add}
             onAction={() => setCreateAssistantModalOpen(true)}
           />
@@ -129,9 +134,10 @@ export function AssistantPage() {
       ) : (
         <div className="h-full flex justify-center items-center">
           <EmptyState
-            title="No Assistant"
+            icon={Bot}
+            title="No assistants"
             subtitle="Create assistants for each client, brand, or business unit from one controlled platform."
-            action="Create new Assistant"
+            action={CREATE_ASSISTANT_LABEL}
             actionIcon={Add}
             onAction={() => setCreateAssistantModalOpen(true)}
           />
