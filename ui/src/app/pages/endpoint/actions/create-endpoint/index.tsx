@@ -9,7 +9,13 @@ import {
   PrimaryButton,
   SecondaryButton,
 } from '@/app/components/carbon/button';
-import { ButtonSet } from '@carbon/react';
+import {
+  ButtonSet,
+  Toggletip,
+  ToggletipButton,
+  ToggletipContent,
+} from '@carbon/react';
+import { Information } from '@carbon/icons-react';
 import { TabForm } from '@/app/components/form/tab-form';
 import {
   ConnectionConfig,
@@ -40,10 +46,9 @@ import { ChatCompletePrompt } from '@/utils/prompt';
 import { connectionConfig } from '@/configs';
 import { YellowNoticeBlock } from '@/app/components/container/message/notice-block';
 import { InputHelper } from '@/app/components/input-helper';
-import { ArrowUpRight, ExternalLink, Info } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { ConfigureEndpointPromptDialog } from '@/app/components/base/modal/configure-endpoint-prompt-modal/index';
 import { CornerBorderOverlay } from '@/app/components/base/corner-border';
-import { SectionDivider } from '@/app/components/blocks/section-divider';
 
 export function CreateEndpointPage() {
   const { authId, token, projectId } = useCurrentCredential();
@@ -342,7 +347,6 @@ export function CreateEndpointPage() {
 
                   {/* Model configuration section */}
                   <div className="flex flex-col gap-6">
-                    <SectionDivider label="Model Configuration" />
                     <TextProvider
                       onChangeProvider={onChangeTextProvider}
                       onChangeParameter={onChangeTextProviderParameter}
@@ -353,7 +357,6 @@ export function CreateEndpointPage() {
 
                   {/* Prompt template section */}
                   <div className="flex flex-col gap-6">
-                    <SectionDivider label="Prompt Template" />
                     <ConfigPrompt
                       instanceId={randomString(10)}
                       existingPrompt={promptConfig}
@@ -400,72 +403,60 @@ export function CreateEndpointPage() {
             ],
             body: (
               <div className="px-8 pt-8 pb-8 max-w-2xl flex flex-col gap-10">
-                {/* Identity section */}
                 <div className="flex flex-col gap-6">
-                  <SectionDivider label="Identity" />
-
                   <FieldSet>
                     <div className="flex items-baseline justify-between">
-                      <FormLabel
-                        htmlFor="name"
-                        className="text-xs tracking-wide uppercase"
-                      >
-                        Endpoint name{' '}
-                        <span className="text-red-500 ml-0.5 normal-case">
-                          *
-                        </span>
-                      </FormLabel>
+                      <div className="flex items-center gap-1">
+                        <FormLabel htmlFor="name">Endpoint name</FormLabel>
+                        <Toggletip align="right">
+                          <ToggletipButton label="Endpoint name information">
+                            <Information size={14} />
+                          </ToggletipButton>
+                          <ToggletipContent>
+                            Use a short, stable name that makes this endpoint
+                            easy to identify.
+                          </ToggletipContent>
+                        </Toggletip>
+                      </div>
                       <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
                         {name.length}/100
                       </span>
                     </div>
                     <Input
+                      id="name"
                       name="name"
                       maxLength={100}
                       onChange={e => setName(e.target.value)}
                       value={name}
                       placeholder="e.g. customer-support-v1"
                     />
-                    <InputHelper>
-                      A unique identifier for this endpoint. Use lowercase
-                      letters, numbers, and hyphens.
-                    </InputHelper>
                   </FieldSet>
 
                   <FieldSet>
-                    <FormLabel
-                      htmlFor="description"
-                      className="text-xs tracking-wide uppercase"
-                    >
-                      Description
-                    </FormLabel>
+                    <div className="flex items-center gap-1">
+                      <FormLabel htmlFor="description">Description</FormLabel>
+                      <Toggletip align="right">
+                        <ToggletipButton label="Endpoint description information">
+                          <Information size={14} />
+                        </ToggletipButton>
+                        <ToggletipContent>
+                          Describe what this endpoint is for and when it should
+                          be used.
+                        </ToggletipContent>
+                      </Toggletip>
+                    </div>
                     <Textarea
+                      id="description"
                       row={4}
                       name="description"
                       value={description}
                       placeholder="What does this endpoint do? When should it be used?"
                       onChange={t => setDescription(t.target.value)}
                     />
-                    <InputHelper>
-                      A clear description helps your team understand the purpose
-                      of this endpoint.
-                    </InputHelper>
                   </FieldSet>
                 </div>
 
-                {/* Labels section */}
                 <div className="flex flex-col gap-6">
-                  <div className="flex items-center gap-3">
-                    <span className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400 whitespace-nowrap">
-                      Labels
-                    </span>
-                    <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
-                    {tags.length > 0 && (
-                      <span className="text-xs tabular-nums bg-primary/10 text-primary px-2 py-0.5 rounded-full font-medium">
-                        {tags.length}
-                      </span>
-                    )}
-                  </div>
                   <TagInput
                     tags={tags}
                     addTag={onAddTag}

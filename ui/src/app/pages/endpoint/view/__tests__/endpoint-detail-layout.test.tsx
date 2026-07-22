@@ -1,5 +1,5 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 import { EndpointSideNav } from '@/app/pages/endpoint/view/endpoint-side-nav';
@@ -75,13 +75,21 @@ jest.mock('@carbon/react', () => ({
     </aside>
   ),
   SideNavItems: ({ children }: any) => <ul>{children}</ul>,
-  SideNavLink: ({ children, isActive, href }: any) => (
+  SideNavLink: ({ children, isActive, href, renderIcon: Icon }: any) => (
     <a data-active={isActive} href={href}>
+      {Icon ? <Icon size={16} /> : null}
       {children}
     </a>
   ),
-  SideNavMenu: ({ children, title, isActive, defaultExpanded }: any) => (
+  SideNavMenu: ({
+    children,
+    title,
+    isActive,
+    defaultExpanded,
+    renderIcon: Icon,
+  }: any) => (
     <li data-active={isActive} data-expanded={defaultExpanded}>
+      {Icon ? <Icon size={16} /> : null}
       <span>{title}</span>
       {children}
     </li>
@@ -223,6 +231,10 @@ describe('Endpoint detail layout', () => {
       'href',
       '/deployment/endpoint/endpoint-1/logs',
     );
+    expect(screen.getByText('source-control')).toHaveAttribute(
+      'data-icon-size',
+      '16',
+    );
     expect(screen.getByText('Overview')).toHaveAttribute('data-active', 'true');
 
     rerender(
@@ -287,15 +299,16 @@ describe('Endpoint detail layout', () => {
   it('uses a Carbon shell header with right-side global actions', () => {
     renderEndpointDetailRoute();
 
+    const toolbar = screen.getByRole('toolbar', {
+      name: 'Endpoint header actions',
+    });
+    expect(toolbar).toBeInTheDocument();
     expect(
-      screen.getByRole('toolbar', { name: 'Endpoint header actions' }),
-    ).toBeInTheDocument();
-    expect(
-      screen
+      within(toolbar)
         .getAllByText(/source-control|info|edit|tag|copy/)
         .map(icon => icon),
     ).toHaveLength(5);
-    screen
+    within(toolbar)
       .getAllByText(/source-control|info|edit|tag|copy/)
       .forEach(icon => expect(icon).toHaveAttribute('data-icon-size', '16'));
     expect(screen.getByText('Endpoints')).toBeInTheDocument();

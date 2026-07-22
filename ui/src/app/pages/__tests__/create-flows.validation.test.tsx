@@ -7,7 +7,11 @@ import { CreateEndpointPage } from '@/app/pages/endpoint/actions/create-endpoint
 import { CreateNewVersionEndpointPage } from '@/app/pages/endpoint/actions/create-endpoint-version';
 import { CreateAssistantPage } from '@/app/pages/assistant/actions/create-assistant';
 import { CreateVersionAssistantPage } from '@/app/pages/assistant/actions/create-assistant-version';
-import { ForgotPassword, GetAssistant } from '@rapidaai/react';
+import {
+  CreateEndpointProviderModel,
+  ForgotPassword,
+  GetAssistant,
+} from '@rapidaai/react';
 
 let mockParams: Record<string, string | undefined> = {};
 const mockNavigate = jest.fn();
@@ -339,10 +343,20 @@ describe('Requested create/update flow pages', () => {
       });
     });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Configure instruction' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Configure instruction' }),
+    );
 
     expect(screen.queryByText('Please define at least one variable.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create endpoint' })).toBeInTheDocument();
+    expect(screen.getByText('Endpoint name')).toBeInTheDocument();
+    expect(screen.queryByText('Endpoint name *')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Endpoint name information' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Endpoint description information' }),
+    ).toBeInTheDocument();
   });
 
   it('create endpoint validates using changed provider', () => {
@@ -409,6 +423,38 @@ describe('Requested create/update flow pages', () => {
 
     expect(mockValidateTextProviderDefaultOptions).toHaveBeenCalled();
     expect(mockValidateTextProviderDefaultOptions.mock.calls.at(-1)?.[0]).toBe('anthropic');
+  });
+
+  it('redirects to endpoint versions after creating a new endpoint version', () => {
+    mockParams = { endpointId: 'endpoint-1' };
+    (CreateEndpointProviderModel as jest.Mock).mockImplementation(
+      (_cfg, _endpointId, _attr, _auth, cb) => {
+        cb(null, {
+          getSuccess: () => true,
+          getData: () => ({
+            getEndpointid: () => 'endpoint-1',
+          }),
+        });
+      },
+    );
+
+    render(<CreateNewVersionEndpointPage />);
+
+    const endpointVersionPromptProps = getLatestConfigPromptProps();
+    act(() => {
+      endpointVersionPromptProps.onChange({
+        prompt: [{ role: 'system', content: 'Hello {{topic}}' }],
+        variables: [{ name: 'topic', type: 'string', defaultvalue: '' }],
+      });
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Configure instruction' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create new version' }));
+
+    expect(CreateEndpointProviderModel).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith(
+      '/deployment/endpoint/endpoint-1/versions',
+    );
   });
 
   it('create assistant blocks continue when prompt content is empty', () => {

@@ -5,7 +5,11 @@ import toast from 'react-hot-toast/headless';
 import { useRapidaStore } from '@/hooks';
 import { Endpoint, EndpointLog } from '@rapidaai/react';
 import { SourceIndicator } from '@/app/components/indicators/source';
-import { toDate, toDateString } from '@/utils/date';
+import {
+  formatNanoToReadableMilli,
+  toDateString,
+  toHumanReadableDateTime,
+} from '@/utils/date';
 import { getTimeTakenMetric, getTotalTokenMetric } from '@/utils/metadata';
 import { EndpointTraceModal } from '@/app/components/base/modal/endpoint-trace-modal';
 import { useEndpointLogPage } from '@/hooks/use-endpoint-log-page-store';
@@ -16,6 +20,7 @@ import { CopyButton } from '@/app/components/carbon/button/copy-button';
 import { DateFilter } from '@/app/components/carbon/date-filter';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { Renew, View, Activity } from '@carbon/icons-react';
+import { ScrollableTableSection } from '@/app/components/sections/table-section';
 
 import {
   Table,
@@ -28,76 +33,18 @@ import {
   TableToolbarContent,
   TableToolbarSearch,
   Loading,
-  DefinitionTooltip,
-  Tag,
 } from '@carbon/react';
-
-type TraceMetadataRecord = {
-  getKey?: () => string;
-  getName?: () => string;
-  getValue: () => string;
-};
-
-const TRACE_ID_KEYS = new Set([
-  'traceId',
-  'traceID',
-  'trace_id',
-  'context.traceId',
-]);
-
-const getTraceIdFromJson = (value: string): string => {
-  if (!value.trim()) return '';
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!parsed || typeof parsed !== 'object') return '';
-
-    const context =
-      'context' in parsed &&
-      parsed.context &&
-      typeof parsed.context === 'object'
-        ? parsed.context
-        : parsed;
-
-    return (
-      String(
-        context.traceId || context.traceID || context.trace_id || '',
-      ).trim() || ''
-    );
-  } catch {
-    return '';
-  }
-};
-
-const getTraceIdFromRecords = (records: TraceMetadataRecord[]): string => {
-  for (const record of records) {
-    const key = record.getKey?.() || record.getName?.() || '';
-    const value = record.getValue();
-    if (TRACE_ID_KEYS.has(key) && value) return value;
-    if (key === 'context') {
-      const traceId = getTraceIdFromJson(value);
-      if (traceId) return traceId;
-    }
-  }
-
-  return '';
-};
-
-const getEndpointTraceId = (row: EndpointLog): string =>
-  getTraceIdFromRecords([
-    ...row.getMetadataList(),
-    ...row.getOptionsList(),
-    ...row.getArgumentsList(),
-  ]);
 
 export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [userId, token, projectId] = useCredential();
   const [currentTrace, setCurrentTrace] = useState<EndpointLog | null>(null);
   const [showTraceModal, setShowTraceModal] = useState(false);
+  const [loadingTraceId, setLoadingTraceId] = useState<string | null>(null);
 
   const {
     getLogs,
+    getLog,
     addCriterias,
     endpointLogs,
     onChangeLogs,
@@ -146,6 +93,27 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
     );
   };
 
+  const onGetEndpointLog = (row: EndpointLog) => {
+    const logId = String(row.getId());
+    setLoadingTraceId(logId);
+    getLog(
+      props.currentEndpoint.getId(),
+      logId,
+      projectId,
+      token,
+      userId,
+      err => {
+        setLoadingTraceId(null);
+        toast.error(err);
+      },
+      log => {
+        setLoadingTraceId(null);
+        setCurrentTrace(log);
+        setShowTraceModal(true);
+      },
+    );
+  };
+
   const visibleColumns = columns.filter(c => c.visible);
 
   return (
@@ -180,8 +148,8 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
           <Loading withOverlay={false} small />
         </div>
       ) : endpointLogs && endpointLogs.length > 0 ? (
-        <div className="overflow-auto flex-1">
-          <Table>
+        <ScrollableTableSection>
+          <Table className="min-w-max">
             <TableHead>
               <TableRow>
                 {visibleColumns.map(col => (
@@ -191,36 +159,25 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
             </TableHead>
             <TableBody>
               {endpointLogs.map((row, idx) => {
-                const traceId = getEndpointTraceId(row);
-
                 return (
                   <TableRow key={idx}>
                     {visibleColumn('id') && (
-                      <TableCell className="font-mono text-[13px]">
-                        {row.getId()}
-                      </TableCell>
-                    )}
-                    {visibleColumn('trace_id') && (
-                      <TableCell className="max-w-[260px]">
-                        <div className="flex min-w-0 items-center gap-1">
-                          <span className="truncate font-mono text-[13px]">
-                            {traceId || '-'}
-                          </span>
-                          {traceId && (
-                            <CopyButton className="h-6 w-6 shrink-0">
-                              {traceId}
-                            </CopyButton>
-                          )}
-                        </div>
+                      <TableCell className="text-[13px]">
+                        <span className="font-mono">{row.getId()}</span>
                       </TableCell>
                     )}
                     {visibleColumn('version') && (
-                      <TableCell className="text-sm">
-                        <Tag size="md" type="cool-gray">
-                          <span className="font-mono text-[13px] leading-none">
-                            vrsn_{row.getEndpointprovidermodelid()}
+                      <TableCell className="text-[13px]">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span className="font-mono">
+                            {`vrsn_${row.getEndpointprovidermodelid()}`}
                           </span>
-                        </Tag>
+                          {row.getEndpointprovidermodelid() && (
+                            <CopyButton className="h-6 w-6 shrink-0">
+                              {`vrsn_${row.getEndpointprovidermodelid()}`}
+                            </CopyButton>
+                          )}
+                        </div>
                       </TableCell>
                     )}
                     {visibleColumn('source') && (
@@ -234,46 +191,40 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
                       </TableCell>
                     )}
                     {visibleColumn('action') && (
-                      <TableCell className="text-sm">
-                        <IconOnlyButton
-                          kind="ghost"
-                          size="md"
-                          renderIcon={View}
-                          iconDescription="View detail"
-                          onClick={() => {
-                            setCurrentTrace(row);
-                            setShowTraceModal(true);
-                          }}
-                        />
+                      <TableCell>
+                        <div className="flex items-center gap-0">
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={View}
+                            iconDescription="View detail"
+                            isLoading={loadingTraceId === String(row.getId())}
+                            onClick={() => onGetEndpointLog(row)}
+                          />
+                        </div>
                       </TableCell>
                     )}
                     {visibleColumn('timetaken') && (
-                      <TableCell className="font-mono text-[13px] tabular-nums">
-                        {Number(row.getTimetaken()) / 1000000}ms
+                      <TableCell className="font-mono text-[13px]">
+                        {formatNanoToReadableMilli(row.getTimetaken())}
                       </TableCell>
                     )}
                     {visibleColumn('total_token') && (
-                      <TableCell className="text-sm tabular-nums">
+                      <TableCell className="font-mono text-[13px]">
                         {getTotalTokenMetric(row.getMetricsList())}
                       </TableCell>
                     )}
                     {visibleColumn('time_taken') && (
-                      <TableCell className="font-mono text-[13px] tabular-nums">
-                        {getTimeTakenMetric(row.getMetricsList()) / 1000000}ms
+                      <TableCell className="font-mono text-[13px]">
+                        {formatNanoToReadableMilli(
+                          getTimeTakenMetric(row.getMetricsList()),
+                        )}
                       </TableCell>
                     )}
                     {visibleColumn('created_date') && (
                       <TableCell className="text-[13px] whitespace-nowrap">
-                        {row.getCreateddate() && (
-                          <DefinitionTooltip
-                            definition={toDate(
-                              row.getCreateddate()!,
-                            ).toUTCString()}
-                            openOnHover
-                          >
-                            {toDate(row.getCreateddate()!).toLocaleString()}
-                          </DefinitionTooltip>
-                        )}
+                        {row.getCreateddate() &&
+                          toHumanReadableDateTime(row.getCreateddate()!)}
                       </TableCell>
                     )}
                   </TableRow>
@@ -281,7 +232,7 @@ export const EndpointTraces: FC<{ currentEndpoint: Endpoint }> = props => {
               })}
             </TableBody>
           </Table>
-        </div>
+        </ScrollableTableSection>
       ) : (
         <EmptyState
           icon={Activity}

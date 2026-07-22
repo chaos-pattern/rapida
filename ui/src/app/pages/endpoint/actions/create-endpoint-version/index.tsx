@@ -39,7 +39,6 @@ import { Textarea } from '@/app/components/form/textarea';
 import { connectionConfig } from '@/configs';
 import { DocNoticeBlock } from '@/app/components/container/message/notice-block/doc-notice-block';
 import { InputHelper } from '@/app/components/input-helper';
-import { SectionDivider } from '@/app/components/blocks/section-divider';
 
 export const CreateNewVersionEndpointPage: FC = () => {
   /**
@@ -122,7 +121,7 @@ export const CreateNewVersionEndpointPage: FC = () => {
       if (response?.getSuccess() && response.getData()) {
         let ep = response.getData();
         toast.success('New version of endpoint successfully created.');
-        navigator(`/deployment/endpoint/${ep?.getEndpointid()}`);
+        navigator(`/deployment/endpoint/${ep?.getEndpointid()}/versions`);
         return;
       }
       if (response?.getError()) {
@@ -305,7 +304,6 @@ export const CreateNewVersionEndpointPage: FC = () => {
                 <div className="px-8 pt-6 pb-8 max-w-4xl flex flex-col gap-8">
                   {/* Model configuration section */}
                   <div className="flex flex-col gap-6">
-                    <SectionDivider label="Model Configuration" />
                     <TextProvider
                       onChangeProvider={onChangeTextProvider}
                       parameters={textProviderModel.parameters}
@@ -316,7 +314,6 @@ export const CreateNewVersionEndpointPage: FC = () => {
 
                   {/* Prompt template section */}
                   <div className="flex flex-col gap-6">
-                    <SectionDivider label="Prompt Template" />
                     <ConfigPrompt
                       instanceId={randomString(10)}
                       existingPrompt={promptConfig}
@@ -370,7 +367,6 @@ export const CreateNewVersionEndpointPage: FC = () => {
             body: (
               <div className="px-8 pt-8 pb-8 max-w-2xl flex flex-col gap-10">
                 <div className="flex flex-col gap-6">
-                  <SectionDivider label="Version Description" />
                   <FieldSet>
                     <FormLabel>Version note</FormLabel>
                     <Textarea

@@ -41,6 +41,16 @@ export type EndpointLogType = {
     onSuccess: (e: EndpointLog[]) => void,
   ) => void;
 
+  getLog: (
+    endpointId: string,
+    logId: string,
+    projectId: string,
+    token: string,
+    userId: string,
+    onError: (err: string) => void,
+    onSuccess: (e: EndpointLog) => void,
+  ) => void;
+
   /**
    * clear everything
    * @returns

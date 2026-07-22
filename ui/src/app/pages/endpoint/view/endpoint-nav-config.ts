@@ -1,4 +1,4 @@
-import { Dashboard, RecentlyViewed, Activity } from '@carbon/icons-react';
+import { Dashboard, SourceControl, Activity } from '@carbon/icons-react';
 import type { ComponentType } from 'react';
 
 export interface EndpointNavChild {
@@ -41,7 +41,7 @@ export const endpointNavSections: EndpointNavSection[] = [
       {
         key: 'versions',
         label: 'Versions',
-        icon: RecentlyViewed,
+        icon: SourceControl,
         path: 'versions',
         children: [
           { key: 'versions-list', label: 'View all', path: 'versions' },
