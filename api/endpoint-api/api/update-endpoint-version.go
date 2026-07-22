@@ -17,7 +17,7 @@ import (
 func (endpointGRPCApi *endpointGRPCApi) UpdateEndpointVersion(ctx context.Context, cer *endpoint_grpc_api.UpdateEndpointVersionRequest) (*endpoint_grpc_api.UpdateEndpointVersionResponse, error) {
 	endpointGRPCApi.logger.Debugf("update endpoint version request %v, %v", cer, ctx)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(ctx)
-	if !isAuthenticated {
+	if !isAuthenticated || !iAuth.HasProject() {
 		endpointGRPCApi.logger.Errorf("unauthenticated request for UpdateEndpointVersion")
 		return utils.Error[endpoint_grpc_api.UpdateEndpointVersionResponse](
 			errors.New("unauthenticated request for updateendpointversion"),

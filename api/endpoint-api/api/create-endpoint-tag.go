@@ -17,7 +17,7 @@ import (
 
 func (endpointGRPCApi *endpointGRPCApi) CreateEndpointTag(ctx context.Context, eRequest *protos.CreateEndpointTagRequest) (*protos.GetEndpointResponse, error) {
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(ctx)
-	if !isAuthenticated {
+	if !isAuthenticated || !iAuth.HasProject() {
 		endpointGRPCApi.logger.Errorf("unauthenticated request for invoke")
 		return utils.Error[protos.GetEndpointResponse](
 			errors.New("unauthenticated request for CreateEndpointProviderModel"),

@@ -154,11 +154,15 @@ func (eService *endpointService) GetAllEndpointProviderModel(ctx context.Context
 		epms []*internal_gorm.EndpointProviderModel
 		cnt  int64
 	)
-	// use projectId and orgId to validate that he has access to the endpoint
 	qry := db.Model(internal_gorm.EndpointProviderModel{})
 	qry.
+		Joins("inner join endpoints on endpoints.id = endpoint_provider_models.endpoint_id").
 		Preload("EndpointProviderModelOptions").
-		Where("endpoint_id = ? ", endpointId)
+		Where("endpoint_provider_models.endpoint_id = ? AND endpoints.project_id = ? AND endpoints.organization_id = ?",
+			endpointId,
+			auth.GetCurrentProjectId(),
+			auth.GetCurrentOrganizationId(),
+		)
 	for _, ct := range criteria {
 		qry.Where(fmt.Sprintf("%s = ?", ct.GetKey()), ct.GetValue())
 	}
@@ -171,7 +175,7 @@ func (eService *endpointService) GetAllEndpointProviderModel(ctx context.Context
 					&cnt,
 					qry))).
 		Order(clause.OrderByColumn{
-			Column: clause.Column{Name: "created_date"},
+			Column: clause.Column{Table: "endpoint_provider_models", Name: "created_date"},
 			Desc:   true,
 		}).Find(&epms)
 
@@ -236,6 +240,15 @@ func (eService *endpointService) CreateEndpointProviderModel(
 	options []*endpoint_grpc_api.Metadata,
 ) (*internal_gorm.EndpointProviderModel, error) {
 	db := eService.postgres.DB(ctx)
+	var endpoint internal_gorm.Endpoint
+	tx := db.
+		Where("id = ? AND project_id = ? AND organization_id = ?", endpointId, auth.GetCurrentProjectId(), auth.GetCurrentOrganizationId()).
+		First(&endpoint)
+	if tx.Error != nil {
+		eService.logger.Errorf("not able to validate endpoint access %v", tx.Error)
+		return nil, tx.Error
+	}
+
 	epm := &internal_gorm.EndpointProviderModel{
 		Mutable: gorm_models.Mutable{
 			Status:    type_enums.RECORD_ACTIVE,
@@ -246,7 +259,7 @@ func (eService *endpointService) CreateEndpointProviderModel(
 		EndpointId:        endpointId,
 	}
 	epm.SetPrompt(promptRequest)
-	tx := db.Save(epm)
+	tx = db.Save(epm)
 	if tx.Error != nil {
 		eService.logger.Errorf("unable to create endpoint.")
 		return nil, tx.Error
@@ -326,12 +339,18 @@ func (eService *endpointService) ConfigureEndpointRetry(ctx context.Context,
 		},
 		RetryEnable: retryEnable,
 	}
-	tx := db.Where("id = ?", endpointId).
+	tx := db.Where("id = ? AND project_id = ? AND organization_id = ?", endpointId,
+		auth.GetCurrentProjectId(),
+		auth.GetCurrentOrganizationId(),
+	).
 		Clauses(clause.Returning{}).
 		Updates(endpoint)
 	if tx.Error != nil {
 		eService.logger.Errorf("error while updating for endpoint configuration %v", tx.Error)
 		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, fmt.Errorf("you don't have access to the endpoint")
 	}
 
 	retryEndpoint := &internal_gorm.EndpointRetry{
@@ -378,12 +397,18 @@ func (eService *endpointService) ConfigureEndpointCaching(ctx context.Context,
 		},
 		CacheEnable: cacheEnable,
 	}
-	tx := db.Where("id = ?", endpointId).
+	tx := db.Where("id = ? AND project_id = ? AND organization_id = ?", endpointId,
+		auth.GetCurrentProjectId(),
+		auth.GetCurrentOrganizationId(),
+	).
 		Clauses(clause.Returning{}).
 		Updates(endpoint)
 	if tx.Error != nil {
 		eService.logger.Errorf("error while updating for endpoint configuration %v", tx.Error)
 		return nil, tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return nil, fmt.Errorf("you don't have access to the endpoint")
 	}
 
 	cachingEndpoint := &internal_gorm.EndpointCaching{
@@ -414,6 +439,15 @@ func (eService *endpointService) CreateOrUpdateEndpointTag(ctx context.Context,
 	tags []string,
 ) (*internal_gorm.EndpointTag, error) {
 	db := eService.postgres.DB(ctx)
+	var endpoint internal_gorm.Endpoint
+	tx := db.
+		Where("id = ? AND project_id = ? AND organization_id = ?", endpointId, auth.GetCurrentProjectId(), auth.GetCurrentOrganizationId()).
+		First(&endpoint)
+	if tx.Error != nil {
+		eService.logger.Errorf("not able to validate endpoint access %v", tx.Error)
+		return nil, tx.Error
+	}
+
 	endpointTag := &internal_gorm.EndpointTag{
 		EndpointId: endpointId,
 		Tag:        tags,
@@ -422,7 +456,7 @@ func (eService *endpointService) CreateOrUpdateEndpointTag(ctx context.Context,
 			UpdatedBy: *auth.GetUserId(),
 		},
 	}
-	tx := db.Clauses(clause.OnConflict{
+	tx = db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "endpoint_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"tag",

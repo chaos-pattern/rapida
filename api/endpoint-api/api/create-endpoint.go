@@ -16,9 +16,8 @@ import (
 )
 
 func (endpointGRPCApi *endpointGRPCApi) CreateEndpoint(ctx context.Context, cer *protos.CreateEndpointRequest) (*protos.CreateEndpointResponse, error) {
-	endpointGRPCApi.logger.Debugf("Create endpoint request %v, %v", cer, ctx)
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(ctx)
-	if !isAuthenticated {
+	if !isAuthenticated || !iAuth.HasProject() {
 		endpointGRPCApi.logger.Errorf("unauthenticated request for invoke")
 		return utils.Error[protos.CreateEndpointResponse](
 			errors.New("unauthenticated request for invoke"),
@@ -93,15 +92,11 @@ func (endpointGRPCApi *endpointGRPCApi) CreateEndpoint(ctx context.Context, cer 
 			"Unable to create endpoint tags, please try again.",
 		)
 	}
-
 	endpoint.EndpointProviderModel = epModel
 	out := &protos.Endpoint{}
 	err = utils.Cast(endpoint, out)
 	if err != nil {
 		endpointGRPCApi.logger.Errorf("unable to cast the endpoint provider model to the response object")
 	}
-
-	// calling to index the endpoint
-	// endpointGRPCApi.endpointService.IndexEndpoint(ctx, iAuth, endpoint.Id)
 	return utils.Success[protos.CreateEndpointResponse, *protos.Endpoint](out)
 }
