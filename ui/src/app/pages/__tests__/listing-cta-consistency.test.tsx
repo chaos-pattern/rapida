@@ -67,7 +67,11 @@ jest.mock('@/app/components/carbon/pagination', () => ({
 
 jest.mock('@/app/pages/assistant/listing/single-assistant', () => ({
   __esModule: true,
-  default: ({ assistant }: any) => <article>{assistant.getName()}</article>,
+  default: ({ assistant }: any) => (
+    <tr>
+      <td>{assistant.getName()}</td>
+    </tr>
+  ),
 }));
 
 jest.mock('@/app/pages/endpoint/listing/single-endpoint', () => ({
@@ -124,6 +128,11 @@ jest.mock('@carbon/react', () => {
       <th className={className}>{children}</th>
     ),
     TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    DataTableSkeleton: ({ className, headers, rowCount }: any) => (
+      <div className={className}>
+        Loading table {headers?.length} columns {rowCount} rows
+      </div>
+    ),
     TableToolbar: Div,
     TableToolbarContent: Div,
     TableToolbarSearch: ({ placeholder }: any) => (
@@ -250,6 +259,21 @@ describe('listing page create CTAs', () => {
     );
   });
 
+  it('uses a table skeleton while the assistant listing reloads', () => {
+    mockLoading = true;
+    mockAssistantState.pageSize = 20;
+
+    render(<AssistantPage />);
+
+    expect(screen.getByText('Loading table 13 columns 10 rows')).toHaveClass(
+      'min-w-max',
+    );
+    expect(
+      screen.getByRole('button', { name: 'Create new assistant' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Loading page')).not.toBeInTheDocument();
+  });
+
   it('keeps endpoint metric headers on one line with fixed minimum widths', () => {
     mockEndpointState.endpoints = [makeEndpoint('e-1', 'Support endpoint')];
     mockEndpointState.columns = [
@@ -278,6 +302,50 @@ describe('listing page create CTAs', () => {
     expect(screen.getByRole('columnheader', { name: 'Cost' })).toHaveClass(
       'min-w-28',
       'whitespace-nowrap',
+    );
+  });
+
+  it('keeps assistant resource table headers on one line with fixed minimum widths', () => {
+    mockAssistantState.assistants = [makeAssistant('a-1', 'Support assistant')];
+    mockAssistantState.totalCount = 1;
+
+    render(<AssistantPage />);
+
+    expect(screen.getByRole('columnheader', { name: 'Assistant' })).toHaveClass(
+      'min-w-56',
+      'whitespace-nowrap',
+    );
+    expect(
+      screen.getByRole('columnheader', { name: 'Assistant ID' }),
+    ).toHaveClass('min-w-64', 'whitespace-nowrap');
+    expect(screen.getByRole('columnheader', { name: 'Provider' })).toHaveClass(
+      'min-w-36',
+      'whitespace-nowrap',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Version' })).toHaveClass(
+      'min-w-44',
+      'whitespace-nowrap',
+    );
+    expect(
+      screen.getByRole('columnheader', { name: 'Deployments' }),
+    ).toHaveClass('min-w-48', 'whitespace-nowrap');
+    expect(screen.getByRole('columnheader', { name: 'Sessions' })).toHaveClass(
+      'min-w-28',
+      'whitespace-nowrap',
+    );
+    expect(
+      screen.getByRole('columnheader', { name: 'Last activity' }),
+    ).toHaveClass('min-w-36', 'whitespace-nowrap');
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toHaveClass(
+      'min-w-28',
+      'whitespace-nowrap',
+    );
+
+    const assistantHeaders = screen
+      .getAllByRole('columnheader')
+      .map(header => header.textContent);
+    expect(assistantHeaders.indexOf('Actions')).toBeLessThan(
+      assistantHeaders.indexOf('Tags'),
     );
   });
 });

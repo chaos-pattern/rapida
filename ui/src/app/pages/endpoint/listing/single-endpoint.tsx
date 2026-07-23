@@ -5,7 +5,7 @@ import { nanoToMilli, toHumanReadableRelativeTime } from '@/utils/date';
 import { useNavigate } from 'react-router-dom';
 import { TableRow, TableCell, Tag, Link } from '@carbon/react';
 import { ProviderTag } from '@/app/components/carbon/provider-tag';
-import { Launch, View, Add } from '@carbon/icons-react';
+import { Launch, View, SourceControl } from '@carbon/icons-react';
 import { CarbonStatusIndicator } from '@/app/components/carbon/status-indicator';
 import { VersionIndicator } from '@/app/components/indicators/version';
 import { IconOnlyButton } from '@/app/components/carbon/button';
@@ -156,7 +156,7 @@ export const SingleEndpoint: FC<SingleEndpointProps> = ({ endpoint }) => {
             <IconOnlyButton
               kind="ghost"
               size="md"
-              renderIcon={Add}
+              renderIcon={SourceControl}
               iconDescription="Create new version"
               onClick={() =>
                 navigate(

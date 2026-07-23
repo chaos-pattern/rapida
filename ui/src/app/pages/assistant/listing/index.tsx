@@ -7,20 +7,25 @@ import toast from 'react-hot-toast/headless';
 import SingleAssistant from './single-assistant';
 import { useAssistantPageStore } from '@/hooks/use-assistant-page-store';
 import { Assistant } from '@rapidaai/react';
-import { PageLoading } from '@/app/components/carbon/loading';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { Pagination } from '@/app/components/carbon/pagination';
 import {
   Add,
-  ArrowRight,
   Bot,
   PromptTemplate,
   Renew,
+  ArrowRight,
 } from '@carbon/icons-react';
 import {
+  Table,
+  TableHead,
+  TableRow,
+  TableHeader,
+  TableBody,
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
+  DataTableSkeleton,
   Button,
   ClickableTile,
 } from '@carbon/react';
@@ -30,6 +35,38 @@ import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { Modal, ModalBody, ModalHeader } from '@/app/components/carbon/modal';
 
 const CREATE_ASSISTANT_LABEL = 'Create new assistant';
+
+const assistantColumnClassName: Record<string, string> = {
+  name: 'min-w-56 whitespace-nowrap',
+  id: 'min-w-64 whitespace-nowrap',
+  provider: 'min-w-36 whitespace-nowrap',
+  version: 'min-w-44 whitespace-nowrap',
+  status: 'min-w-28 whitespace-nowrap',
+  deployments: 'min-w-48 whitespace-nowrap',
+  actions: 'w-28 min-w-28 whitespace-nowrap',
+  tags: 'min-w-40 whitespace-nowrap',
+  sessions: 'min-w-28 whitespace-nowrap',
+  users: 'min-w-28 whitespace-nowrap',
+  lastActivity: 'min-w-36 whitespace-nowrap',
+  updated: 'min-w-36 whitespace-nowrap',
+  owner: 'min-w-32 whitespace-nowrap',
+};
+
+const assistantColumns = [
+  { name: 'Assistant', key: 'name' },
+  { name: 'Assistant ID', key: 'id' },
+  { name: 'Provider', key: 'provider' },
+  { name: 'Version', key: 'version' },
+  { name: 'Status', key: 'status' },
+  { name: 'Deployments', key: 'deployments' },
+  { name: 'Actions', key: 'actions' },
+  { name: 'Tags', key: 'tags' },
+  { name: 'Sessions', key: 'sessions' },
+  { name: 'Users', key: 'users' },
+  { name: 'Last activity', key: 'lastActivity' },
+  { name: 'Updated', key: 'updated' },
+  { name: 'Owner', key: 'owner' },
+];
 
 export function AssistantPage() {
   const navigate = useNavigate();
@@ -112,14 +149,45 @@ export function AssistantPage() {
 
       {/* Content */}
       {loading ? (
-        <PageLoading className="h-full" />
+        <div className="overflow-auto flex-1">
+          <DataTableSkeleton
+            headers={assistantColumns.map(col => ({
+              key: col.key,
+              header: col.name,
+            }))}
+            rowCount={Math.min(assistantAction.pageSize, 10)}
+            columnCount={assistantColumns.length}
+            showHeader={false}
+            showToolbar={false}
+            className="min-w-max"
+          />
+        </div>
       ) : assistantAction.assistants &&
         assistantAction.assistants.length > 0 ? (
-        <section className="grid content-start grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 flex-1 overflow-auto p-4">
-          {assistantAction.assistants.map((ast, idx) => (
-            <SingleAssistant key={idx} assistant={ast} />
-          ))}
-        </section>
+        <div className="overflow-auto flex-1">
+          <Table>
+            <TableHead>
+              <TableRow>
+                {assistantColumns.map(col => (
+                  <TableHeader
+                    key={col.key}
+                    className={assistantColumnClassName[col.key]}
+                  >
+                    {col.name}
+                  </TableHeader>
+                ))}
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {assistantAction.assistants.map(ast => (
+                <SingleAssistant
+                  key={`assistant_row_${ast.getId()}`}
+                  assistant={ast}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       ) : assistantAction.criteria.length > 0 ? (
         <div className="h-full flex justify-center items-center">
           <EmptyState
