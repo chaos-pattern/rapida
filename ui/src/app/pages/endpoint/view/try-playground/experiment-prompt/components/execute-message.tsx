@@ -2,9 +2,9 @@ import { Metric } from '@rapidaai/react';
 import { ExclamationTriangleIcon } from '@/app/components/Icon/exclamation-triangle';
 import { PlayIcon } from '@/app/components/Icon/Play';
 import { TickIcon } from '@/app/components/Icon/Tick';
-import { Spinner } from '@/app/components/loader/spinner';
 import { PlainWrapper } from '@/app/components/wrapper/alert-wrapper';
 import { cn } from '@/utils';
+import { Loading } from '@carbon/react';
 import React, { FC } from 'react';
 import { FieldErrors } from 'react-hook-form';
 
@@ -18,7 +18,7 @@ export const ExecuteMessage: FC<{
   if (loading) {
     return (
       <PlainWrapper className={cn(className, 'flex items-center')}>
-        <Spinner className="w-5 h-5 text-blue-600 dark:text-blue-700" />
+        <Loading description="Executing endpoint" withOverlay={false} small />
         <div className="text-sm">Executing your endpoint.</div>
       </PlainWrapper>
     );

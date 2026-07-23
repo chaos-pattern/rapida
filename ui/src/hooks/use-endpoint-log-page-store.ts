@@ -6,8 +6,13 @@ import {
   EndpointLogType,
   EndpointLogTypeProperty,
 } from '@/types/types.endpoint-log';
-import { EndpointLog, GetAllEndpointLogResponse } from '@rapidaai/react';
-import { GetAllEndpointLog } from '@rapidaai/react';
+import {
+  EndpointLog,
+  GetAllEndpointLog,
+  GetAllEndpointLogResponse,
+  GetEndpointLog,
+  GetEndpointLogResponse,
+} from '@rapidaai/react';
 import { connectionConfig } from '@/configs';
 
 const intialActivityLog: EndpointLogTypeProperty = {
@@ -147,17 +152,57 @@ export const useEndpointLogPage = create<EndpointLogType>((set, get) => ({
     );
   },
 
+  getLog: (
+    endpointId: string,
+    logId: string,
+    projectId: string,
+    token: string,
+    userId: string,
+    onError: (err: string) => void,
+    onSuccess: (e: EndpointLog) => void,
+  ) => {
+    const afterGetEndpointLog = (
+      err: ServiceError | null,
+      gur: GetEndpointLogResponse | null,
+    ) => {
+      if (err) {
+        onError(
+          err.message || 'Unable to get endpoint log, please try again later.',
+        );
+        return;
+      }
+
+      if (gur?.getSuccess() && gur.getData()) {
+        onSuccess(gur.getData()!);
+        return;
+      }
+
+      let errorMessage = gur?.getError();
+      if (errorMessage) {
+        onError(errorMessage.getHumanmessage());
+        return;
+      }
+
+      onError('Unable to get endpoint log, please try again later.');
+    };
+
+    GetEndpointLog(connectionConfig, endpointId, logId, afterGetEndpointLog, {
+      authorization: token,
+      'x-project-id': projectId,
+      'x-auth-id': userId,
+    });
+  },
+
   columns: [
     { name: 'ID', key: 'id', visible: true },
-    { name: 'traceID', key: 'trace_id', visible: true },
     { name: 'Version', key: 'version', visible: true },
     { name: 'Source', key: 'source', visible: true },
     { name: 'Status', key: 'status', visible: true },
-    { name: 'Action', key: 'action', visible: true },
-    { name: 'Total Time Taken', key: 'timetaken', visible: true },
-    { name: 'LLM Total Token', key: 'total_token', visible: true },
-    { name: 'LLM Time Taken', key: 'time_taken', visible: true },
-    { name: 'Created Date', key: 'created_date', visible: true },
+    { name: 'Actions', key: 'action', visible: true },
+    { name: 'Total Time', key: 'timetaken', visible: true },
+    { name: 'LLM Tokens', key: 'total_token', visible: true },
+    { name: 'LLM Time', key: 'time_taken', visible: true },
+    { name: 'Date', key: 'created_date', visible: true },
   ],
 
   /**

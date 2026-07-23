@@ -50,6 +50,7 @@ import {
   DeploymentCreateAgentflowPage,
 } from '@/app/pages/assistant';
 import { AssistantViewLayout } from '@/app/pages/assistant/view/assistant-view.layout';
+import { EndpointViewLayout } from '@/app/pages/endpoint/view/endpoint-view.layout';
 import { StaticPageNotFoundPage } from '@/app/pages/static-pages';
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
@@ -86,10 +87,6 @@ export function DeploymentRoute() {
           path={'endpoint/create-endpoint'}
           element={<DeploymentCreateEndpointPage />}
         />
-        <Route
-          path={'endpoint/:endpointId/create-endpoint-version'}
-          element={<DeploymentCreateVersionEndpointPage />}
-        />
         {/*  */}
         <Route
           path={'endpoint/configure-endpoint'}
@@ -99,14 +96,14 @@ export function DeploymentRoute() {
           path={'endpoint/configure-endpoint/:endpointId'}
           element={<DeploymentConfigureEndpointPage />}
         />
-        <Route
-          path={'endpoint/:endpointId'}
-          element={<DeploymentViewEndpointPage />}
-        />
-        <Route
-          path={'endpoint/:endpointId/:endpointProviderId'}
-          element={<DeploymentViewEndpointPage />}
-        />
+        <Route path={'endpoint/:endpointId'} element={<EndpointViewLayout />}>
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route
+            path={'create-endpoint-version'}
+            element={<DeploymentCreateVersionEndpointPage />}
+          />
+          <Route path={':tab'} element={<DeploymentViewEndpointPage />} />
+        </Route>
         {/* assistant routes */}
         <Route
           key={'/deployment/assistant'}

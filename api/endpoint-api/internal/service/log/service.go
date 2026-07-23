@@ -335,7 +335,12 @@ func (els *endpointLogService) GetEndpointLog(ctx context.Context, auth types.Si
 	start := time.Now()
 	db := els.postgres.DB(ctx)
 	var wkg *internal_gorm.EndpointLog
-	tx := db.Where("id = ? AND organization_id = ? AND project_id = ? AND endpoint_id = ?", logId, *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), endpointId).
+	tx := db.
+		Preload("Arguments").
+		Preload("Metadata").
+		Preload("Options").
+		Preload("Metrics").
+		Where("id = ? AND organization_id = ? AND project_id = ? AND endpoint_id = ?", logId, *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), endpointId).
 		First(&wkg)
 	if tx.Error != nil {
 		els.logger.Benchmark("EndpointLogService.GetLog", time.Since(start))

@@ -1,39 +1,218 @@
 import { Variable, BytesToAny, StringToAny } from '@rapidaai/react';
-import { Pill } from '@/app/components/pill';
-import React, { HTMLAttributes } from 'react';
+import React from 'react';
 import p from 'google-protobuf/google/protobuf/any_pb';
 import { cn } from '@/utils';
+import { InputVarType } from '@/models/common';
+import { InlineNotification, Tag, TextArea, TextInput } from '@carbon/react';
+import type { UseFormRegisterReturn } from 'react-hook-form';
 
-export const InputVarForm = React.forwardRef<
-  HTMLTextAreaElement,
-  {
-    var: Variable;
-  } & HTMLAttributes<HTMLDivElement>
->((props, ref) => {
+export const ENDPOINT_PLAYGROUND_EDITABLE_TYPES = [
+  InputVarType.stringInput,
+  InputVarType.textInput,
+  InputVarType.paragraph,
+  InputVarType.number,
+  InputVarType.json,
+  InputVarType.url,
+] as string[];
+
+const UNSUPPORTED_TYPE_COPY: Record<string, string> = {
+  [InputVarType.select]:
+    'Select variables do not expose options in the endpoint model yet.',
+  [InputVarType.files]:
+    'File variables require upload support before this endpoint can run here.',
+  [InputVarType.contexts]:
+    'Context variables are resolved by runtime retrieval and cannot be edited here.',
+};
+
+const VARIABLE_PLACEHOLDERS: Record<string, string> = {
+  [InputVarType.stringInput]: 'Enter value',
+  [InputVarType.textInput]: 'Enter value',
+  [InputVarType.paragraph]: 'Enter paragraph',
+  [InputVarType.number]: 'Enter number',
+  [InputVarType.url]: 'https://example.com',
+  [InputVarType.json]: '{ "key": "value" }',
+};
+
+export function isEndpointVariableEditable(type?: string): boolean {
+  return Boolean(type && ENDPOINT_PLAYGROUND_EDITABLE_TYPES.includes(type));
+}
+
+export function getUnsupportedEndpointVariableReason(type?: string): string {
+  if (!type) return 'This variable does not define a supported type.';
+  return (
+    UNSUPPORTED_TYPE_COPY[type] ??
+    'This variable type is not supported by the endpoint playground.'
+  );
+}
+
+export function getUnsupportedEndpointVariables(
+  variables: Variable[],
+): Variable[] {
+  return variables.filter(
+    variable => !isEndpointVariableEditable(variable.getType()),
+  );
+}
+
+function getFieldId(variable: Variable): string {
+  const rawId = variable.getId() || variable.getName();
+  return `endpoint-playground-${rawId.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+}
+
+function getRows(type: string): number {
+  if (type === InputVarType.json) return 8;
+  if (type === InputVarType.paragraph) return 5;
+  return 3;
+}
+
+function renderVariableInput({
+  variable,
+  registration,
+  error,
+}: {
+  variable: Variable;
+  registration?: UseFormRegisterReturn;
+  error?: React.ReactNode;
+}) {
+  const type = variable.getType();
+  const id = getFieldId(variable);
+  const labelText = `{{${variable.getName()}}}`;
+  const invalid = Boolean(error);
+  const invalidText = error || 'Please provide a valid input.';
+  const commonProps = {
+    id,
+    labelText,
+    hideLabel: true,
+    defaultValue: variable.getDefaultvalue(),
+    invalid,
+    invalidText,
+    placeholder: VARIABLE_PLACEHOLDERS[type] ?? 'Enter value',
+    ...registration,
+  };
+
+  if (
+    type === InputVarType.paragraph ||
+    type === InputVarType.json ||
+    type === InputVarType.textInput
+  ) {
+    return (
+      <TextArea
+        {...commonProps}
+        rows={getRows(type)}
+        className={cn(type === InputVarType.json && '[&_textarea]:font-mono')}
+      />
+    );
+  }
+
+  return (
+    <TextInput
+      {...commonProps}
+      type={
+        type === InputVarType.number
+          ? 'number'
+          : type === InputVarType.url
+            ? 'url'
+            : 'text'
+      }
+    />
+  );
+}
+
+export function EndpointArgumentField(props: {
+  variable: Variable;
+  registration?: UseFormRegisterReturn;
+  error?: React.ReactNode;
+}) {
+  const { variable, registration, error } = props;
+  const type = variable.getType();
+  const editable = isEndpointVariableEditable(type);
+
   return (
     <div
       className={cn(
-        'bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 transition-colors',
-        props.className,
+        'border-b border-gray-200 bg-white px-4 py-4 dark:border-gray-800 dark:bg-gray-900',
+        'last:border-b-0',
       )}
     >
       <label
-        htmlFor={props.var.getName()}
-        className="flex shrink-0 items-center justify-between gap-3 break-all px-4 py-3 border-b border-gray-100 dark:border-gray-800"
+        htmlFor={getFieldId(variable)}
+        className="mb-3 flex shrink-0 items-start justify-between gap-4"
       >
-        <span className="font-mono text-sm font-medium text-gray-900 dark:text-gray-100">
-          {'{{'}
-          {props.var.getName()}
-          {'}}'}
+        <span className="min-w-0">
+          <span
+            className="block truncate font-mono text-sm font-semibold text-gray-900 dark:text-gray-100"
+            title={variable.getName()}
+          >
+            {`{{${variable.getName()}}}`}
+          </span>
+          {variable.getDefaultvalue() && (
+            <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+              Default value loaded
+            </span>
+          )}
         </span>
-        <Pill className="py-0.5 px-2 shrink-0">{props.var.getType()}</Pill>
+        <Tag
+          type={editable ? 'blue' : 'gray'}
+          size="sm"
+          title={type || 'unknown'}
+        >
+          {type || 'unknown'}
+        </Tag>
       </label>
-      <div className="px-4 py-3 bg-gray-50/50 dark:bg-gray-950/40">
-        {props.children}
-      </div>
+
+      {editable ? (
+        renderVariableInput({ variable, registration, error })
+      ) : (
+        <InlineNotification
+          kind="warning"
+          lowContrast
+          hideCloseButton
+          title="Not runnable in playground"
+          subtitle={getUnsupportedEndpointVariableReason(type)}
+          className="!m-0 !max-w-full"
+        />
+      )}
     </div>
   );
-});
+}
+
+export function EndpointArgumentList(props: {
+  variables: Variable[];
+  getRegistration: (variable: Variable) => UseFormRegisterReturn;
+  getErrorMessage?: (variable: Variable) => React.ReactNode;
+}) {
+  const { variables, getRegistration, getErrorMessage } = props;
+
+  if (variables.length === 0) {
+    return (
+      <div className="flex min-h-[14rem] items-center justify-center border-b border-gray-200 bg-white px-6 text-center dark:border-gray-800 dark:bg-gray-900">
+        <div>
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+            No arguments defined
+          </p>
+          <p className="mt-1 max-w-sm text-sm text-gray-500 dark:text-gray-400">
+            This endpoint does not expose prompt variables.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-gray-200 dark:divide-gray-800">
+      {variables.map(variable => {
+        const editable = isEndpointVariableEditable(variable.getType());
+        return (
+          <EndpointArgumentField
+            key={variable.getId() || variable.getName()}
+            variable={variable}
+            registration={editable ? getRegistration(variable) : undefined}
+            error={getErrorMessage?.(variable)}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 //
 export const InputFormData = async (data): Promise<Map<string, p.Any>> => {
@@ -50,9 +229,18 @@ export const InputFormData = async (data): Promise<Map<string, p.Any>> => {
   };
 
   for (const [key, value] of Object.entries(data)) {
-    if (value instanceof File) {
+    const file =
+      value instanceof File
+        ? value
+        : typeof FileList !== 'undefined' &&
+            value instanceof FileList &&
+            value.length > 0
+          ? value.item(0)
+          : null;
+
+    if (file) {
       try {
-        const fileContent = await handleFileAsync(value);
+        const fileContent = await handleFileAsync(file);
         formDataMap.set(key, BytesToAny(fileContent));
       } catch (error) {
         // return error;

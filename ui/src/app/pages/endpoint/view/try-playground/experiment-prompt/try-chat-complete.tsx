@@ -9,24 +9,16 @@ import { Endpoint, EndpointProviderModel } from '@rapidaai/react';
 import { InvokeResponse } from '@rapidaai/react';
 import { useRapidaStore } from '@/hooks';
 import { useCredential } from '@/hooks/use-credential';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Variable } from '@rapidaai/react';
 
 import {
+  EndpointArgumentList,
+  getUnsupportedEndpointVariables,
   InputFormData,
-  InputVarForm,
 } from '@/app/pages/endpoint/view/try-playground/experiment-prompt/components/input-var-form';
 
-import {
-  JsonTextarea,
-  NumberTextarea,
-  ParagraphTextarea,
-  TextTextarea,
-  UrlTextarea,
-} from '@/app/components/form/textarea';
-
-import { InputVarType } from '@/models/common';
 import { OutputMessage } from '@/app/pages/endpoint/view/try-playground/experiment-prompt/components/output-message';
 import { PlaygroundHeader } from '@/app/pages/endpoint/view/try-playground/experiment-prompt/components/playground-header';
 import { connectionConfig } from '@/configs';
@@ -43,7 +35,9 @@ export function TryChatComplete(props: {
     register,
     handleSubmit,
     formState: { errors, isValid },
-  } = useForm();
+  } = useForm<Record<string, string>>({
+    mode: 'onChange',
+  });
 
   /**
    *
@@ -64,7 +58,12 @@ export function TryChatComplete(props: {
   /**
    *
    */
-  const [variables, setVaribales] = useState<Variable[]>([]);
+  const [variables, setVariables] = useState<Variable[]>([]);
+  const unsupportedVariables = useMemo(
+    () => getUnsupportedEndpointVariables(variables),
+    [variables],
+  );
+  const hasUnsupportedVariables = unsupportedVariables.length > 0;
 
   useEffect(() => {
     let endpointProviderModel = props.endpointProviderModel;
@@ -72,7 +71,7 @@ export function TryChatComplete(props: {
       let allVars = endpointProviderModel
         .getChatcompleteprompt()
         ?.getPromptvariablesList();
-      if (allVars) setVaribales(allVars);
+      if (allVars) setVariables(allVars);
     }
   }, [props.endpointProviderModel]);
 
@@ -81,6 +80,14 @@ export function TryChatComplete(props: {
    * @param data
    */
   const onInvoke = async data => {
+    if (hasUnsupportedVariables) {
+      setCallerResponse(null);
+      setError(
+        'This endpoint contains variables that are not runnable in the playground.',
+      );
+      return;
+    }
+
     showLoader();
     setError('');
     setCallerResponse(null);
@@ -126,59 +133,32 @@ export function TryChatComplete(props: {
 
   return (
     <form onSubmit={handleSubmit(onInvoke)} className="flex flex-col flex-1">
-      <PlaygroundHeader isValid={isValid} loading={loading} />
-      <div className="flex-1 overflow-y-auto transition-all duration-300 max-h-screen">
-        <div className="flex flex-1 h-full w-full flex-col overflow-auto bg-divider-500/20 pt-0">
-          <div className="flex flex-col">
-            {variables.map((x, idx) => {
-              return (
-                <InputVarForm key={idx} var={x}>
-                  {x.getType() === InputVarType.textInput && (
-                    <TextTextarea
-                      id={x.getName()}
-                      {...register(x.getName(), {
-                        required: 'Please provide a valid input.',
-                      })}
-                    />
-                  )}
-                  {x.getType() === InputVarType.stringInput && (
-                    <ParagraphTextarea
-                      id={x.getName()}
-                      {...register(x.getName(), {
-                        required: 'Please provide a valid input.',
-                      })}
-                    />
-                  )}
-
-                  {x.getType() === InputVarType.number && (
-                    <NumberTextarea
-                      id={x.getName()}
-                      {...register(x.getName(), {
-                        required: 'Please provide a valid input.',
-                      })}
-                    />
-                  )}
-
-                  {x.getType() === InputVarType.json && (
-                    <JsonTextarea
-                      id={x.getName()}
-                      {...register(x.getName(), {
-                        required: 'Please provide a valid input.',
-                      })}
-                    />
-                  )}
-
-                  {x.getType() === InputVarType.url && (
-                    <UrlTextarea
-                      id={x.getName()}
-                      {...register(x.getName(), {
-                        required: 'Please provide a valid input.',
-                      })}
-                    />
-                  )}
-                </InputVarForm>
-              );
-            })}
+      <PlaygroundHeader
+        isValid={isValid}
+        loading={loading}
+        disabled={hasUnsupportedVariables}
+        variableCount={variables.length}
+        unsupportedCount={unsupportedVariables.length}
+      />
+      <div className="flex-1 overflow-hidden bg-gray-50 dark:bg-gray-950">
+        <div className="grid h-full grid-rows-[minmax(0,1fr)_minmax(18rem,42%)] overflow-hidden">
+          <div className="overflow-y-auto border-b border-gray-200 dark:border-gray-800">
+            <div className="border-b border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                Arguments
+              </p>
+            </div>
+            <EndpointArgumentList
+              variables={variables}
+              getRegistration={variable =>
+                register(variable.getName(), {
+                  required: 'Please provide a valid input.',
+                })
+              }
+              getErrorMessage={variable =>
+                errors[variable.getName()]?.message?.toString()
+              }
+            />
           </div>
           <OutputMessage
             callerResponse={callerResponse}

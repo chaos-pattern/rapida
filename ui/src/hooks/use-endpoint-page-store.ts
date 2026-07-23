@@ -273,19 +273,20 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
    * columns
    */
   columns: [
-    { name: 'Endpoint Status', key: 'getStatus', visible: true },
     { name: 'Endpoint', key: 'getName', visible: true },
-    { name: 'Action', key: 'action', visible: true },
-    { name: 'Current Version', key: 'getVersion', visible: false },
+    { name: 'Endpoint ID', key: 'getId', visible: true },
+    { name: 'Status', key: 'getStatus', visible: true },
+    { name: 'Provider', key: 'getCurrentModel', visible: true },
+    { name: 'Version', key: 'getVersion', visible: true },
     { name: 'Tags', key: 'getTags', visible: true },
-    { name: 'Run Count (7D)', key: 'getCount', visible: true },
-    { name: 'Error Rate (7D)', key: 'getErrorRate', visible: true },
-    { name: 'Current Model', key: 'getCurrentModel', visible: true },
-    { name: 'Total Token (7D)', key: 'getTotalToken', visible: true },
-    { name: 'P50 Latency (7D)', key: 'getP50', visible: true },
-    { name: 'P99 Latency (7D)', key: 'getP99', visible: true },
-    { name: 'Most Recent Run', key: 'getMRR', visible: true },
-    { name: 'Created by', key: 'getCreatedBy', visible: true },
+    { name: 'Runs (7D)', key: 'getCount', visible: true },
+    { name: 'Error rate (7D)', key: 'getErrorRate', visible: true },
+    { name: 'P50 latency', key: 'getP50', visible: true },
+    { name: 'P99 latency', key: 'getP99', visible: true },
+    { name: 'Cost', key: 'getCost', visible: true },
+    { name: 'Last activity', key: 'getMRR', visible: true },
+    { name: 'Owner', key: 'getCreatedBy', visible: true },
+    { name: 'Actions', key: 'action', visible: true },
   ],
 
   /**

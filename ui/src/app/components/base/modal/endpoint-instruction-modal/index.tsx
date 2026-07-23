@@ -23,7 +23,10 @@ export function EndpointInstructionDialog(
   } = props;
 
   return (
-    <RightSideModal className={cn(className)} {...mldAttr}>
+    <RightSideModal
+      className={cn('w-[580px] max-w-[calc(100vw-2rem)]', className)}
+      {...mldAttr}
+    >
       {/* Carbon breadcrumb header */}
       <div className="h-12 px-4 flex items-center gap-2 border-b border-gray-200 dark:border-gray-800 shrink-0">
         <span className="text-xs font-medium uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400">
@@ -36,9 +39,7 @@ export function EndpointInstructionDialog(
       </div>
 
       <div className="flex flex-col flex-1 overflow-auto h-[calc(100vh-48px)]">
-        {currentEndpoint && (
-          <EndpointIntegration endpoint={currentEndpoint} />
-        )}
+        {currentEndpoint && <EndpointIntegration endpoint={currentEndpoint} />}
       </div>
     </RightSideModal>
   );

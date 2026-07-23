@@ -26,6 +26,25 @@ import {
   Button,
 } from '@carbon/react';
 
+const CREATE_ENDPOINT_LABEL = 'Create new endpoint';
+
+const endpointColumnClassName: Record<string, string> = {
+  getName: 'min-w-56 whitespace-nowrap',
+  getId: 'min-w-64 whitespace-nowrap',
+  getStatus: 'min-w-28 whitespace-nowrap',
+  getCurrentModel: 'min-w-36 whitespace-nowrap',
+  getVersion: 'min-w-44 whitespace-nowrap',
+  getTags: 'min-w-40 whitespace-nowrap',
+  getCount: 'min-w-28 whitespace-nowrap',
+  getErrorRate: 'min-w-36 whitespace-nowrap',
+  getP50: 'min-w-32 whitespace-nowrap',
+  getP99: 'min-w-32 whitespace-nowrap',
+  getCost: 'min-w-28 whitespace-nowrap',
+  getMRR: 'min-w-36 whitespace-nowrap',
+  getCreatedBy: 'min-w-32 whitespace-nowrap',
+  action: 'w-16 min-w-16 whitespace-nowrap',
+};
+
 export function EndpointPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -100,10 +119,9 @@ export function EndpointPage() {
           <PrimaryButton
             size="md"
             renderIcon={Add}
-            isLoading={loading}
             onClick={() => navigate('/deployment/endpoint/create-endpoint')}
           >
-            Add new endpoint
+            {CREATE_ENDPOINT_LABEL}
           </PrimaryButton>
         </TableToolbarContent>
       </TableToolbar>
@@ -116,7 +134,12 @@ export function EndpointPage() {
             <TableHead>
               <TableRow>
                 {visibleColumns.map(col => (
-                  <TableHeader key={col.key}>{col.name}</TableHeader>
+                  <TableHeader
+                    key={col.key}
+                    className={endpointColumnClassName[col.key]}
+                  >
+                    {col.name}
+                  </TableHeader>
                 ))}
               </TableRow>
             </TableHead>
@@ -130,12 +153,22 @@ export function EndpointPage() {
             </TableBody>
           </Table>
         </div>
-      ) : (
+      ) : endpointActions.criteria.length > 0 ? (
         <EmptyState
           icon={Connect}
           title="No endpoints found"
+          subtitle="No endpoints match your current filters."
+          action={CREATE_ENDPOINT_LABEL}
+          actionIcon={Add}
+          onAction={() => navigate('/deployment/endpoint/create-endpoint')}
+        />
+      ) : (
+        <EmptyState
+          icon={Connect}
+          title="No endpoints"
           subtitle="Deploy governed APIs for client, brand, or business-unit workflows with audit trails and access control."
-          action="Create new endpoint"
+          action={CREATE_ENDPOINT_LABEL}
+          actionIcon={Add}
           onAction={() => navigate('/deployment/endpoint/create-endpoint')}
         />
       )}

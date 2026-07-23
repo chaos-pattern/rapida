@@ -1,21 +1,18 @@
-import {
-  Debug,
-  RecentlyViewed,
-  Activity,
-} from '@carbon/icons-react';
+import { Dashboard, SourceControl, Activity } from '@carbon/icons-react';
 import type { ComponentType } from 'react';
 
 export interface EndpointNavChild {
   key: string;
   label: string;
-  tabKey: string;
+  path: string;
 }
 
 export interface EndpointNavItem {
   key: string;
   label: string;
   icon: ComponentType<{ size?: number }>;
-  tabKey: string;
+  path: string;
+  exact?: boolean;
   children?: EndpointNavChild[];
 }
 
@@ -29,25 +26,30 @@ export const endpointNavSections: EndpointNavSection[] = [
     label: '',
     items: [
       {
-        key: 'playground',
-        label: 'Playground',
-        icon: Debug,
-        tabKey: 'overview',
+        key: 'overview',
+        label: 'Overview',
+        icon: Dashboard,
+        path: 'overview',
+        exact: true,
       },
       {
         key: 'traces',
-        label: 'Traces',
+        label: 'Logs',
         icon: Activity,
-        tabKey: 'Traces',
+        path: 'logs',
       },
       {
         key: 'versions',
         label: 'Versions',
-        icon: RecentlyViewed,
-        tabKey: 'versions',
+        icon: SourceControl,
+        path: 'versions',
         children: [
-          { key: 'versions-list', label: 'View all', tabKey: 'versions' },
-          { key: 'versions-create', label: 'Add new version', tabKey: 'create-version' },
+          { key: 'versions-list', label: 'View all', path: 'versions' },
+          {
+            key: 'versions-create',
+            label: 'Add new version',
+            path: 'create-endpoint-version',
+          },
         ],
       },
     ],
