@@ -31,8 +31,8 @@ type SIPInboundConfig struct {
 // SIPConfig holds the SIP server configuration.
 type SIPConfig struct {
 	Server                  string           `mapstructure:"server"`
-	InstanceID              string           `mapstructure:"instance_id"` // Unique identifier for this SIP server instance (defaults to external_ip)
-	ExternalIP              string           `mapstructure:"external_ip"` // Public/reachable IP for outbound SDP and SIP Contact headers
+	InstanceID              string           `mapstructure:"instance_id" validate:"required"` // Unique identifier for this SIP server instance
+	ExternalIP              string           `mapstructure:"external_ip"`                     // Public/reachable IP for outbound SDP and SIP Contact headers
 	AllowLoopbackExternalIP bool             `mapstructure:"allow_loopback_external_ip"`
 	Port                    int              `mapstructure:"port"`
 	Transport               string           `mapstructure:"transport"`

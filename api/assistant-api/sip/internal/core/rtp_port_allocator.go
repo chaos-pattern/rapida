@@ -9,8 +9,8 @@ package core
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -19,21 +19,13 @@ import (
 )
 
 const (
-	// Redis key for the set of available RTP ports
-	// Uses hash tag {rtp:ports} to ensure all RTP keys hash to the same Redis Cluster slot
-	rtpAvailableKey = "{rtp:ports}:available"
-
-	// Redis key prefix for per-instance allocated ports (for crash recovery)
-	// Uses hash tag {rtp:ports} to ensure all RTP keys hash to the same Redis Cluster slot
-	rtpAllocatedPrefix = "{rtp:ports}:allocated:"
-
 	// TTL for per-instance allocated port tracking (crash recovery)
 	rtpAllocatedTTL = 10 * time.Minute
 )
 
 // RTPPortAllocator manages distributed allocation of RTP ports via Redis.
 // RTP ports are even-numbered per RFC 3550 (RTCP uses the next odd port).
-// Thread-safe across multiple server instances via Redis atomic operations.
+// Thread-safe within the configured SIP instance ID via Redis atomic operations.
 type RTPAllocator interface {
 	Allocate() (int, error)
 	Release(port int)
@@ -47,14 +39,13 @@ type RTPPortAllocator struct {
 	portStart  int
 	portEnd    int
 	instanceID string // unique ID for this server instance (crash recovery)
+	keyPrefix  string
 }
 
-// NewRTPPortAllocator creates a Redis-backed distributed port allocator for the given range [start, end).
-// Ports are allocated as even numbers per RTP convention.
-// The allocator initializes the Redis available-ports set on first use.
-func NewRTPPortAllocator(client *redis.Client, logger commons.Logger, portStart, portEnd int) *RTPPortAllocator {
-	hostname, _ := os.Hostname()
-	instanceID := fmt.Sprintf("%s:%d", hostname, os.Getpid())
+// NewRTPPortAllocatorWithInstanceID creates a Redis-backed RTP port allocator
+// scoped to the configured SIP instance ID.
+func NewRTPPortAllocatorWithInstanceID(client *redis.Client, logger commons.Logger, portStart, portEnd int, instanceID string) *RTPPortAllocator {
+	instanceID = normalizeRTPInstanceID(instanceID)
 
 	return &RTPPortAllocator{
 		client:     client,
@@ -62,7 +53,30 @@ func NewRTPPortAllocator(client *redis.Client, logger commons.Logger, portStart,
 		portStart:  portStart,
 		portEnd:    portEnd,
 		instanceID: instanceID,
+		keyPrefix:  rtpKeyPrefix(instanceID),
 	}
+}
+
+func normalizeRTPInstanceID(instanceID string) string {
+	return sanitizeRTPKeyPart(instanceID)
+}
+
+func sanitizeRTPKeyPart(value string) string {
+	value = strings.TrimSpace(value)
+	replacer := strings.NewReplacer("{", "_", "}", "_", " ", "_", "\t", "_", "\n", "_", "\r", "_")
+	return replacer.Replace(value)
+}
+
+func rtpKeyPrefix(instanceID string) string {
+	return fmt.Sprintf("{rtp:ports:%s}", sanitizeRTPKeyPart(instanceID))
+}
+
+func (a *RTPPortAllocator) availableKey() string {
+	return a.keyPrefix + ":available"
+}
+
+func (a *RTPPortAllocator) allocatedKey() string {
+	return a.keyPrefix + ":allocated:" + a.instanceID
 }
 
 // initLuaScript atomically initializes the available ports set in Redis
@@ -102,7 +116,7 @@ func (a *RTPPortAllocator) Init(ctx context.Context) error {
 	}
 
 	// Atomically initialize only if the set doesn't exist
-	result, err := initLuaScript.Run(ctx, a.client, []string{rtpAvailableKey}, ports...).Int()
+	result, err := initLuaScript.Run(ctx, a.client, []string{a.availableKey()}, ports...).Int()
 	if err != nil {
 		return fmt.Errorf("failed to initialize RTP port pool in Redis: %w", err)
 	}
@@ -110,10 +124,11 @@ func (a *RTPPortAllocator) Init(ctx context.Context) error {
 	if result > 0 {
 		a.logger.Info("Initialized RTP port pool in Redis",
 			"ports_added", result,
+			"instance_id", a.instanceID,
 			"range_start", a.portStart,
 			"range_end", a.portEnd)
 	} else {
-		a.logger.Debugw("RTP port pool already exists in Redis, skipping initialization")
+		a.logger.Debugw("RTP port pool already exists in Redis, skipping initialization", "instance_id", a.instanceID)
 	}
 
 	// Reclaim any ports from a previous crashed instance with this same ID
@@ -142,10 +157,10 @@ func (a *RTPPortAllocator) Allocate() (int, error) {
 		return 0, fmt.Errorf("redis connection not available for RTP port allocation")
 	}
 
-	instanceKey := rtpAllocatedPrefix + a.instanceID
+	instanceKey := a.allocatedKey()
 
 	// Atomically pop from available and track in instance set
-	result, err := allocateLuaScript.Run(ctx, a.client, []string{rtpAvailableKey, instanceKey}).Int()
+	result, err := allocateLuaScript.Run(ctx, a.client, []string{a.availableKey(), instanceKey}).Int()
 	if err != nil {
 		return 0, fmt.Errorf("failed to allocate RTP port from Redis: %w", err)
 	}
@@ -180,9 +195,9 @@ func (a *RTPPortAllocator) Release(port int) {
 		return
 	}
 
-	instanceKey := rtpAllocatedPrefix + a.instanceID
+	instanceKey := a.allocatedKey()
 
-	_, err := releaseLuaScript.Run(ctx, a.client, []string{rtpAvailableKey, instanceKey}, port).Result()
+	_, err := releaseLuaScript.Run(ctx, a.client, []string{a.availableKey(), instanceKey}, port).Result()
 	if err != nil {
 		a.logger.Error("Failed to release RTP port to Redis", "port", port, "error", err)
 		return
@@ -207,7 +222,7 @@ func (a *RTPPortAllocator) InUse() (int, error) {
 	}
 	totalPorts := (a.portEnd - start) / 2
 
-	available, err := a.client.SCard(ctx, rtpAvailableKey).Result()
+	available, err := a.client.SCard(ctx, a.availableKey()).Result()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get available port count: %w", err)
 	}
@@ -222,7 +237,7 @@ func (a *RTPPortAllocator) reclaimCrashedPorts(ctx context.Context) {
 		return
 	}
 
-	instanceKey := rtpAllocatedPrefix + a.instanceID
+	instanceKey := a.allocatedKey()
 
 	// Get all ports allocated to this instance (from a previous crash)
 	ports, err := a.client.SMembers(ctx, instanceKey).Result()
@@ -245,7 +260,7 @@ func (a *RTPPortAllocator) reclaimCrashedPorts(ctx context.Context) {
 		if err != nil {
 			continue
 		}
-		_, err = releaseLuaScript.Run(ctx, a.client, []string{rtpAvailableKey, instanceKey}, port).Result()
+		_, err = releaseLuaScript.Run(ctx, a.client, []string{a.availableKey(), instanceKey}, port).Result()
 		if err != nil {
 			a.logger.Warn("Failed to reclaim port", "port", port, "error", err)
 		}
@@ -263,7 +278,7 @@ func (a *RTPPortAllocator) ReleaseAll(ctx context.Context) {
 		return
 	}
 
-	instanceKey := rtpAllocatedPrefix + a.instanceID
+	instanceKey := a.allocatedKey()
 
 	ports, err := a.client.SMembers(ctx, instanceKey).Result()
 	if err != nil {

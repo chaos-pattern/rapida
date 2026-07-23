@@ -159,11 +159,11 @@ func (c *ListenConfig) GetListenAddr() string {
 	return fmt.Sprintf("%s:%d", c.Address, c.Port)
 }
 
-func buildSIPContactHeader(config *ListenConfig) sip.ContactHeader {
+func (c *ListenConfig) SIPContactHeader() sip.ContactHeader {
 	return internal_outbound.BuildContactHeader(internal_outbound.ContactConfig{
-		ExternalIP: config.GetExternalIP(),
-		Port:       config.Port,
-		Transport:  internal_outbound.Transport(config.Transport),
+		ExternalIP: c.GetExternalIP(),
+		Port:       c.Port,
+		Transport:  internal_outbound.Transport(c.Transport),
 	})
 }
 
@@ -174,6 +174,7 @@ type ServerConfig struct {
 	Middlewares       []Middleware  // Resolves tenant-specific config per-call
 	Logger            commons.Logger
 	RedisClient       *redis.Client // Redis client for distributed RTP port allocation
+	InstanceID        string        // SIP instance ID used to scope RTP Redis pools
 	RTPPortRangeStart int           // Start of RTP port range (even, >= 1024)
 	RTPPortRangeEnd   int           // End of RTP port range (exclusive)
 }
@@ -194,6 +195,9 @@ func (c *ServerConfig) Validate() error {
 	}
 	if c.RedisClient == nil {
 		return fmt.Errorf("redis client is required for distributed RTP port allocation")
+	}
+	if c.InstanceID == "" {
+		return fmt.Errorf("%w: instance_id is required", ErrInvalidConfig)
 	}
 	if c.RTPPortRangeStart <= 0 || c.RTPPortRangeEnd <= 0 {
 		return fmt.Errorf("rtp_port_range must be specified")
@@ -263,7 +267,7 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	}
 
 	// Create Redis-backed distributed RTP port allocator
-	rtpAllocator := NewRTPPortAllocator(cfg.RedisClient, cfg.Logger, cfg.RTPPortRangeStart, cfg.RTPPortRangeEnd)
+	rtpAllocator := NewRTPPortAllocatorWithInstanceID(cfg.RedisClient, cfg.Logger, cfg.RTPPortRangeStart, cfg.RTPPortRangeEnd, cfg.InstanceID)
 	if err := rtpAllocator.Init(serverCtx); err != nil {
 		cancel()
 		return nil, NewSIPError("NewServer", "", "failed to initialize RTP port allocator", err)
@@ -271,7 +275,7 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 
 	// Build the Contact header used for outbound dialog sessions.
 	// Uses the external IP so the remote side can route subsequent requests back to us.
-	contactHDR := buildSIPContactHeader(cfg.ListenConfig)
+	contactHDR := cfg.ListenConfig.SIPContactHeader()
 
 	// Create dialog client cache — routes incoming BYE/re-INVITE for outbound dialogs
 	// to the correct DialogClientSession. This is essential for proper dialog lifecycle:

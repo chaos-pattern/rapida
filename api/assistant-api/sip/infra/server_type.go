@@ -108,6 +108,7 @@ type ServerConfig struct {
 	Middlewares       []Middleware
 	Logger            commons.Logger
 	RedisClient       *redis.Client
+	InstanceID        string
 	RTPPortRangeStart int
 	RTPPortRangeEnd   int
 }
@@ -161,6 +162,7 @@ func (c *ServerConfig) toCore() *internal_core.ServerConfig {
 		Middlewares:       coreMiddlewares,
 		Logger:            c.Logger,
 		RedisClient:       c.RedisClient,
+		InstanceID:        c.InstanceID,
 		RTPPortRangeStart: c.RTPPortRangeStart,
 		RTPPortRangeEnd:   c.RTPPortRangeEnd,
 	}

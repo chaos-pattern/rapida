@@ -202,8 +202,8 @@ func (h *RTPHandler) GetDetailedStats() RTPStats {
 	return RTPStats{}
 }
 
-func NewRTPPortAllocator(client *redis.Client, logger commons.Logger, portStart, portEnd int) *RTPPortAllocator {
-	return &RTPPortAllocator{inner: internal_core.NewRTPPortAllocator(client, logger, portStart, portEnd)}
+func NewRTPPortAllocatorWithInstanceID(client *redis.Client, logger commons.Logger, portStart, portEnd int, instanceID string) *RTPPortAllocator {
+	return &RTPPortAllocator{inner: internal_core.NewRTPPortAllocatorWithInstanceID(client, logger, portStart, portEnd, instanceID)}
 }
 
 func (a *RTPPortAllocator) Init(ctx context.Context) error {

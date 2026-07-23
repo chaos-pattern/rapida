@@ -282,7 +282,7 @@ func (controller *inboundAnswerController) sendSessionFinalResponse(statusCode i
 
 	response := sip.NewResponseFromRequest(controller.dialog.InviteRequest, statusCode, "", nil)
 	if response.Contact() == nil {
-		contactHeader := buildSIPContactHeader(controller.server.listenConfig)
+		contactHeader := controller.server.listenConfig.SIPContactHeader()
 		response.AppendHeader(&contactHeader)
 	}
 	controller.dialog.InviteResponse = response

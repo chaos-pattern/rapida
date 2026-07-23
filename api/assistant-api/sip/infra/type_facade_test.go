@@ -232,10 +232,11 @@ func TestListenConfigAndServerConfigConversions(t *testing.T) {
 
 	serverConfig := (&ServerConfig{
 		ListenConfig:      listenConfig,
+		InstanceID:        "sip-instance-a",
 		RTPPortRangeStart: 30000,
 		RTPPortRangeEnd:   30100,
 	}).toCore()
-	if serverConfig.ListenConfig.Address != listenConfig.Address || serverConfig.RTPPortRangeStart != 30000 {
+	if serverConfig.ListenConfig.Address != listenConfig.Address || serverConfig.InstanceID != "sip-instance-a" || serverConfig.RTPPortRangeStart != 30000 {
 		t.Fatalf("server config conversion mismatch: %#v", serverConfig)
 	}
 }

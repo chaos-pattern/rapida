@@ -779,7 +779,7 @@ func inboundACKAlreadyAccepted(session *Session, reason LifecycleReason) bool {
 func (s *Server) newSDPResponse(req *sip.Request, sdpBody string) *sip.Response {
 	resp := sip.NewSDPResponseFromRequest(req, []byte(sdpBody))
 	if resp.Contact() == nil {
-		contactHeader := buildSIPContactHeader(s.listenConfig)
+		contactHeader := s.listenConfig.SIPContactHeader()
 		resp.AppendHeader(&contactHeader)
 	}
 	return resp

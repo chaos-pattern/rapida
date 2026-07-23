@@ -111,6 +111,7 @@ func (m *SIPEngine) Connect(ctx context.Context) error {
 		ListenConfig:      m.listenConfig(),
 		Logger:            m.logger,
 		RedisClient:       m.redis.GetConnection(),
+		InstanceID:        m.cfg.SIPConfig.InstanceID,
 		RTPPortRangeStart: m.cfg.SIPConfig.RTPPortRangeStart,
 		RTPPortRangeEnd:   m.cfg.SIPConfig.RTPPortRangeEnd,
 	})

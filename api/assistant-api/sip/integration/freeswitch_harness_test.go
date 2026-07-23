@@ -113,6 +113,7 @@ func newFreeSWITCHHarness(t *testing.T, credentials sipCredentialConfig) *freeSW
 		},
 		Logger:            logger,
 		RedisClient:       redisClient,
+		InstanceID:        "freeswitch-integration",
 		RTPPortRangeStart: config.rtpPortFrom,
 		RTPPortRangeEnd:   config.rtpPortTo,
 	})
@@ -276,7 +277,7 @@ func cleanupIntegrationRTPKeys(t *testing.T, client *redis.Client) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	iter := client.Scan(ctx, 0, "{rtp:ports}:*", 100).Iterator()
+	iter := client.Scan(ctx, 0, "{rtp:ports*}:*", 100).Iterator()
 	for iter.Next(ctx) {
 		require.NoError(t, client.Del(ctx, iter.Val()).Err())
 	}

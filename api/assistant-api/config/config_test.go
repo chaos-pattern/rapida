@@ -70,6 +70,7 @@ ui:
   host: "http://localhost:3000"
 sip:
   server: "0.0.0.0"
+  instance_id: "assistant-test-01"
   port: 5070
   inbound:
     answer_mode: "answer_immediately"
@@ -186,6 +187,21 @@ func TestGetApplicationConfig_ParsesNestedSIPInboundConfig(t *testing.T) {
 	}
 	if inboundConfig.ACKTimeout != 7*time.Second {
 		t.Fatalf("Inbound.ACKTimeout = %s, want 7s", inboundConfig.ACKTimeout)
+	}
+}
+
+func TestGetApplicationConfig_RequiresSIPInstanceID(t *testing.T) {
+	v := viper.New()
+	v.SetConfigType("yaml")
+	configYAML := strings.Replace(baseAssistantYAML, `  instance_id: "assistant-test-01"
+`, "", 1)
+
+	if err := v.ReadConfig(strings.NewReader(configYAML)); err != nil {
+		t.Fatalf("ReadConfig returned an error: %v", err)
+	}
+
+	if _, err := GetApplicationConfig(v); err == nil {
+		t.Fatalf("expected missing SIP instance_id to fail validation")
 	}
 }
 
