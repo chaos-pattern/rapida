@@ -9,8 +9,6 @@ const mockHideLoader = jest.fn();
 
 jest.mock('@rapidaai/react', () => {
   class ConnectionConfig {
-    constructor(_: unknown) {}
-
     static WithDebugger(config: unknown) {
       return config;
     }
@@ -61,12 +59,15 @@ jest.mock('@/hooks/use-global-navigator', () => ({
   }),
 }));
 
-jest.mock('@/app/pages/assistant/actions/hooks/use-delete-confirmation', () => ({
-  useDeleteConfirmDialog: () => ({
-    showDialog: jest.fn(),
-    ConfirmDeleteDialogComponent: () => null,
+jest.mock(
+  '@/app/pages/assistant/actions/hooks/use-delete-confirmation',
+  () => ({
+    useDeleteConfirmDialog: () => ({
+      showDialog: jest.fn(),
+      ConfirmDeleteDialogComponent: () => null,
+    }),
   }),
-}));
+);
 
 jest.mock('@/app/components/carbon/notification', () => ({
   Notification: ({ subtitle }: any) => <div>{subtitle}</div>,
@@ -80,6 +81,7 @@ jest.mock('react-hot-toast/headless', () => ({
 describe('EditAssistant layout', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    window.scrollTo = jest.fn();
   });
 
   it('uses light/dark background tokens on general settings page root', async () => {
@@ -92,5 +94,41 @@ describe('EditAssistant layout', () => {
     const pageRoot = container.firstElementChild as HTMLElement;
     expect(pageRoot).toHaveClass('bg-white');
     expect(pageRoot).toHaveClass('dark:bg-gray-900');
+  });
+
+  it('uses label toggletips instead of helper text for edit fields', async () => {
+    const { container } = render(<EditAssistant assistantId="assistant-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Demo Assistant')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Assistant ID information' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Name information' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: 'Description information' }),
+    ).toBeInTheDocument();
+    expect(container.querySelector('.cds--form__helper-text')).toBeNull();
+  });
+
+  it('shows assistant id as an inline copyable value instead of a wide input', async () => {
+    render(<EditAssistant assistantId="assistant-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText('assistant-1')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByDisplayValue('assistant-1')).not.toBeInTheDocument();
+    expect(screen.getByText('assistant-1').parentElement).toHaveClass(
+      'inline-flex',
+    );
+    expect(screen.getByText('assistant-1').parentElement).not.toHaveClass(
+      'border',
+    );
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
   });
 });

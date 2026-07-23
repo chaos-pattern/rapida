@@ -83,7 +83,9 @@ jest.mock('@/app/components/carbon/tile', () => ({
 }));
 
 jest.mock('@carbon/react', () => ({
-  Button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+  Button: ({ children, ...props }: any) => (
+    <button {...props}>{children}</button>
+  ),
   Toggletip: ({ children }: any) => <span>{children}</span>,
   ToggletipButton: ({ label }: any) => <button type="button">{label}</button>,
   ToggletipContent: ({ children }: any) => {
@@ -95,14 +97,7 @@ jest.mock('@carbon/react', () => ({
 
 jest.mock('@rapidaai/react', () => ({
   GetAllAssistantConversation: jest.fn(
-    (
-      _config,
-      _assistantId,
-      _page,
-      _pageSize,
-      _criteria,
-      callback,
-    ) => {
+    (_config, _assistantId, _page, _pageSize, _criteria, callback) => {
       callback(null, {
         getSuccess: () => true,
         getDataList: () => [{ getMetricsList: () => [] }],
@@ -111,7 +106,9 @@ jest.mock('@rapidaai/react', () => ({
   ),
 }));
 
-const { AssistantAnalytics } = require('@/app/pages/assistant/view/overview/assistant-analytics');
+const {
+  AssistantAnalytics,
+} = require('@/app/pages/assistant/view/overview/assistant-analytics');
 
 describe('AssistantAnalytics sessions toggletip', () => {
   beforeEach(() => {
@@ -148,25 +145,66 @@ describe('AssistantAnalytics sessions toggletip', () => {
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Active')).toBeInTheDocument();
+      expect(screen.getByText('Failure rate')).toBeInTheDocument();
     });
 
-    expect(screen.getAllByRole('button', { name: 'Go to sessions' })).toHaveLength(1);
+    expect(
+      screen.getAllByRole('button', { name: 'Go to sessions' }),
+    ).toHaveLength(1);
   });
 
   it('includes eos latency in the latency summary', async () => {
-    mockFindMetricByName.mockImplementation((_metrics: unknown, name: string) => {
-      if (name === 'eos_latency_ms') return '42';
-      return '';
-    });
+    mockFindMetricByName.mockImplementation(
+      (_metrics: unknown, name: string) => {
+        if (name === 'eos_latency_ms') return '42';
+        return '';
+      },
+    );
 
     const assistant = { getId: () => 'assistant-1' } as any;
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('EOS')).toHaveLength(3);
+      expect(screen.getAllByText('EOS')).toHaveLength(2);
     });
 
-    expect(screen.getAllByText('42')).toHaveLength(2);
+    expect(screen.getAllByText('42')).toHaveLength(3);
+  });
+
+  it('puts important KPIs before dashboard detail widgets', async () => {
+    const assistant = { getId: () => 'assistant-1' } as any;
+    render(<AssistantAnalytics assistant={assistant} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Assistant activity')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Total sessions')).toBeInTheDocument();
+    expect(screen.getByText('Total messages')).toBeInTheDocument();
+    expect(screen.getByText('Average response latency')).toBeInTheDocument();
+    expect(screen.getByText('Failed sessions')).toBeInTheDocument();
+    expect(screen.getByText('Message activity')).toBeInTheDocument();
+    expect(
+      screen.getByText('Messages over selected range'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Avg session duration')).toBeInTheDocument();
+    expect(screen.getByText('Usage totals')).toBeInTheDocument();
+    expect(screen.queryByText('Summary Dashboard')).not.toBeInTheDocument();
+  });
+
+  it('keeps message activity after summary dashboard widgets', async () => {
+    const assistant = { getId: () => 'assistant-1' } as any;
+    render(<AssistantAnalytics assistant={assistant} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Message activity')).toBeInTheDocument();
+    });
+
+    expect(
+      screen
+        .getByText('Reliability')
+        .compareDocumentPosition(screen.getByText('Message activity')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 });

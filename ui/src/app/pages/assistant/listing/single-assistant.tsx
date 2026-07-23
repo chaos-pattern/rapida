@@ -1,231 +1,222 @@
 import React, { FC } from 'react';
-import { Assistant } from '@rapidaai/react';
+import { Assistant, AssistantConversation } from '@rapidaai/react';
 import {
   toDate,
-  toHumanReadableDate,
-  toHumanReadableDateFromDate,
-  toHumanReadableRelativeDay,
+  toHumanReadableRelativeTime,
+  toHumanReadableDateTime,
 } from '@/utils/date';
-import TooltipPlus from '@/app/components/base/tooltip-plus';
 import SourceIndicator from '@/app/components/indicators/source';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { AssistantConversation } from '@rapidaai/react';
-import { ArrowRight } from '@carbon/icons-react';
-import { ActionCard } from '@/app/components/base/cards';
+import { Launch, Rocket, SourceControl, View } from '@carbon/icons-react';
+import { Link, TableRow, TableCell, Tag } from '@carbon/react';
+import { CarbonStatusIndicator } from '@/app/components/carbon/status-indicator';
+import { IconOnlyButton } from '@/app/components/carbon/button';
+import { CopyButton } from '@/app/components/carbon/button/copy-button';
+import { VersionIndicator } from '@/app/components/indicators/version';
 
 const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
   const gn = useGlobalNavigation();
-
-  const hasDeployment =
-    assistant.getApideployment() ||
-    assistant.getDebuggerdeployment() ||
-    assistant.getWebplugindeployment() ||
-    assistant.getPhonedeployment();
+  const assistantId = assistant.getId();
+  const conversations = assistant.getAssistantconversationsList();
+  const status = assistant.getStatus();
+  const tags = assistant.getAssistanttag()?.getTagList() ?? [];
+  const visibleTags = tags.slice(0, 2);
+  const overflowTagCount = Math.max(tags.length - visibleTags.length, 0);
+  const lastActivity = getLastActivity(conversations);
+  const owner = assistant.getCreateduser()?.getName();
+  const hasDeployment = hasAssistantDeployment(assistant);
 
   return (
-    <ActionCard onClick={() => gn.goToAssistant(assistant.getId())}>
-      {/* ── Card header ── */}
-      <div className="px-4 pt-4 pb-3">
-        <div className="text-base text-gray-900 dark:text-gray-300 leading-snug mb-1.5 truncate">
-          {assistant.getName()}
-        </div>
-        {/* Stats row */}
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-          <span>
-            Sessions: {assistant.getAssistantconversationsList().length}
-          </span>
-          <span className="w-px h-3 bg-gray-300 dark:bg-gray-600" />
-          <span>
-            Users:{' '}
-            {
-              assistant
-                .getAssistantconversationsList()
-                .map(x => x.getIdentifier())
-                .filter((v, i, self) => self.indexOf(v) === i).length
-            }
-          </span>
-        </div>
-      </div>
+    <TableRow>
+      <TableCell className="text-sm">
+        <Link
+          href={`/deployment/assistant/${assistantId}`}
+          className="!inline-flex !min-w-0 !items-center !gap-1 !text-sm"
+        >
+          <span className="truncate">{assistant.getName()}</span>
+          <Launch size={12} className="shrink-0" />
+        </Link>
+      </TableCell>
 
-      {/* ── Sparkline chart ── */}
-      <ConversationChart
-        conversations={assistant.getAssistantconversationsList()}
-      />
-
-      {/* ── Footer: deployments + open arrow ── */}
-      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800 flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-[0.08em] text-gray-500 dark:text-gray-400 mb-2">
-            Deployments
-          </p>
-          {hasDeployment ? (
-            <div className="flex flex-wrap gap-1.5 items-center">
-              {assistant.getApideployment() && (
-                <DeploymentBadge
-                  source="react-sdk"
-                  tooltip={`API Deployment · ${toHumanReadableRelativeDay(assistant.getApideployment()?.getCreateddate()!)}`}
-                />
-              )}
-              {assistant.getDebuggerdeployment() && (
-                <DeploymentBadge
-                  source="debugger"
-                  tooltip={`Debugger · ${toHumanReadableRelativeDay(assistant.getDebuggerdeployment()?.getCreateddate()!)}`}
-                />
-              )}
-              {assistant.getWebplugindeployment() && (
-                <DeploymentBadge
-                  source="web-plugin"
-                  tooltip={`Web Plugin · ${toHumanReadableRelativeDay(assistant.getWebplugindeployment()?.getCreateddate()!)}`}
-                />
-              )}
-              {assistant.getPhonedeployment() && (
-                <DeploymentBadge
-                  source="twilio-call"
-                  tooltip={`Phone · ${toHumanReadableRelativeDay(assistant.getPhonedeployment()?.getCreateddate()!)}`}
-                />
-              )}
-            </div>
-          ) : (
-            // Carbon empty-state inline CTA
-            <button
-              className="flex items-center gap-1 text-xs text-primary hover:underline underline-offset-2"
-              onClick={e => {
-                e.stopPropagation();
-                gn.goToManageAssistant(assistant.getId());
-              }}
-            >
-              Set up deployment
-              <ArrowRight size={12} />
-            </button>
+      <TableCell className="max-w-[260px]">
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate font-mono text-[13px]">
+            {assistantId || '-'}
+          </span>
+          {assistantId && (
+            <CopyButton className="h-6 w-6 shrink-0">{assistantId}</CopyButton>
           )}
         </div>
+      </TableCell>
 
-        {/* Carbon clickable-tile arrow — communicates the card is navigable */}
-        <ArrowRight
-          size={16}
-          className="shrink-0 text-gray-300 dark:text-gray-600 group-hover:text-primary transition-colors mt-0.5"
-        />
-      </div>
-    </ActionCard>
-  );
-};
+      <TableCell className="text-sm">
+        <span className="capitalize">{formatProvider(assistant)}</span>
+      </TableCell>
 
-/** Deployment badge with tooltip */
-const DeploymentBadge: FC<{ source: string; tooltip: string }> = ({
-  source,
-}) => (
-  <SourceIndicator source={source} withLabel={false} />
-);
+      <TableCell className="text-sm">
+        {assistant.getAssistantproviderid() ? (
+          <VersionIndicator id={assistant.getAssistantproviderid()} />
+        ) : (
+          <span className="text-sm text-gray-400">-</span>
+        )}
+      </TableCell>
 
-const ConversationChart: FC<{
-  conversations: Array<AssistantConversation>;
-}> = ({ conversations }) => {
-  const groupedData = conversations.reduce(
-    (acc, conversation) => {
-      const date = toHumanReadableDate(conversation.getCreateddate()!);
-      if (!acc[date]) {
-        acc[date] = { activeUsers: new Set(), totalSessions: 0 };
-      }
-      acc[date].activeUsers.add(conversation.getIdentifier());
-      acc[date].totalSessions += 1;
-      return acc;
-    },
-    {} as Record<string, { activeUsers: Set<string>; totalSessions: number }>,
-  );
+      <TableCell className="text-sm">
+        {status ? (
+          <CarbonStatusIndicator state={status} />
+        ) : (
+          <span className="text-sm text-gray-400">-</span>
+        )}
+      </TableCell>
 
-  // Compute range: from earliest conversation (or 30 days ago, whichever is earlier) to today
-  const today = new Date();
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(today.getDate() - 30);
+      <TableCell className="text-sm">
+        {hasDeployment ? (
+          <div className="flex flex-wrap gap-1">
+            {assistant.getApideployment() && (
+              <SourceIndicator source="react-sdk" withLabel={false} />
+            )}
+            {assistant.getDebuggerdeployment() && (
+              <SourceIndicator source="debugger" withLabel={false} />
+            )}
+            {assistant.getWebplugindeployment() && (
+              <SourceIndicator source="web-plugin" withLabel={false} />
+            )}
+            {assistant.getPhonedeployment() && (
+              <SourceIndicator source="twilio-call" withLabel={false} />
+            )}
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">Not configured</span>
+        )}
+      </TableCell>
 
-  let earliest = thirtyDaysAgo;
-  conversations.forEach(c => {
-    const d = toDate(c.getCreateddate()!);
-    if (d < earliest) earliest = d;
-  });
-
-  const dayCount = Math.max(
-    Math.ceil((today.getTime() - earliest.getTime()) / (1000 * 60 * 60 * 24)) + 1,
-    30,
-  );
-
-  const last30Days = Array.from({ length: dayCount }, (_, i) => {
-    const date = new Date(today);
-    date.setDate(today.getDate() - (dayCount - 1 - i));
-    return toHumanReadableDateFromDate(date);
-  });
-
-  const dataArray = last30Days.map(date => ({
-    date,
-    activeUsers: 0,
-    totalSessions: 0,
-  }));
-
-  Object.entries(groupedData).forEach(([date, data]) => {
-    const index = dataArray.findIndex(d => d.date === date);
-    if (index !== -1) {
-      dataArray[index].activeUsers = data.activeUsers.size;
-      dataArray[index].totalSessions = data.totalSessions;
-    }
-  });
-
-  const maxSessions = Math.max(...dataArray.map(d => d.totalSessions));
-  const maxHeight = 48;
-
-  return (
-    <div className="relative w-full h-16 bg-gray-50 dark:bg-gray-950/70">
-      {dataArray.length > 0 && (
-        <div className="absolute inset-0 flex items-end px-px">
-          {dataArray.map((data, i) => {
-            const barHeight =
-              (data.totalSessions / maxSessions) * maxHeight || 3;
-
-            return (
-              <div key={i} className="flex-1 px-px">
-                <TooltipPlus
-                  className="bg-white dark:bg-gray-950 border rounded-none px-0 py-0 w-56"
-                  popupContent={
-                    <div className="divide-y text-xs dark:text-gray-400 text-gray-700">
-                      <div className="px-3 py-2 space-y-1">
-                        <div className="flex justify-between">
-                          <span>Active Users</span>
-                          <span className="font-semibold">
-                            {data.activeUsers}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>Sessions</span>
-                          <span className="font-semibold">
-                            {data.totalSessions}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="px-3 py-1.5 text-gray-400">
-                        {data.date}
-                      </div>
-                    </div>
-                  }
-                >
-                  <div className="h-full flex items-end">
-                    <div
-                      className="bg-primary w-full"
-                      style={{
-                        height: `${barHeight}px`,
-                        opacity:
-                          data.totalSessions === 0
-                            ? 0.15
-                            : 0.2 + (data.totalSessions / maxSessions) * 0.8,
-                      }}
-                    />
-                  </div>
-                </TooltipPlus>
-              </div>
-            );
-          })}
+      <TableCell>
+        <div className="flex items-center gap-0">
+          <IconOnlyButton
+            kind="ghost"
+            size="md"
+            renderIcon={View}
+            iconDescription="View detail"
+            onClick={() => gn.goToAssistant(assistantId)}
+          />
+          {hasDeployment ? (
+            <IconOnlyButton
+              kind="ghost"
+              size="md"
+              renderIcon={Rocket}
+              iconDescription="Manage deployments"
+              onClick={() => gn.goToManageAssistant(assistantId)}
+            />
+          ) : (
+            <IconOnlyButton
+              kind="ghost"
+              size="md"
+              renderIcon={Rocket}
+              iconDescription="Set up deployment"
+              onClick={() => gn.goToManageAssistant(assistantId)}
+            />
+          )}
+          <IconOnlyButton
+            kind="ghost"
+            size="md"
+            renderIcon={SourceControl}
+            iconDescription="Create new version"
+            onClick={() => gn.goToCreateAssistantVersion(assistantId)}
+          />
         </div>
-      )}
-    </div>
+      </TableCell>
+
+      <TableCell className="text-sm">
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {visibleTags.map(tag => (
+              <Tag key={tag} type="cool-gray" size="sm">
+                {tag}
+              </Tag>
+            ))}
+            {overflowTagCount > 0 && (
+              <Tag type="gray" size="sm">
+                +{overflowTagCount}
+              </Tag>
+            )}
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">-</span>
+        )}
+      </TableCell>
+
+      <TableCell className="min-w-28 whitespace-nowrap text-sm tabular-nums">
+        {formatInteger(conversations.length)}
+      </TableCell>
+
+      <TableCell className="min-w-28 whitespace-nowrap text-sm tabular-nums">
+        {formatInteger(getUniqueUserCount(conversations))}
+      </TableCell>
+
+      <TableCell className="min-w-36 whitespace-nowrap text-[13px]">
+        {lastActivity ? (
+          toHumanReadableRelativeTime(lastActivity)
+        ) : (
+          <span className="text-gray-400">Not yet run</span>
+        )}
+      </TableCell>
+
+      <TableCell className="min-w-36 whitespace-nowrap text-[13px]">
+        {assistant.getUpdateddate()
+          ? toHumanReadableDateTime(assistant.getUpdateddate()!)
+          : '-'}
+      </TableCell>
+
+      <TableCell className="text-sm">
+        <span className="capitalize">{owner || '-'}</span>
+      </TableCell>
+    </TableRow>
   );
 };
+
+const hasAssistantDeployment = (assistant: Assistant): boolean =>
+  Boolean(
+    assistant.getApideployment() ||
+      assistant.getDebuggerdeployment() ||
+      assistant.getWebplugindeployment() ||
+      assistant.getPhonedeployment(),
+  );
+
+const formatProvider = (assistant: Assistant): string => {
+  const provider = assistant.getAssistantprovider();
+  if (provider) return provider.replace(/[-_]/g, ' ').toLowerCase();
+  if (assistant.getAssistantprovidermodel()) return 'prompt';
+  if (assistant.getAssistantprovideragentkit()) return 'agentkit';
+  if (assistant.getAssistantproviderwebsocket()) return 'websocket';
+  if (assistant.getAssistantprovideragentflow()) return 'agentflow';
+  return '-';
+};
+
+const getUniqueUserCount = (
+  conversations: Array<AssistantConversation>,
+): number =>
+  new Set(
+    conversations
+      .map(conversation => conversation.getIdentifier())
+      .filter(Boolean),
+  ).size;
+
+const getLastActivity = (
+  conversations: Array<AssistantConversation>,
+): ReturnType<AssistantConversation['getCreateddate']> => {
+  return conversations.reduce<
+    ReturnType<AssistantConversation['getCreateddate']>
+  >((latest, conversation) => {
+    const createdDate = conversation.getCreateddate();
+    if (!createdDate) return latest;
+    if (!latest) return createdDate;
+    return toDate(createdDate).getTime() > toDate(latest).getTime()
+      ? createdDate
+      : latest;
+  }, undefined);
+};
+
+const formatInteger = (value: number): string =>
+  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 
 export default React.memo(SingleAssistant);

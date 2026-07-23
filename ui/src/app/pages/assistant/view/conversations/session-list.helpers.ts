@@ -4,7 +4,7 @@ import { getMetadataValueOrDefault, getMetricValue } from '@/utils/metadata';
 const DISCONNECT_REASON_KEY = 'disconnect_reason';
 const UNKNOWN_DISCONNECT_REASON = 'unknown';
 const CHANNEL_KEY = 'client.channel';
-const UNKNOWN_CHANNEL = 'unknown';
+const DEFAULT_CHANNEL = 'webrtc';
 
 export const UNKNOWN_DURATION_VALUE = 'unknown';
 
@@ -56,7 +56,7 @@ export const getDisconnectReasonValue = (
 };
 
 export const getChannelValue = (conversation: AssistantConversation): string =>
-  getSessionMetadataValue(conversation, CHANNEL_KEY, UNKNOWN_CHANNEL);
+  getSessionMetadataValue(conversation, CHANNEL_KEY, DEFAULT_CHANNEL);
 
 const formatDurationMetricSeconds = (
   rawValue: string,

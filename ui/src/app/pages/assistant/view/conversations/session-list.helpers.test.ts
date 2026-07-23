@@ -22,12 +22,12 @@ const metric = (name: string, value: string): Metric => {
 const conversation = (): AssistantConversation => new AssistantConversation();
 
 describe('session list helpers', () => {
-  it('reads channel metadata with unknown fallback', () => {
+  it('reads channel metadata with WebRTC fallback', () => {
     const conv = conversation();
     conv.addMetadata(metadata('client.channel', 'phone'));
 
     expect(getChannelValue(conv)).toBe('phone');
-    expect(getChannelValue(conversation())).toBe('unknown');
+    expect(getChannelValue(conversation())).toBe('webrtc');
   });
 
   it('reads disconnect reason metadata with unknown fallback for blank values', () => {

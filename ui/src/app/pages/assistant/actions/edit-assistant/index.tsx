@@ -12,7 +12,7 @@ import { useDeleteConfirmDialog } from '@/app/pages/assistant/actions/hooks/use-
 import { useRapidaStore } from '@/hooks';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { FC, useEffect, useState } from 'react';
+import { FC, ReactNode, useEffect, useState } from 'react';
 import toast from 'react-hot-toast/headless';
 import { useParams } from 'react-router-dom';
 import { UpdateAssistantDetail } from '@rapidaai/react';
@@ -20,9 +20,36 @@ import { connectionConfig } from '@/configs';
 import { Notification } from '@/app/components/carbon/notification';
 import { Form, Stack, TextInput, TextArea } from '@/app/components/carbon/form';
 import { PrimaryButton, DangerButton } from '@/app/components/carbon/button';
-import { Breadcrumb, BreadcrumbItem } from '@carbon/react';
-import { WarningAlt } from '@carbon/icons-react';
+import { CopyButton } from '@/app/components/carbon/button/copy-button';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  Toggletip as CarbonToggletip,
+  ToggletipButton,
+  ToggletipContent,
+} from '@carbon/react';
+import { Information, WarningAlt } from '@carbon/icons-react';
 import { InputGroup } from '../../../../components/input-group/index';
+
+const Toggletip = (CarbonToggletip as any).default || CarbonToggletip;
+
+const FieldLabelWithToggletip: FC<{
+  label: string;
+  description: ReactNode;
+}> = ({ label, description }) => (
+  <span className="inline-flex items-center gap-1.5">
+    <span>{label}</span>
+    <Toggletip align="right">
+      <ToggletipButton
+        label={`${label} information`}
+        title={`${label} information`}
+      >
+        <Information size={14} />
+      </ToggletipButton>
+      <ToggletipContent>{description}</ToggletipContent>
+    </Toggletip>
+  </span>
+);
 
 export function EditAssistantPage() {
   const { assistantId } = useParams();
@@ -173,13 +200,21 @@ export const EditAssistant: FC<{ assistantId: string }> = ({ assistantId }) => {
       </div>
 
       <InputGroup title="Identity">
-        <TextInput
-          id="assistant-id"
-          labelText="Assistant ID"
-          value={assistantId}
-          readOnly
-          helperText="Your assistant's unique identifier. This cannot be changed."
-        />
+        <div className="flex max-w-full flex-col items-start gap-2">
+          <FieldLabelWithToggletip
+            label="Assistant ID"
+            description="Your assistant's unique identifier. This cannot be changed."
+          />
+          <div
+            id="assistant-id"
+            className="inline-flex max-w-full items-center gap-1"
+          >
+            <span className="min-w-0 max-w-[32rem] truncate font-mono text-sm text-gray-700 dark:text-gray-200">
+              {assistantId}
+            </span>
+            <CopyButton className="h-6 w-6 shrink-0">{assistantId}</CopyButton>
+          </div>
+        </div>
       </InputGroup>
       <InputGroup title="General Information">
         <Form
@@ -192,20 +227,28 @@ export const EditAssistant: FC<{ assistantId: string }> = ({ assistantId }) => {
           <Stack gap={6}>
             <TextInput
               id="assistant-name"
-              labelText="Name"
+              labelText={
+                <FieldLabelWithToggletip
+                  label="Name"
+                  description="The display name shown across the platform."
+                />
+              }
               value={name}
               onChange={e => setName(e.target.value)}
               placeholder="e.g. Customer support bot"
-              helperText="The display name shown across the platform."
             />
             <TextArea
               id="assistant-description"
-              labelText="Description"
+              labelText={
+                <FieldLabelWithToggletip
+                  label="Description"
+                  description="Describe what this assistant does and its intended use case."
+                />
+              }
               value={description}
               rows={4}
               onChange={e => setDescription(e.target.value)}
               placeholder="What's the purpose of this assistant?"
-              helperText="Describe what this assistant does and its intended use case."
             />
             {errorMessage && (
               <Notification

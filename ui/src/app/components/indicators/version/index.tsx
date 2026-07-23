@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Tag } from '@carbon/react';
 import { Checkmark, Copy } from '@carbon/icons-react';
 import { IconOnlyButton } from '@/app/components/carbon/button';
 
@@ -15,9 +14,7 @@ export function VersionIndicator({ id }: { id: string }) {
 
   return (
     <span className="inline-flex items-center gap-1">
-      <Tag size="md" type="cool-gray" className="!inline-flex !items-center">
-        <span className="font-mono leading-none">{version}</span>
-      </Tag>
+      <span className="font-mono text-[13px] leading-none">{version}</span>
       <IconOnlyButton
         kind="ghost"
         size="sm"

@@ -125,6 +125,10 @@ func (assistant *webAssistantGRPCApi) GetAssistant(c context.Context, iRequest *
 	}
 
 	if _assistant.GetSuccess() {
+		if _assistant.GetData() != nil {
+			_assistant.GetData().CreatedUser = assistant.GetUser(c, iAuth, _assistant.GetData().GetCreatedBy())
+		}
+
 		providerModel := _assistant.GetData().GetAssistantProviderModel()
 		if providerModel != nil {
 			user := assistant.GetUser(c, iAuth, providerModel.GetCreatedBy())
@@ -176,6 +180,8 @@ func (assistant *webAssistantGRPCApi) GetAllAssistant(c context.Context, iReques
 	}
 
 	for _, ast := range _assistant {
+		ast.CreatedUser = assistant.GetUser(c, iAuth, ast.GetCreatedBy())
+
 		providerModel := ast.GetAssistantProviderModel()
 		if providerModel != nil {
 			user := assistant.GetUser(c, iAuth, providerModel.GetCreatedBy())

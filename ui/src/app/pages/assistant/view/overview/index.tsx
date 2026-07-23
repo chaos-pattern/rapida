@@ -5,13 +5,13 @@ import { useRapidaStore } from '@/hooks';
 import { FC } from 'react';
 import { LinkNotification } from '@/app/components/carbon/notification';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
-import { toHumanReadableRelativeTime } from '@/utils/date';
 import {
   Breadcrumb,
   BreadcrumbItem,
-  ComboButton,
-  MenuItem,
+  Button,
+  HeaderGlobalBar,
 } from '@carbon/react';
+import { SourceControl } from '@carbon/icons-react';
 
 export const Overview: FC<{ currentAssistant: Assistant }> = ({
   currentAssistant,
@@ -29,55 +29,37 @@ export const Overview: FC<{ currentAssistant: Assistant }> = ({
 
   return (
     <div className="flex flex-col flex-1 grow">
-      {/* ── IBM Page header — breadcrumb + title + actions ── */}
-      <div className="px-4 pt-4 pb-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <div className="flex items-start justify-between">
-          <div>
-            <Breadcrumb noTrailingSlash className="mb-2">
-              <BreadcrumbItem href="/deployment/assistant">
-                Assistants
-              </BreadcrumbItem>
-            </Breadcrumb>
-            <h1 className="text-2xl font-light tracking-tight">
-              {currentAssistant.getName()}
-            </h1>
-            {currentAssistant.getAssistantprovidermodel()?.getCreateddate() && (
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 tabular-nums">
-                Last updated{' '}
-                {toHumanReadableRelativeTime(
-                  currentAssistant
-                    .getAssistantprovidermodel()
-                    ?.getCreateddate()!,
-                )}
-              </p>
-            )}
-          </div>
-          <ComboButton
-            label="Create new version"
-            size="md"
+      <header className="flex h-12 shrink-0 items-center justify-between bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+        <div className="min-w-0 pl-4">
+          <Breadcrumb noTrailingSlash>
+            <BreadcrumbItem href="/deployment/assistant">
+              Assistants
+            </BreadcrumbItem>
+            <BreadcrumbItem isCurrentPage>
+              <span className="block max-w-[42vw] truncate">
+                {currentAssistant.getName()}
+              </span>
+            </BreadcrumbItem>
+          </Breadcrumb>
+        </div>
+        <HeaderGlobalBar
+          aria-label="Assistant overview header actions"
+          className="h-full items-center"
+        >
+          <Button
+            aria-label="Create new version"
+            kind="primary"
+            size="lg"
+            renderIcon={SourceControl}
+            className="h-full! min-h-full! items-center justify-center whitespace-nowrap"
             onClick={() =>
               navigation.goToCreateAssistantVersion(currentAssistant.getId())
             }
           >
-            <MenuItem
-              label="Create AgentKit"
-              onClick={() =>
-                navigation.goToCreateAssistantAgentKitVersion(
-                  currentAssistant.getId(),
-                )
-              }
-            />
-            <MenuItem
-              label="Create Agentflow"
-              onClick={() =>
-                navigation.goToCreateAssistantAgentflowVersion(
-                  currentAssistant.getId(),
-                )
-              }
-            />
-          </ComboButton>
-        </div>
-      </div>
+            Create new version
+          </Button>
+        </HeaderGlobalBar>
+      </header>
 
       {/* ── Notifications ── */}
       {!currentAssistant.getApideployment() &&

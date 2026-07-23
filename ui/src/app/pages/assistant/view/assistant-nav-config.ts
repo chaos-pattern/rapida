@@ -1,7 +1,6 @@
 import {
   Dashboard,
   Chat,
-  RecentlyViewed,
   Settings,
   Deploy,
   ToolKit,
@@ -12,6 +11,7 @@ import {
   ChartLine,
   DigitalIdentity,
   ObjectStorage,
+  SourceControl,
   CarbonIconType,
 } from '@carbon/icons-react';
 import { Assistant } from '@rapidaai/react';
@@ -67,7 +67,7 @@ export const assistantNavSections: AssistantNavSection[] = [
       {
         key: 'versions',
         label: 'Versions',
-        icon: RecentlyViewed,
+        icon: SourceControl,
         path: 'version-history',
         children: [
           { key: 'versions-list', label: 'View all', path: 'version-history' },
