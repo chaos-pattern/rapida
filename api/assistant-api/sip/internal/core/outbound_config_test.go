@@ -41,11 +41,15 @@ func TestOutboundConfig_MapsLifecycleTimeouts(t *testing.T) {
 	cfg := testOutboundConfig()
 	cfg.InviteTimeout = 30 * time.Second
 	cfg.SessionTimeout = 45 * time.Minute
+	cfg.MediaTimeoutInitial = 20 * time.Second
+	cfg.MediaTimeout = 10 * time.Second
 
 	outboundConfig := cfg.ToOutboundConfig()
 
 	assert.Equal(t, 30*time.Second, outboundConfig.RingingTimeout)
 	assert.Equal(t, 45*time.Minute, outboundConfig.MaxCallDuration)
+	assert.Equal(t, 20*time.Second, outboundConfig.MediaTimeoutInitial)
+	assert.Equal(t, 10*time.Second, outboundConfig.MediaTimeout)
 }
 
 func TestOutboundConfig_EffectiveTimeouts(t *testing.T) {

@@ -7,7 +7,9 @@
 package core
 
 import (
+	"context"
 	"errors"
+	"net"
 	"testing"
 	"time"
 
@@ -90,6 +92,107 @@ func TestRTPHandler_StopOwnsLoopShutdownBeforeClosingChannels(t *testing.T) {
 	case _, ok := <-handler.audioOutChan:
 		require.True(t, ok, "RTP output queue must not be closed by Stop")
 	default:
+	}
+}
+
+func TestRTPHandler_StopClosesUnstartedSocket(t *testing.T) {
+	handler, err := NewRTPHandler(context.Background(), &RTPConfig{
+		LocalIP:     "127.0.0.1",
+		LocalPort:   0,
+		PayloadType: CodecPCMU.PayloadType,
+		ClockRate:   CodecPCMU.ClockRate,
+	})
+	require.NoError(t, err)
+	_, port := handler.LocalAddr()
+
+	require.NoError(t, handler.Stop())
+	require.NoError(t, handler.Stop())
+
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{
+		IP:   net.ParseIP("127.0.0.1"),
+		Port: port,
+	})
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+}
+
+func TestRTPHandler_MediaTimeoutUsesInitialWindow(t *testing.T) {
+	handler, err := NewRTPHandler(context.Background(), &RTPConfig{
+		LocalIP:             "127.0.0.1",
+		LocalPort:           0,
+		PayloadType:         CodecPCMU.PayloadType,
+		ClockRate:           CodecPCMU.ClockRate,
+		MediaTimeoutInitial: 80 * time.Millisecond,
+		MediaTimeout:        40 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	defer handler.Stop()
+
+	handler.EnableMediaTimeout(true)
+
+	select {
+	case <-handler.MediaTimeout():
+		t.Fatal("initial media timeout fired too early")
+	case <-time.After(40 * time.Millisecond):
+	}
+
+	select {
+	case <-handler.MediaTimeout():
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("initial media timeout did not fire")
+	}
+}
+
+func TestRTPHandler_MediaTimeoutUsesRegularWindowAfterAudio(t *testing.T) {
+	handler, err := NewRTPHandler(context.Background(), &RTPConfig{
+		LocalIP:             "127.0.0.1",
+		LocalPort:           0,
+		PayloadType:         CodecPCMU.PayloadType,
+		ClockRate:           CodecPCMU.ClockRate,
+		MediaTimeoutInitial: 200 * time.Millisecond,
+		MediaTimeout:        50 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	defer handler.Stop()
+
+	handler.EnableMediaTimeout(true)
+	time.Sleep(30 * time.Millisecond)
+	handler.markInboundAudioPacketReceived()
+
+	select {
+	case <-handler.MediaTimeout():
+		t.Fatal("regular media timeout fired too early")
+	case <-time.After(25 * time.Millisecond):
+	}
+
+	select {
+	case <-handler.MediaTimeout():
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("regular media timeout did not fire")
+	}
+}
+
+func TestRTPHandler_MediaTimeoutStaysOpenWhileAudioFlows(t *testing.T) {
+	handler, err := NewRTPHandler(context.Background(), &RTPConfig{
+		LocalIP:             "127.0.0.1",
+		LocalPort:           0,
+		PayloadType:         CodecPCMU.PayloadType,
+		ClockRate:           CodecPCMU.ClockRate,
+		MediaTimeoutInitial: 100 * time.Millisecond,
+		MediaTimeout:        60 * time.Millisecond,
+	})
+	require.NoError(t, err)
+	defer handler.Stop()
+
+	handler.EnableMediaTimeout(true)
+
+	for i := 0; i < 5; i++ {
+		handler.markInboundAudioPacketReceived()
+		select {
+		case <-handler.MediaTimeout():
+			t.Fatal("media timeout fired while audio was flowing")
+		case <-time.After(25 * time.Millisecond):
+		}
 	}
 }
 

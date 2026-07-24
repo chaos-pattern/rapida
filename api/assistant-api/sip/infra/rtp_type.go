@@ -8,6 +8,7 @@ package sip_infra
 
 import (
 	"context"
+	"time"
 
 	internal_core "github.com/rapidaai/api/assistant-api/sip/internal/core"
 	"github.com/rapidaai/pkg/commons"
@@ -46,6 +47,9 @@ type RTPConfig struct {
 	PayloadType uint8
 	ClockRate   uint32
 	Logger      commons.Logger
+
+	MediaTimeoutInitial time.Duration
+	MediaTimeout        time.Duration
 }
 
 func (c *RTPConfig) Validate() error {
@@ -57,11 +61,13 @@ func (c *RTPConfig) toCore() *internal_core.RTPConfig {
 		return nil
 	}
 	return &internal_core.RTPConfig{
-		LocalIP:     c.LocalIP,
-		LocalPort:   c.LocalPort,
-		PayloadType: c.PayloadType,
-		ClockRate:   c.ClockRate,
-		Logger:      c.Logger,
+		LocalIP:             c.LocalIP,
+		LocalPort:           c.LocalPort,
+		PayloadType:         c.PayloadType,
+		ClockRate:           c.ClockRate,
+		Logger:              c.Logger,
+		MediaTimeoutInitial: c.MediaTimeoutInitial,
+		MediaTimeout:        c.MediaTimeout,
 	}
 }
 

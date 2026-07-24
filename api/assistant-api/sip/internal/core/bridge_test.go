@@ -707,37 +707,37 @@ func TestCodecName_PCMA(t *testing.T) {
 }
 
 // =============================================================================
-// outboundInvite cleanup
+// outboundMedia cleanup
 // =============================================================================
 
-func TestOutboundInviteCleanup_StopsRTPHandler(t *testing.T) {
+func TestOutboundMediaStop_StopsRTPHandler(t *testing.T) {
 	t.Parallel()
 	rtp := newTestRTPHandler()
 	require.True(t, rtp.running.Load())
 
-	invite := &outboundInvite{
+	media := &outboundMedia{
 		rtpHandler: rtp,
 	}
-	invite.cleanup()
+	media.Stop()
 	assert.False(t, rtp.running.Load(), "RTP handler should be stopped")
 }
 
-func TestOutboundInviteCleanup_NilRTPHandler(t *testing.T) {
+func TestOutboundMediaStop_NilRTPHandler(t *testing.T) {
 	t.Parallel()
-	invite := &outboundInvite{
+	media := &outboundMedia{
 		rtpHandler: nil,
 	}
 	// Should not panic
-	invite.cleanup()
+	media.Stop()
 }
 
-func TestOutboundInviteCleanup_DoubleCleanup(t *testing.T) {
+func TestOutboundMediaStop_DoubleStop(t *testing.T) {
 	t.Parallel()
 	rtp := newTestRTPHandler()
-	invite := &outboundInvite{
+	media := &outboundMedia{
 		rtpHandler: rtp,
 	}
-	invite.cleanup()
-	invite.cleanup() // second call should not panic
+	media.Stop()
+	media.Stop() // second call should not panic
 	assert.False(t, rtp.running.Load())
 }

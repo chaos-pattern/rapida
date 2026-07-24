@@ -210,6 +210,10 @@ func (m *SIPEngine) applySIPConfigDefaults(c *sip_infra.Config) {
 		m.cfg.SIPConfig.InviteTimeout,
 		m.cfg.SIPConfig.SessionTimeout,
 	)
+	c.ApplyMediaTimeoutDefaults(
+		m.cfg.SIPConfig.MediaTimeoutInitial,
+		m.cfg.SIPConfig.MediaTimeout,
+	)
 	inboundConfig := m.cfg.SIPConfig.Inbound
 	c.ApplyInboundAnswerDefaults(
 		sip_infra.InboundAnswerMode(inboundConfig.AnswerMode),

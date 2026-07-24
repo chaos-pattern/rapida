@@ -127,6 +127,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": strconv.Itoa(update.ProviderStatusCode),
 						"retryable":            strconv.FormatBool(update.Retryable),
@@ -188,6 +190,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": strconv.Itoa(update.ProviderStatusCode),
 						"retryable":            strconv.FormatBool(update.Retryable),
@@ -224,6 +228,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": update.ProviderStatusCode,
 						"retryable":            update.Retryable,
@@ -239,6 +245,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"from":          currentCallContext.FromNumber,
 						"provider":      currentCallContext.Provider,
 						"failure_class": update.FailureClass,
+						"sli_result":    update.SLIResult,
+						"sli_reason":    update.SLIReason,
 					},
 				},
 			)
@@ -249,6 +257,12 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},
 			)
+			if update.SLIResult != "" {
+				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataSLIResult, Value: update.SLIResult})
+			}
+			if update.SLIReason != "" {
+				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataSLIReason, Value: update.SLIReason})
+			}
 			if update.ProviderStatusCode != 0 {
 				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataProviderStatusCode, Value: strconv.Itoa(update.ProviderStatusCode)})
 			}
@@ -276,6 +290,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": strconv.Itoa(update.ProviderStatusCode),
 						"retryable":            strconv.FormatBool(update.Retryable),
@@ -293,6 +309,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": strconv.Itoa(update.ProviderStatusCode),
 						"retryable":            strconv.FormatBool(update.Retryable),
@@ -312,6 +330,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_status":          update.CallStatus,
 						"failure_class":        update.FailureClass,
 						"failure_reason":       update.FailureReason,
+						"sli_result":           update.SLIResult,
+						"sli_reason":           update.SLIReason,
 						"disconnect_reason":    update.DisconnectReason,
 						"provider_status_code": update.ProviderStatusCode,
 						"retryable":            update.Retryable,
@@ -328,6 +348,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 						"call_id":       currentCallContext.ChannelUUID,
 						"component":     observability.ComponentCall.String(),
 						"failure_class": update.FailureClass,
+						"sli_result":    update.SLIResult,
+						"sli_reason":    update.SLIReason,
 					},
 				},
 			)
@@ -338,6 +360,12 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},
 			)
+			if update.SLIResult != "" {
+				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataSLIResult, Value: update.SLIResult})
+			}
+			if update.SLIReason != "" {
+				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataSLIReason, Value: update.SLIReason})
+			}
 			if update.ProviderStatusCode != 0 {
 				metadata = append(metadata, &protos.Metadata{Key: observability.MetadataProviderStatusCode, Value: strconv.Itoa(update.ProviderStatusCode)})
 			}

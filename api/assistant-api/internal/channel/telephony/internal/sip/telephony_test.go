@@ -30,13 +30,15 @@ func newSIPTelephonyForTest() *sipTelephony {
 		logger: logger,
 		appCfg: &config.AssistantConfig{
 			SIPConfig: &config.SIPConfig{
-				Port:              5060,
-				Transport:         "udp",
-				RTPPortRangeStart: 10000,
-				RTPPortRangeEnd:   10100,
-				RegisterTimeout:   5 * time.Second,
-				InviteTimeout:     30 * time.Second,
-				SessionTimeout:    45 * time.Minute,
+				Port:                5060,
+				Transport:           "udp",
+				RTPPortRangeStart:   10000,
+				RTPPortRangeEnd:     10100,
+				RegisterTimeout:     5 * time.Second,
+				InviteTimeout:       30 * time.Second,
+				SessionTimeout:      45 * time.Minute,
+				MediaTimeoutInitial: 20 * time.Second,
+				MediaTimeout:        10 * time.Second,
 			},
 		},
 	}
@@ -135,6 +137,12 @@ func TestParseConfig_AppliesPlatformTimeouts(t *testing.T) {
 	}
 	if cfg.SessionTimeout != 45*time.Minute {
 		t.Fatalf("expected session timeout 45m, got %s", cfg.SessionTimeout)
+	}
+	if cfg.MediaTimeoutInitial != 20*time.Second {
+		t.Fatalf("expected initial media timeout 20s, got %s", cfg.MediaTimeoutInitial)
+	}
+	if cfg.MediaTimeout != 10*time.Second {
+		t.Fatalf("expected media timeout 10s, got %s", cfg.MediaTimeout)
 	}
 }
 

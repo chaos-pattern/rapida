@@ -90,9 +90,11 @@ func runningHealthTestServer(listenConfig *ListenConfig) *Server {
 }
 
 type testRTPAllocator struct {
-	nextPort    int
-	releasePort int
-	inUse       int
+	nextPort     int
+	releasePort  int
+	releaseCount int
+	releaseAll   bool
+	inUse        int
 }
 
 func (a *testRTPAllocator) Allocate() (int, error) {
@@ -101,10 +103,13 @@ func (a *testRTPAllocator) Allocate() (int, error) {
 
 func (a *testRTPAllocator) Release(port int) {
 	a.releasePort = port
+	a.releaseCount++
 }
 
 func (a *testRTPAllocator) InUse() (int, error) {
 	return a.inUse, nil
 }
 
-func (a *testRTPAllocator) ReleaseAll(ctx context.Context) {}
+func (a *testRTPAllocator) ReleaseAll(ctx context.Context) {
+	a.releaseAll = true
+}

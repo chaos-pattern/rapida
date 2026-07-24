@@ -105,15 +105,17 @@ func (o TransferBridgeCallOptions) makeCallOptions() MakeCallOptions {
 }
 
 type OutboundConfig struct {
-	Mode            OutboundMode
-	Address         string
-	Port            int
-	Transport       Transport
-	Domain          string
-	Auth            SIPAuthConfig
-	Headers         map[string]string
-	RingingTimeout  time.Duration
-	MaxCallDuration time.Duration
+	Mode                OutboundMode
+	Address             string
+	Port                int
+	Transport           Transport
+	Domain              string
+	Auth                SIPAuthConfig
+	Headers             map[string]string
+	RingingTimeout      time.Duration
+	MaxCallDuration     time.Duration
+	MediaTimeoutInitial time.Duration
+	MediaTimeout        time.Duration
 }
 
 type OutboundCallIdentity struct {

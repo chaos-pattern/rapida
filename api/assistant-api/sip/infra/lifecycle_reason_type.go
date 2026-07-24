@@ -56,6 +56,7 @@ const (
 	LifecycleReasonOutboundRejected               LifecycleReason = "outbound_rejected"
 	LifecycleReasonOutboundMediaRejected          LifecycleReason = "outbound_media_rejected"
 	LifecycleReasonOutboundUpstreamFailure        LifecycleReason = "outbound_upstream_failure"
+	LifecycleReasonOutboundTrunkCapacity          LifecycleReason = "outbound_trunk_capacity"
 	LifecycleReasonOutboundNetworkFailure         LifecycleReason = "outbound_network_failure"
 	LifecycleReasonOutboundACKSent                LifecycleReason = "outbound_ack_sent"
 	LifecycleReasonOutboundAnswerSDPFailed        LifecycleReason = "outbound_answer_sdp_failed"

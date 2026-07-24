@@ -71,11 +71,17 @@ func TestMakeCall_InviteFailureEndsRegisteredSessionAndReportsFailure(t *testing
 	}
 	dialogClientCache := sipgo.NewDialogClientCache(client, contact)
 	rtpPort := 19000
+	var preparedRTPHandler *RTPHandler
 	server := &Server{
-		logger:            bridgeTestLogger(),
-		listenConfig:      outboundTestListenConfig(),
-		rtpAllocator:      &testRTPAllocator{nextPort: rtpPort},
-		newRTPHandler:     testOutboundRTPHandler,
+		logger:       bridgeTestLogger(),
+		listenConfig: outboundTestListenConfig(),
+		rtpAllocator: &testRTPAllocator{nextPort: rtpPort},
+		newRTPHandler: func(_ context.Context, cfg *RTPConfig) (*RTPHandler, error) {
+			preparedRTPHandler = newTestRTPHandler()
+			preparedRTPHandler.localIP = cfg.LocalIP
+			preparedRTPHandler.localPort = cfg.LocalPort
+			return preparedRTPHandler, nil
+		},
 		dialogClientCache: dialogClientCache,
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
@@ -92,9 +98,16 @@ func TestMakeCall_InviteFailureEndsRegisteredSessionAndReportsFailure(t *testing
 	require.Nil(t, session)
 	require.Error(t, err)
 	assert.Equal(t, rtpPort, server.rtpAllocator.(*testRTPAllocator).releasePort)
+	assert.Equal(t, 1, server.rtpAllocator.(*testRTPAllocator).releaseCount)
+	require.NotNil(t, preparedRTPHandler)
+	assert.True(t, preparedRTPHandler.closed.Load())
 	assert.Equal(t, requester.observedCallID(), statusUpdate.ChannelUUID)
 	assert.Equal(t, string(OutboundCallStatusFailed), statusUpdate.CallStatus)
-	assert.Equal(t, "setup", statusUpdate.FailureClass)
+	assert.Equal(t, "failed to send INVITE: invite send failed", statusUpdate.ErrorMessage)
+	assert.Equal(t, string(OutboundFailureSetup), statusUpdate.FailureClass)
+	assert.Equal(t, "failed to send INVITE: invite send failed", statusUpdate.FailureReason)
+	assert.Equal(t, string(CallTerminationServerError), statusUpdate.SLIResult)
+	assert.Equal(t, "outbound_setup_failed", statusUpdate.SLIReason)
 	assert.Equal(t, LifecycleReasonOutboundSetupFailure.String(), statusUpdate.DisconnectReason)
 	_, ok := server.GetSession(requester.observedCallID())
 	assert.False(t, ok)

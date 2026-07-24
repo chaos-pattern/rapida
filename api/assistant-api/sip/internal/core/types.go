@@ -24,6 +24,7 @@ var (
 	ErrSessionClosed              = errors.New("SIP session is closed")
 	ErrRTPNotInitialized          = errors.New("RTP handler not initialized")
 	ErrRTPHandlerStopped          = errors.New("RTP handler is stopped")
+	ErrRTPMediaTimeout            = errors.New("RTP media timeout")
 	ErrRTPOutputQueueFull         = errors.New("RTP output queue is full")
 	ErrSDPParseFailed             = errors.New("failed to parse SDP")
 	ErrCodecNotSupported          = errors.New("codec not supported")
@@ -101,10 +102,12 @@ type Config struct {
 	RTPPortRangeEnd   int       `json:"rtp_port_range_end" mapstructure:"rtp_port_range_end"`
 	SRTPEnabled       bool      `json:"srtp_enabled" mapstructure:"srtp_enabled"`
 
-	RegisterTimeout  time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
-	InviteTimeout    time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
-	SessionTimeout   time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
-	KeepAliveEnabled bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
+	RegisterTimeout     time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
+	InviteTimeout       time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
+	SessionTimeout      time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
+	MediaTimeoutInitial time.Duration `json:"media_timeout_initial,omitempty" mapstructure:"media_timeout_initial"`
+	MediaTimeout        time.Duration `json:"media_timeout,omitempty" mapstructure:"media_timeout"`
+	KeepAliveEnabled    bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
 
 	InboundAnswerMode      InboundAnswerMode `json:"inbound_answer_mode,omitempty" mapstructure:"inbound_answer_mode"`
 	InboundMinRingDuration time.Duration     `json:"inbound_min_ring_duration,omitempty" mapstructure:"inbound_min_ring_duration"`
@@ -142,6 +145,15 @@ func (c *Config) ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTim
 	}
 	if c.SessionTimeout <= 0 && sessionTimeout > 0 {
 		c.SessionTimeout = sessionTimeout
+	}
+}
+
+func (c *Config) ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout time.Duration) {
+	if c.MediaTimeoutInitial <= 0 && initialTimeout > 0 {
+		c.MediaTimeoutInitial = initialTimeout
+	}
+	if c.MediaTimeout <= 0 && mediaTimeout > 0 {
+		c.MediaTimeout = mediaTimeout
 	}
 }
 

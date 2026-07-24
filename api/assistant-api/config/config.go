@@ -41,6 +41,8 @@ type SIPConfig struct {
 	RegisterTimeout         time.Duration    `mapstructure:"register_timeout"`
 	InviteTimeout           time.Duration    `mapstructure:"invite_timeout"`
 	SessionTimeout          time.Duration    `mapstructure:"session_timeout"`
+	MediaTimeoutInitial     time.Duration    `mapstructure:"media_timeout_initial"`
+	MediaTimeout            time.Duration    `mapstructure:"media_timeout"`
 	OutboundHealthGate      *bool            `mapstructure:"outbound_health_gate"`
 	Inbound                 SIPInboundConfig `mapstructure:"inbound"`
 }
