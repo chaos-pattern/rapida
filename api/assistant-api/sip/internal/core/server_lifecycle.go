@@ -14,7 +14,6 @@ import (
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	internal_inbound "github.com/rapidaai/api/assistant-api/sip/internal/inbound"
-	internal_outbound "github.com/rapidaai/api/assistant-api/sip/internal/outbound"
 )
 
 // GetSession returns the session for a call ID.
@@ -101,7 +100,8 @@ func (s *Server) RejectInboundInvite(req *sip.Request, tx sip.ServerTransaction,
 			"reason", reason,
 			"error", err)
 	}
-	s.sendResponse(tx, req, statusCode)
+	response := s.sendResponse(tx, req, statusCode)
+	s.recordRejectedInboundInvite(req, response)
 }
 
 func (s *Server) ConnectInboundCall(session *Session, reason LifecycleReason) bool {
@@ -222,12 +222,7 @@ func (s *Server) sendBye(session *Session) {
 }
 
 func (s *Server) sendOutboundBye(ctx context.Context, dialogSession *sipgo.DialogClientSession) error {
-	if dialogSession.InviteRequest == nil || dialogSession.InviteResponse == nil {
-		return dialogSession.Bye(ctx)
-	}
-	internal_outbound.NormalizeDialogRouteSet(dialogSession)
-	byeRequest := internal_outbound.NewByeRequest(dialogSession.InviteRequest, dialogSession.InviteResponse)
-	return dialogSession.WriteBye(ctx, byeRequest)
+	return (&outboundDialog{dialogSession: dialogSession}).SendBye(ctx)
 }
 
 // removeSession removes a session from memory and releases its RTP port.
@@ -319,29 +314,29 @@ func (s *Server) beginEnding(session *Session, reason string) {
 	_ = s.transitionLifecycle(session, CallStateEnding, reason)
 }
 
-func (s *Server) setPendingInvite(callID string, req *sip.Request, tx sip.ServerTransaction) {
+func (s *Server) setPendingInvite(key inboundInviteKey, req *sip.Request, tx sip.ServerTransaction) {
 	s.mu.Lock()
 	if s.pendingInvites == nil {
-		s.pendingInvites = make(map[string]*pendingInvite)
+		s.pendingInvites = make(map[inboundInviteKey]*pendingInvite)
 	}
-	s.pendingInvites[callID] = &pendingInvite{req: req, tx: tx}
+	s.pendingInvites[key] = &pendingInvite{req: req, tx: tx}
 	s.mu.Unlock()
 }
 
-func (s *Server) clearPendingInvite(callID string) {
+func (s *Server) clearPendingInvite(key inboundInviteKey) {
 	s.mu.Lock()
-	delete(s.pendingInvites, callID)
+	delete(s.pendingInvites, key)
 	s.mu.Unlock()
 }
 
-func (s *Server) terminatePendingInvite(callID string, status int) bool {
+func (s *Server) terminatePendingInvite(key inboundInviteKey, status int) bool {
 	s.mu.Lock()
-	pending, ok := s.pendingInvites[callID]
+	pending, ok := s.pendingInvites[key]
 	if ok {
 		if pending != nil && pending.finalResponseStarted {
 			ok = false
 		} else {
-			delete(s.pendingInvites, callID)
+			delete(s.pendingInvites, key)
 		}
 	}
 	s.mu.Unlock()
@@ -353,13 +348,13 @@ func (s *Server) terminatePendingInvite(callID string, status int) bool {
 	return true
 }
 
-func (s *Server) beginPendingInviteFinalResponse(callID string) bool {
+func (s *Server) beginPendingInviteFinalResponse(key inboundInviteKey) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.cancelledInvites != nil && s.cancelledInvites[callID] {
+	if s.cancelledInvites != nil && s.cancelledInvites[key] {
 		return false
 	}
-	pending, ok := s.pendingInvites[callID]
+	pending, ok := s.pendingInvites[key]
 	if !ok || pending == nil {
 		return true
 	}
@@ -367,32 +362,32 @@ func (s *Server) beginPendingInviteFinalResponse(callID string) bool {
 	return true
 }
 
-func (s *Server) isPendingInviteFinalResponseStarted(callID string) bool {
+func (s *Server) isPendingInviteFinalResponseStarted(key inboundInviteKey) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	pending := s.pendingInvites[callID]
+	pending := s.pendingInvites[key]
 	return pending != nil && pending.finalResponseStarted
 }
 
-func (s *Server) markInviteCancelled(callID string) {
+func (s *Server) markInviteCancelled(key inboundInviteKey) {
 	s.mu.Lock()
 	if s.cancelledInvites == nil {
-		s.cancelledInvites = make(map[string]bool)
+		s.cancelledInvites = make(map[inboundInviteKey]bool)
 	}
-	s.cancelledInvites[callID] = true
+	s.cancelledInvites[key] = true
 	s.mu.Unlock()
 }
 
-func (s *Server) isInviteCancelled(callID string) bool {
+func (s *Server) isInviteCancelled(key inboundInviteKey) bool {
 	s.mu.RLock()
-	cancelled := s.cancelledInvites[callID]
+	cancelled := s.cancelledInvites[key]
 	s.mu.RUnlock()
 	return cancelled
 }
 
-func (s *Server) clearInviteCancelled(callID string) {
+func (s *Server) clearInviteCancelled(key inboundInviteKey) {
 	s.mu.Lock()
-	delete(s.cancelledInvites, callID)
+	delete(s.cancelledInvites, key)
 	s.mu.Unlock()
 }
 

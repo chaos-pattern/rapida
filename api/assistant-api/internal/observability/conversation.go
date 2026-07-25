@@ -57,6 +57,8 @@ const (
 	MetadataCallError          = "call_error"
 	MetadataFailureClass       = "failure_class"
 	MetadataFailureReason      = "failure_reason"
+	MetadataSLIResult          = "sli_result"
+	MetadataSLIReason          = "sli_reason"
 	MetadataRetryable          = "retryable"
 	MetadataProviderStatusCode = "provider_status_code"
 	MetadataTelephonyError     = "telephony.error"

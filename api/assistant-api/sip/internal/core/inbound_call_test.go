@@ -34,12 +34,14 @@ func TestInboundCall_InvalidSDPRejectsWithoutSession(t *testing.T) {
 
 func TestInboundCall_InvalidIdentityRejectsWithoutSession(t *testing.T) {
 	cases := []struct {
-		name         string
-		callID       string
-		removeHeader string
+		name          string
+		callID        string
+		removeHeader  string
+		removeFromTag bool
 	}{
 		{name: "missing call id", callID: "inbound-missing-call-id", removeHeader: "Call-ID"},
 		{name: "missing from", callID: "inbound-missing-from", removeHeader: "From"},
+		{name: "missing from tag", callID: "inbound-missing-from-tag", removeFromTag: true},
 		{name: "missing to", callID: "inbound-missing-to", removeHeader: "To"},
 	}
 
@@ -48,6 +50,9 @@ func TestInboundCall_InvalidIdentityRejectsWithoutSession(t *testing.T) {
 			server := newServerForCommandTests(t)
 			request := newInboundInviteRequest(tc.callID)
 			for request.RemoveHeader(tc.removeHeader) {
+			}
+			if tc.removeFromTag && request.From() != nil && request.From().Params != nil {
+				delete(request.From().Params, "tag")
 			}
 			transaction := newTestServerTx()
 
@@ -76,6 +81,31 @@ func TestInboundCall_ConfigRejectDoesNotCreateSession(t *testing.T) {
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 403, transaction.lastStatus())
 	_, exists := server.GetSession("inbound-config-reject")
+	assert.False(t, exists)
+}
+
+func TestInboundCall_ReplaysRejectedInviteWithoutMiddleware(t *testing.T) {
+	server := newServerForCommandTests(t)
+	middlewareCalls := 0
+	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
+		middlewareCalls++
+		return &SIPError{Code: 403, Message: "forbidden", Err: ErrAuthRequired}
+	}})
+
+	firstRequest := newInboundInviteRequest("inbound-rejected-retry")
+	firstTransaction := newTestServerTx()
+	server.handleInvite(firstRequest, firstTransaction)
+
+	secondRequest := newInboundInviteRequest("inbound-rejected-retry")
+	secondTransaction := newTestServerTx()
+	server.handleInvite(secondRequest, secondTransaction)
+
+	require.NotEmpty(t, firstTransaction.responses)
+	require.NotEmpty(t, secondTransaction.responses)
+	assert.Equal(t, 403, firstTransaction.lastStatus())
+	assert.Equal(t, 403, secondTransaction.lastStatus())
+	assert.Equal(t, 1, middlewareCalls)
+	_, exists := server.GetSession("inbound-rejected-retry")
 	assert.False(t, exists)
 }
 
@@ -112,6 +142,37 @@ func TestInboundCall_InvalidSessionConfigRejectsWithoutSession(t *testing.T) {
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 500, transaction.lastStatus())
 	_, exists := server.GetSession("inbound-session-config-invalid")
+	assert.False(t, exists)
+}
+
+func TestInboundCall_DialogCreationFailureRespondsAndFailsSession(t *testing.T) {
+	server := newServerForCommandTests(t)
+	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
+		ctx.Config = bridgeTestConfig()
+		return nil
+	}})
+	var failedSession *Session
+	server.SetOnError(func(session *Session, _ error) {
+		failedSession = session
+	})
+	request := newInboundInviteRequest("inbound-dialog-create-failed")
+	for request.RemoveHeader("Contact") {
+	}
+	transaction := newActiveTestServerTx()
+
+	server.handleInvite(request, transaction)
+
+	require.NotEmpty(t, transaction.responses)
+	assert.Equal(t, 500, transaction.lastStatus())
+	require.NotNil(t, failedSession)
+	assert.True(t, failedSession.IsEnded())
+	assert.Equal(t, CallStateFailed, failedSession.GetState())
+	assertSessionMetadata(t, failedSession, "sip.failure_class", string(inboundFailureDialog))
+	assertSessionMetadata(t, failedSession, "sip.failure_response_class", string(internal_inbound.FailureDialog))
+	assertSessionMetadata(t, failedSession, "sip.sli_result", string(CallTerminationServerError))
+	assertSessionMetadata(t, failedSession, "sip.sli_reason", "inbound_dialog")
+	assertSessionMetadata(t, failedSession, "sip.failure_status_code", 500)
+	_, exists := server.GetSession("inbound-dialog-create-failed")
 	assert.False(t, exists)
 }
 
@@ -248,20 +309,14 @@ func TestInboundCall_RTPAllocationFailureEndsLifecycle(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = failingInboundRTPAllocator{err: errors.New("rtp exhausted")}
 	server.newRTPHandler = testOutboundRTPHandler
+	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
+		ctx.Config = bridgeTestConfig()
+		return nil
+	}})
 	request := newInboundInviteRequest("inbound-rtp-failed")
 	transaction := newActiveTestServerTx()
-	inboundCall := newInboundCall(server, request, transaction)
 
-	require.NoError(t, inboundCall.loadIdentity())
-	require.NoError(t, inboundCall.parseMediaOffer())
-	inboundCall.resolvedConfig = inboundResolvedConfig{config: bridgeTestConfig()}
-	require.NoError(t, inboundCall.createSession())
-	server.registerSession(inboundCall.session, inboundCall.identity.callID)
-	require.NoError(t, inboundCall.createDialog())
-
-	err := inboundCall.setupRTP()
-	require.Error(t, err)
-	inboundCall.failSetup(503, internal_inbound.FailureRTP, LifecycleReasonInboundInviteFailed, err)
+	server.handleInvite(request, transaction)
 
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 503, transaction.lastStatus())
@@ -286,11 +341,13 @@ func TestInboundCall_RTPHandlerCreationFailureEndsLifecycle(t *testing.T) {
 
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 503, transaction.lastStatus())
+	assert.Equal(t, 19000, server.rtpAllocator.(*testRTPAllocator).releasePort)
+	assert.Equal(t, 1, server.rtpAllocator.(*testRTPAllocator).releaseCount)
 	_, exists := server.GetSession("inbound-rtp-handler-failed")
 	assert.False(t, exists)
 }
 
-func TestInboundCall_DialogSetupFailureDoesNotSendManualFinalResponse(t *testing.T) {
+func TestInboundCall_DialogSetupFailureSendsFinalResponse(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
@@ -301,16 +358,16 @@ func TestInboundCall_DialogSetupFailureDoesNotSendManualFinalResponse(t *testing
 
 	server.handleInvite(request, transaction)
 
-	assert.Empty(t, transaction.responses)
+	require.NotEmpty(t, transaction.responses)
+	assert.Equal(t, 500, transaction.lastStatus())
 	_, exists := server.GetSession("inbound-dialog-create-failed")
 	assert.False(t, exists)
 }
 
-func TestInboundCall_TryingResponseFailureEndsLifecycle(t *testing.T) {
+func TestInboundCall_TryingResponseFailureDoesNotStopTerminalResponse(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
-		ctx.Config = bridgeTestConfig()
-		return nil
+		return errors.New("resolver unavailable")
 	}})
 	request := newInboundInviteRequest("inbound-trying-failed")
 	transaction := newFailingStatusServerTx(100)
@@ -692,14 +749,17 @@ func TestInboundCall_ApplicationReadinessFailureRejectsBeforeAnswer(t *testing.T
 func TestInboundCall_ACKTimeoutCleansPreparedApplication(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.inboundACKTimeout = time.Millisecond
-	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
+	rtpAllocator := &testRTPAllocator{nextPort: 19000}
+	server.rtpAllocator = rtpAllocator
 	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
 	}})
 	cleanupCount := 0
-	server.SetOnApplicationReady(func(_ *Session, _, _ string) error {
+	var capturedSession *Session
+	server.SetOnApplicationReady(func(session *Session, _, _ string) error {
+		capturedSession = session
 		return nil
 	})
 	server.SetOnApplicationCleanup(func(_ *Session) {
@@ -717,6 +777,15 @@ func TestInboundCall_ACKTimeoutCleansPreparedApplication(t *testing.T) {
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 200, transaction.lastStatus())
 	assert.Equal(t, 1, cleanupCount)
+	require.NotNil(t, capturedSession)
+	assert.True(t, capturedSession.IsEnded())
+	assert.Equal(t, CallStateFailed, capturedSession.GetState())
+	assert.Equal(t, rtpAllocator.nextPort, rtpAllocator.releasePort)
+	assertSessionMetadata(t, capturedSession, "sip.failure_class", string(inboundFailureNoACK))
+	assertSessionMetadata(t, capturedSession, "sip.failure_response_class", string(internal_inbound.FailureDialog))
+	assertSessionMetadata(t, capturedSession, "sip.sli_result", string(CallTerminationServerError))
+	assertSessionMetadata(t, capturedSession, "sip.sli_reason", "inbound_no_ack")
+	assertNoSessionMetadata(t, capturedSession, "sip.failure_status_code")
 	_, exists := server.GetSession("inbound-ack-timeout-cleanup")
 	assert.False(t, exists)
 }
@@ -764,17 +833,19 @@ func TestInboundCall_CancelAfterSessionRegistrationEndsLifecycle(t *testing.T) {
 	server := newServerForCommandTests(t)
 	request := newInboundInviteRequest("inbound-cancel-registered")
 	transaction := newActiveTestServerTx()
-	inboundCall := newInboundCall(server, request, transaction)
+	inboundCall := NewInbound(server, request, transaction)
 
-	require.NoError(t, inboundCall.loadIdentity())
-	require.NoError(t, inboundCall.parseMediaOffer())
-	inboundCall.resolvedConfig = inboundResolvedConfig{config: bridgeTestConfig()}
-	require.NoError(t, inboundCall.createSession())
+	loadInboundIdentity(t, inboundCall)
+	loadInboundMediaOffer(t, inboundCall)
+	inboundCall.resolvedConfig = inboundConfig{config: bridgeTestConfig()}
+	createInboundSessionForTest(t, inboundCall)
 	server.registerSession(inboundCall.session, inboundCall.identity.callID)
-	server.setPendingInvite(inboundCall.identity.callID, request, transaction)
-	server.markInviteCancelled(inboundCall.identity.callID)
+	server.setPendingInvite(inboundCall.inviteKey, request, transaction)
+	server.markInviteCancelled(inboundCall.inviteKey)
 
-	cancelled := inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled)
+	cancelled := server.terminatePendingInvite(inboundCall.inviteKey, 487)
+	inboundCall.cleanupApplication()
+	_ = server.CancelInboundCall(inboundCall.session, LifecycleReasonInviteCancelled)
 
 	assert.True(t, cancelled)
 	require.NotEmpty(t, transaction.responses)
@@ -792,25 +863,76 @@ func TestInboundCall_CancelAfterRTPOwnershipReleasesPort(t *testing.T) {
 	server.rtpAllocator = rtpAllocator
 	request := newInboundInviteRequest("inbound-cancel-rtp")
 	transaction := newActiveTestServerTx()
-	inboundCall := newInboundCall(server, request, transaction)
+	inboundCall := NewInbound(server, request, transaction)
 
-	require.NoError(t, inboundCall.loadIdentity())
-	require.NoError(t, inboundCall.parseMediaOffer())
-	inboundCall.resolvedConfig = inboundResolvedConfig{config: bridgeTestConfig()}
-	require.NoError(t, inboundCall.createSession())
+	loadInboundIdentity(t, inboundCall)
+	loadInboundMediaOffer(t, inboundCall)
+	inboundCall.resolvedConfig = inboundConfig{config: bridgeTestConfig()}
+	createInboundSessionForTest(t, inboundCall)
 	inboundCall.session.SetLocalRTP("127.0.0.1", rtpAllocator.nextPort)
 	inboundCall.session.SetRTPHandler(&RTPHandler{})
 	server.registerSession(inboundCall.session, inboundCall.identity.callID)
-	server.setPendingInvite(inboundCall.identity.callID, request, transaction)
-	server.markInviteCancelled(inboundCall.identity.callID)
+	server.setPendingInvite(inboundCall.inviteKey, request, transaction)
+	server.markInviteCancelled(inboundCall.inviteKey)
 
-	cancelled := inboundCall.cancelIfRequested(LifecycleReasonInviteCancelledBeforeAnswer)
+	cancelled := server.terminatePendingInvite(inboundCall.inviteKey, 487)
+	inboundCall.cleanupApplication()
+	_ = server.CancelInboundCall(inboundCall.session, LifecycleReasonInviteCancelledBeforeAnswer)
 
 	assert.True(t, cancelled)
 	assertNoSIPStatus(t, transaction.responses, 200)
 	assert.True(t, inboundCall.session.IsEnded())
 	assert.Equal(t, rtpAllocator.nextPort, rtpAllocator.releasePort)
 	_, exists := server.GetSession("inbound-cancel-rtp")
+	assert.False(t, exists)
+}
+
+func TestInboundCall_FinalResponseMediaTimeoutEndsCall(t *testing.T) {
+	server := newServerForCommandTests(t)
+	rtpAllocator := &testRTPAllocator{nextPort: 19000}
+	server.rtpAllocator = rtpAllocator
+	cleanupCalls := 0
+	server.SetOnApplicationCleanup(func(*Session) {
+		cleanupCalls++
+	})
+
+	callID := "inbound-final-response-media-timeout"
+	session := newTestSession(t, callID, CallDirectionInbound)
+	session.SetLocalRTP("127.0.0.1", rtpAllocator.nextPort)
+	session.SetRTPHandler(newTestRTPHandler())
+	server.registerSession(session, callID)
+	require.True(t, server.TransitionCall(session, CallStateRinging, LifecycleReasonInboundInviteRinging))
+	require.True(t, session.MarkInitialACKReceived())
+	require.True(t, server.TransitionCall(session, CallStateConnected, LifecycleReasonInboundInviteACKReceived))
+
+	transaction := newActiveTestServerTx()
+	inboundCall := &Inbound{
+		server:      server,
+		request:     newInboundInviteRequest(callID),
+		transaction: transaction,
+		identity:    inboundInviteIdentity{callID: callID},
+		session:     session,
+		dialog: &inboundDialog{
+			finalResponseStarted: true,
+		},
+	}
+
+	inboundCall.mediaTimeout()
+	inboundCall.mediaTimeout()
+
+	assert.Empty(t, transaction.responses)
+	assert.True(t, session.IsEnded())
+	assert.Equal(t, CallStateEnded, session.GetState())
+	assert.Equal(t, 1, cleanupCalls)
+	assert.Equal(t, rtpAllocator.nextPort, rtpAllocator.releasePort)
+	assertSessionMetadata(t, session, "sip.failure_class", string(inboundFailureMediaTimeout))
+	assertSessionMetadata(t, session, "sip.failure_response_class", string(internal_inbound.FailureRTP))
+	assertSessionMetadata(t, session, "sip.failure_reason", ErrRTPMediaTimeout.Error())
+	assertSessionMetadata(t, session, "sip.sli_result", string(CallTerminationServerError))
+	assertSessionMetadata(t, session, "sip.sli_reason", "inbound_media_timeout")
+	assertSessionMetadata(t, session, "sip.failure_retryable", true)
+	assertNoSessionMetadata(t, session, "sip.failure_status_code")
+	_, exists := server.GetSession(callID)
 	assert.False(t, exists)
 }
 
@@ -898,6 +1020,69 @@ func assertSIPStatus(t *testing.T, responses []*sip.Response, statusCode int) {
 		}
 	}
 	t.Fatalf("expected SIP status %d in responses", statusCode)
+}
+
+func loadInboundIdentity(t *testing.T, inboundCall *Inbound) {
+	t.Helper()
+	require.NotNil(t, inboundCall.request)
+	require.NotNil(t, inboundCall.request.CallID())
+	require.NotNil(t, inboundCall.request.From())
+	require.NotNil(t, inboundCall.request.To())
+	inboundCall.identity = inboundInviteIdentity{
+		callID:  inboundCall.request.CallID().Value(),
+		fromTag: "fromtag",
+		fromURI: inboundCall.request.From().Address.String(),
+		toURI:   inboundCall.request.To().Address.String(),
+	}
+	inboundCall.inviteKey = inboundInviteKey{callID: inboundCall.identity.callID, fromTag: inboundCall.identity.fromTag}
+}
+
+func loadInboundMediaOffer(t *testing.T, inboundCall *Inbound) {
+	t.Helper()
+	mediaOffer, failure := NewInboundMediaOffer(
+		inboundCall.server,
+		inboundCall.request,
+		"inbound INVITE",
+		LifecycleReasonInboundInviteFailed,
+		false,
+	)
+	require.Nil(t, failure)
+	inboundCall.mediaOffer = mediaOffer
+}
+
+func createInboundSessionForTest(t *testing.T, inboundCall *Inbound) {
+	t.Helper()
+	session, err := NewSession(inboundCall.server.ctx, &SessionConfig{
+		Config:          inboundCall.resolvedConfig.config,
+		Direction:       CallDirectionInbound,
+		CallID:          inboundCall.identity.callID,
+		Codec:           inboundCall.mediaOffer.negotiatedCodec,
+		Auth:            inboundCall.resolvedConfig.auth,
+		Assistant:       inboundCall.resolvedConfig.assistant,
+		VaultCredential: inboundCall.resolvedConfig.vaultCredential,
+	})
+	require.NoError(t, err)
+	inboundCall.session = session
+}
+
+func createInboundDialogForTest(t *testing.T, inboundCall *Inbound) {
+	t.Helper()
+	dialog, failure := NewInboundDialog(
+		inboundCall.server,
+		inboundCall.session,
+		inboundCall.request,
+		inboundCall.transaction,
+		inboundCall.inviteKey,
+	)
+	require.Nil(t, failure)
+	inboundCall.dialog = dialog
+	inboundCall.session.SetDialogServerSession(inboundCall.dialog.DialogSession())
+}
+
+func assertNoSessionMetadata(t *testing.T, session *Session, key string) {
+	t.Helper()
+	_, ok := session.GetMetadata(key)
+	assert.False(t, ok, "metadata %s should be absent", key)
 }
 
 func inboundNoopRTPHandler(server *Server) RTPHandlerFactory {

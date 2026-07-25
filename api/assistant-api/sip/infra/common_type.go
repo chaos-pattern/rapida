@@ -76,10 +76,12 @@ type Config struct {
 	RTPPortRangeEnd   int       `json:"rtp_port_range_end" mapstructure:"rtp_port_range_end"`
 	SRTPEnabled       bool      `json:"srtp_enabled" mapstructure:"srtp_enabled"`
 
-	RegisterTimeout  time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
-	InviteTimeout    time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
-	SessionTimeout   time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
-	KeepAliveEnabled bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
+	RegisterTimeout     time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
+	InviteTimeout       time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
+	SessionTimeout      time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
+	MediaTimeoutInitial time.Duration `json:"media_timeout_initial,omitempty" mapstructure:"media_timeout_initial"`
+	MediaTimeout        time.Duration `json:"media_timeout,omitempty" mapstructure:"media_timeout"`
+	KeepAliveEnabled    bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
 
 	InboundAnswerMode      InboundAnswerMode `json:"inbound_answer_mode,omitempty" mapstructure:"inbound_answer_mode"`
 	InboundMinRingDuration time.Duration     `json:"inbound_min_ring_duration,omitempty" mapstructure:"inbound_min_ring_duration"`
@@ -106,6 +108,15 @@ func (c *Config) ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTim
 	}
 	coreConfig := c.toCore()
 	coreConfig.ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTimeout)
+	*c = configFromCore(coreConfig)
+}
+
+func (c *Config) ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout time.Duration) {
+	if c == nil {
+		return
+	}
+	coreConfig := c.toCore()
+	coreConfig.ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout)
 	*c = configFromCore(coreConfig)
 }
 
@@ -168,6 +179,8 @@ func (c *Config) toCore() *internal_core.Config {
 		RegisterTimeout:        c.RegisterTimeout,
 		InviteTimeout:          c.InviteTimeout,
 		SessionTimeout:         c.SessionTimeout,
+		MediaTimeoutInitial:    c.MediaTimeoutInitial,
+		MediaTimeout:           c.MediaTimeout,
 		KeepAliveEnabled:       c.KeepAliveEnabled,
 		InboundAnswerMode:      internal_core.InboundAnswerMode(c.InboundAnswerMode),
 		InboundMinRingDuration: c.InboundMinRingDuration,
@@ -196,6 +209,8 @@ func configFromCore(c *internal_core.Config) Config {
 		RegisterTimeout:        c.RegisterTimeout,
 		InviteTimeout:          c.InviteTimeout,
 		SessionTimeout:         c.SessionTimeout,
+		MediaTimeoutInitial:    c.MediaTimeoutInitial,
+		MediaTimeout:           c.MediaTimeout,
 		KeepAliveEnabled:       c.KeepAliveEnabled,
 		InboundAnswerMode:      InboundAnswerMode(c.InboundAnswerMode),
 		InboundMinRingDuration: c.InboundMinRingDuration,

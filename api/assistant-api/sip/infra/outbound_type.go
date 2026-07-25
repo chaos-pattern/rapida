@@ -116,15 +116,17 @@ func (o TransferBridgeCallOptions) toCore() internal_core.TransferBridgeCallOpti
 }
 
 type OutboundConfig struct {
-	Mode            OutboundMode
-	Address         string
-	Port            int
-	Transport       Transport
-	Domain          string
-	Auth            SIPAuthConfig
-	Headers         map[string]string
-	RingingTimeout  time.Duration
-	MaxCallDuration time.Duration
+	Mode                OutboundMode
+	Address             string
+	Port                int
+	Transport           Transport
+	Domain              string
+	Auth                SIPAuthConfig
+	Headers             map[string]string
+	RingingTimeout      time.Duration
+	MaxCallDuration     time.Duration
+	MediaTimeoutInitial time.Duration
+	MediaTimeout        time.Duration
 }
 
 func (c OutboundConfig) EffectiveRingingTimeout() time.Duration {
@@ -147,9 +149,11 @@ func (c OutboundConfig) toCore() internal_core.OutboundConfig {
 			Password: c.Auth.Password,
 			Realm:    c.Auth.Realm,
 		},
-		Headers:         copyJSONCompatibleMap(c.Headers),
-		RingingTimeout:  c.RingingTimeout,
-		MaxCallDuration: c.MaxCallDuration,
+		Headers:             copyJSONCompatibleMap(c.Headers),
+		RingingTimeout:      c.RingingTimeout,
+		MaxCallDuration:     c.MaxCallDuration,
+		MediaTimeoutInitial: c.MediaTimeoutInitial,
+		MediaTimeout:        c.MediaTimeout,
 	}
 }
 
@@ -200,9 +204,11 @@ func (c *Config) ToOutboundConfig() OutboundConfig {
 			Password: coreOutbound.Auth.Password,
 			Realm:    coreOutbound.Auth.Realm,
 		},
-		Headers:         copyJSONCompatibleMap(coreOutbound.Headers),
-		RingingTimeout:  coreOutbound.RingingTimeout,
-		MaxCallDuration: coreOutbound.MaxCallDuration,
+		Headers:             copyJSONCompatibleMap(coreOutbound.Headers),
+		RingingTimeout:      coreOutbound.RingingTimeout,
+		MaxCallDuration:     coreOutbound.MaxCallDuration,
+		MediaTimeoutInitial: coreOutbound.MediaTimeoutInitial,
+		MediaTimeout:        coreOutbound.MediaTimeout,
 	}
 }
 

@@ -30,6 +30,9 @@ const (
 	ServerStateCreated ServerState = iota
 	ServerStateRunning
 	ServerStateStopped
+
+	inboundRejectedInviteTTL  = time.Minute
+	maxInboundRejectedInvites = 1024
 )
 
 // SIPRequestContext contains information about an incoming SIP request.
@@ -94,10 +97,11 @@ type Server struct {
 	lifecycles map[string]*CallLifecycle
 	// pendingInvites keeps active INVITE server transactions until a final
 	// response is sent, so CANCEL can terminate the original INVITE with 487.
-	pendingInvites map[string]*pendingInvite
-	// cancelledInvites tracks call-ids that received CANCEL while INVITE
-	// processing is still in-flight.
-	cancelledInvites                 map[string]bool
+	pendingInvites map[inboundInviteKey]*pendingInvite
+	// cancelledInvites tracks early-dialog INVITEs that received CANCEL while
+	// INVITE processing is still in-flight.
+	cancelledInvites                 map[inboundInviteKey]bool
+	rejectedInvites                  map[inboundInviteKey]inboundRejectedInvite
 	sessionCount                     atomic.Int64
 	inboundACKTimeout                time.Duration
 	inboundFinalResponseRetryInitial time.Duration
@@ -123,6 +127,18 @@ type pendingInvite struct {
 	req                  *sip.Request
 	tx                   sip.ServerTransaction
 	finalResponseStarted bool
+}
+
+type inboundInviteKey struct {
+	callID  string
+	fromTag string
+}
+
+type inboundRejectedInvite struct {
+	statusCode     int
+	reason         string
+	includeContact bool
+	expiresAt      time.Time
 }
 
 // ListenConfig holds shared server configuration (not tenant-specific)
@@ -301,8 +317,9 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		middlewares:                      append([]Middleware(nil), cfg.Middlewares...),
 		sessions:                         make(map[string]*Session),
 		lifecycles:                       make(map[string]*CallLifecycle),
-		pendingInvites:                   make(map[string]*pendingInvite),
-		cancelledInvites:                 make(map[string]bool),
+		pendingInvites:                   make(map[inboundInviteKey]*pendingInvite),
+		cancelledInvites:                 make(map[inboundInviteKey]bool),
+		rejectedInvites:                  make(map[inboundInviteKey]inboundRejectedInvite),
 		inboundACKTimeout:                defaultInboundACKTimeout,
 		inboundFinalResponseRetryInitial: defaultInboundFinalResponseRetryInitial,
 		inboundFinalResponseRetryMax:     defaultInboundFinalResponseRetryMax,
@@ -391,16 +408,17 @@ func (s *Server) Stop() {
 	s.logger.Infow("Stopping SIP server")
 
 	// Cancel context first to stop accepting new calls
-	s.cancel()
+	if s.cancel != nil {
+		s.cancel()
+	}
 
 	// End all active sessions
-	s.mu.Lock()
+	s.mu.RLock()
 	sessions := make([]*Session, 0, len(s.sessions))
 	for _, session := range s.sessions {
 		sessions = append(sessions, session)
 	}
-	s.sessions = make(map[string]*Session)
-	s.mu.Unlock()
+	s.mu.RUnlock()
 
 	for _, session := range sessions {
 		_ = s.EndCallWithReason(session, LifecycleReasonServerStop)

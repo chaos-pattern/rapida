@@ -69,7 +69,7 @@ func (s *outboundDispatcherConversationServiceStub) CreateOrUpdateConversationMe
 	s.metadataAuth = auth
 	s.metadataAssistantID = assistantID
 	s.metadataConversationID = conversationID
-	s.metadata = metadata
+	s.metadata = append(s.metadata, metadata...)
 	if s.metadataRecorded != nil {
 		s.metadataOnce.Do(func() { close(s.metadataRecorded) })
 	}
@@ -234,6 +234,8 @@ func TestOutboundDispatcher_StatusReporterPersistsFailureDetails(t *testing.T) {
 		ErrorMessage:       "486 Busy Here",
 		FailureClass:       "busy",
 		FailureReason:      "Busy Here",
+		SLIResult:          "client_error",
+		SLIReason:          "outbound_busy",
 		DisconnectReason:   "outbound_rejected",
 		ProviderStatusCode: 486,
 	})
@@ -283,6 +285,8 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 		ErrorMessage:       "486 Busy Here",
 		FailureClass:       "busy",
 		FailureReason:      "Busy Here",
+		SLIResult:          "client_error",
+		SLIReason:          "outbound_busy",
 		DisconnectReason:   "outbound_rejected",
 		ProviderStatusCode: 486,
 	})
@@ -330,6 +334,12 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	}
 	if metadataByKey[observability.MetadataFailureReason] != "Busy Here" {
 		t.Fatalf("expected failure reason metadata, got %q", metadataByKey[observability.MetadataFailureReason])
+	}
+	if metadataByKey[observability.MetadataSLIResult] != "client_error" {
+		t.Fatalf("expected SLI result metadata, got %q", metadataByKey[observability.MetadataSLIResult])
+	}
+	if metadataByKey[observability.MetadataSLIReason] != "outbound_busy" {
+		t.Fatalf("expected SLI reason metadata, got %q", metadataByKey[observability.MetadataSLIReason])
 	}
 	if metadataByKey[observability.MetadataProviderStatusCode] != "486" {
 		t.Fatalf("expected provider status metadata, got %q", metadataByKey[observability.MetadataProviderStatusCode])

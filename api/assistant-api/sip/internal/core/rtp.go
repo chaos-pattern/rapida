@@ -31,6 +31,8 @@ const (
 	rtpPacketMaxSize       = 1500
 	rtpPacketInterval      = 20 * time.Millisecond
 	rtpInputPlayoutTimeout = rtpPacketInterval
+	rtpMediaTimeoutInitial = 30 * time.Second
+	rtpMediaTimeout        = 15 * time.Second
 
 	// Audio channel buffer sizes
 	rtpAudioInBufferSize  = 100
@@ -60,6 +62,7 @@ type RTPHandler struct {
 	mu      sync.RWMutex
 	logger  commons.Logger
 	running atomic.Bool
+	closed  atomic.Bool
 
 	conn      *net.UDPConn // Receiving socket (ListenUDP, bound to 0.0.0.0:port)
 	sendConn  *net.UDPConn // Connected sending socket (DialUDP) — ensures correct UDP checksums
@@ -88,9 +91,18 @@ type RTPHandler struct {
 	// codec changes and regenerate its pre-computed silence chunk.
 	codecVersion uint32
 
-	ctx    context.Context
-	cancel context.CancelFunc
-	loops  sync.WaitGroup
+	ctx              context.Context
+	cancel           context.CancelFunc
+	loops            sync.WaitGroup
+	inputCloseOnce   sync.Once
+	timeoutCloseOnce sync.Once
+
+	mediaTimeoutCh      chan struct{}
+	mediaTimeoutKick    chan struct{}
+	mediaTimeoutStart   atomic.Int64
+	mediaTimeoutInitial atomic.Int64
+	mediaTimeoutGeneral atomic.Int64
+	lastPacketTime      atomic.Int64
 
 	// Statistics
 	packetsSent     atomic.Uint64
@@ -111,6 +123,9 @@ type RTPConfig struct {
 	PayloadType uint8  // 0 = PCMU, 8 = PCMA
 	ClockRate   uint32 // 8000 for G.711
 	Logger      commons.Logger
+
+	MediaTimeoutInitial time.Duration
+	MediaTimeout        time.Duration
 }
 
 // Validate validates the RTP configuration
@@ -123,6 +138,12 @@ func (c *RTPConfig) Validate() error {
 	}
 	if c.ClockRate == 0 {
 		c.ClockRate = 8000 // Default to 8kHz
+	}
+	if c.MediaTimeoutInitial <= 0 {
+		c.MediaTimeoutInitial = rtpMediaTimeoutInitial
+	}
+	if c.MediaTimeout <= 0 {
+		c.MediaTimeout = rtpMediaTimeout
 	}
 	return nil
 }
@@ -194,37 +215,55 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 	}
 
 	handler := &RTPHandler{
-		logger:       config.Logger,
-		conn:         conn,
-		localIP:      localAddr.IP.String(),
-		localPort:    localAddr.Port,
-		ssrc:         rand.Uint32(),
-		codec:        codec,
-		audioInChan:  make(chan []byte, rtpAudioInBufferSize),
-		audioOutChan: make(chan []byte, rtpAudioOutBufferSize),
-		inputJitter:  newRTPInputJitterBuffer(codec),
-		flushAudioCh: make(chan struct{}, 1),
-		ctx:          handlerCtx,
-		cancel:       cancel,
+		logger:           config.Logger,
+		conn:             conn,
+		localIP:          localAddr.IP.String(),
+		localPort:        localAddr.Port,
+		ssrc:             rand.Uint32(),
+		codec:            codec,
+		audioInChan:      make(chan []byte, rtpAudioInBufferSize),
+		audioOutChan:     make(chan []byte, rtpAudioOutBufferSize),
+		inputJitter:      newRTPInputJitterBuffer(codec),
+		flushAudioCh:     make(chan struct{}, 1),
+		ctx:              handlerCtx,
+		cancel:           cancel,
+		mediaTimeoutCh:   make(chan struct{}),
+		mediaTimeoutKick: make(chan struct{}, 1),
 	}
+	handler.mediaTimeoutInitial.Store(int64(config.MediaTimeoutInitial))
+	handler.mediaTimeoutGeneral.Store(int64(config.MediaTimeout))
+	handler.loops.Add(1)
+	go func() {
+		defer handler.loops.Done()
+		handler.mediaTimeoutLoop()
+	}()
 
 	return handler, nil
 }
 
 // Start begins RTP processing
 func (h *RTPHandler) Start() {
+	if h.closed.Load() {
+		return
+	}
 	if !h.running.CompareAndSwap(false, true) {
 		return // Already running
 	}
+	if h.conn == nil {
+		h.running.Store(false)
+		return
+	}
 
 	// Log the actual socket address the OS assigned (important: 0.0.0.0 vs specific IP)
-	h.logger.Infow("RTP Start() called",
-		"conn_local_addr", h.conn.LocalAddr().String(),
-		"handler_local_ip", h.localIP,
-		"handler_local_port", h.localPort,
-		"remote_addr", fmt.Sprintf("%v", h.remoteAddr),
-		"codec", h.codec.Name,
-		"ssrc", h.ssrc)
+	if h.logger != nil {
+		h.logger.Infow("RTP Start() called",
+			"conn_local_addr", h.conn.LocalAddr().String(),
+			"handler_local_ip", h.localIP,
+			"handler_local_port", h.localPort,
+			"remote_addr", fmt.Sprintf("%v", h.remoteAddr),
+			"codec", h.codec.Name,
+			"ssrc", h.ssrc)
+	}
 
 	// Send an initial silence packet immediately to "punch" the RTP path.
 	// Some PBXes (Asterisk with direct_media) expect to see RTP traffic very
@@ -242,9 +281,11 @@ func (h *RTPHandler) Start() {
 		h.sendLoop()
 	}()
 
-	h.logger.Infow("RTP handler started — sendLoop and receiveLoop launched",
-		"local_addr", fmt.Sprintf("%s:%d", h.localIP, h.localPort),
-		"codec", h.codec.Name)
+	if h.logger != nil {
+		h.logger.Infow("RTP handler started — sendLoop and receiveLoop launched",
+			"local_addr", fmt.Sprintf("%s:%d", h.localIP, h.localPort),
+			"codec", h.codec.Name)
+	}
 }
 
 // sendInitialSilence sends the first silence RTP packet synchronously to
@@ -267,17 +308,18 @@ func (h *RTPHandler) sendInitialSilence() {
 	packet := h.createRTPPacket(chunk)
 	data := h.serializeRTPPacket(packet)
 
-	// LOG BEFORE WRITE: exact socket + destination + packet size
-	h.logger.Debugw("sendInitialSilence: sending RTP",
-		"conn_local_addr", h.conn.LocalAddr().String(),
-		"dest_addr", remoteAddr.String(),
-		"dest_ip", remoteAddr.IP.String(),
-		"dest_port", remoteAddr.Port,
-		"packet_bytes", len(data),
-		"payload_bytes", len(chunk),
-		"seq", packet.SequenceNumber,
-		"ssrc", packet.SSRC,
-		"has_send_conn", h.sendConn != nil)
+	if h.logger != nil {
+		h.logger.Debugw("sendInitialSilence: sending RTP",
+			"conn_local_addr", h.conn.LocalAddr().String(),
+			"dest_addr", remoteAddr.String(),
+			"dest_ip", remoteAddr.IP.String(),
+			"dest_port", remoteAddr.Port,
+			"packet_bytes", len(data),
+			"payload_bytes", len(chunk),
+			"seq", packet.SequenceNumber,
+			"ssrc", packet.SSRC,
+			"has_send_conn", h.sendConn != nil)
+	}
 
 	n, err := h.sendPacket(data, remoteAddr)
 	if err != nil {
@@ -302,13 +344,17 @@ func (h *RTPHandler) sendInitialSilence() {
 	}
 }
 
-// Stop stops RTP processing gracefully
+// Stop releases all RTP resources. It is safe before Start, after Start, and
+// after earlier Stop calls because setup and teardown paths share this method.
 func (h *RTPHandler) Stop() error {
-	if !h.running.CompareAndSwap(true, false) {
-		return nil // Already stopped
+	if !h.closed.CompareAndSwap(false, true) {
+		return nil
 	}
+	h.running.Store(false)
 
-	h.cancel()
+	if h.cancel != nil {
+		h.cancel()
+	}
 
 	// Close sockets before waiting so blocked reads wake up and observe the cancelled context.
 	h.mu.Lock()
@@ -336,10 +382,130 @@ func (h *RTPHandler) Stop() error {
 	return err
 }
 
-func (h *RTPHandler) closeInboundChannel() {
-	if h.audioInChan != nil {
-		close(h.audioInChan)
+func (h *RTPHandler) MediaTimeout() <-chan struct{} {
+	if h == nil {
+		return nil
 	}
+	return h.mediaTimeoutCh
+}
+
+func (h *RTPHandler) EnableMediaTimeout(enabled bool) {
+	if h == nil {
+		return
+	}
+	if !enabled {
+		h.mediaTimeoutStart.Store(0)
+		h.kickMediaTimeoutLoop()
+		return
+	}
+	h.SetMediaTimeout(time.Duration(h.mediaTimeoutInitial.Load()), time.Duration(h.mediaTimeoutGeneral.Load()))
+}
+
+func (h *RTPHandler) SetMediaTimeout(initial, general time.Duration) {
+	if h == nil || h.closed.Load() {
+		return
+	}
+	if initial <= 0 {
+		initial = rtpMediaTimeoutInitial
+	}
+	if general <= 0 {
+		general = rtpMediaTimeout
+	}
+	h.mediaTimeoutInitial.Store(int64(initial))
+	h.mediaTimeoutGeneral.Store(int64(general))
+	h.mediaTimeoutStart.Store(time.Now().UnixNano())
+	h.kickMediaTimeoutLoop()
+}
+
+func (h *RTPHandler) kickMediaTimeoutLoop() {
+	if h.mediaTimeoutKick == nil {
+		return
+	}
+	select {
+	case h.mediaTimeoutKick <- struct{}{}:
+	default:
+	}
+}
+
+func (h *RTPHandler) mediaTimeoutLoop() {
+	if h.mediaTimeoutCh == nil || h.ctx == nil {
+		return
+	}
+
+	const disabledPark = time.Hour
+	timer := time.NewTimer(disabledPark)
+	defer timer.Stop()
+
+	for {
+		select {
+		case <-h.ctx.Done():
+			return
+		case <-h.mediaTimeoutKick:
+		case <-timer.C:
+		}
+
+		startNano := h.mediaTimeoutStart.Load()
+		if startNano <= 0 {
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
+			timer.Reset(disabledPark)
+			continue
+		}
+
+		lastPacketNano := h.lastPacketTime.Load()
+		initial := time.Duration(h.mediaTimeoutInitial.Load())
+		general := time.Duration(h.mediaTimeoutGeneral.Load())
+		if initial <= 0 {
+			initial = rtpMediaTimeoutInitial
+		}
+		if general <= 0 {
+			general = rtpMediaTimeout
+		}
+
+		deadline := time.Unix(0, startNano).Add(initial)
+		timeout := initial
+		if lastPacketNano > 0 {
+			deadline = time.Unix(0, lastPacketNano).Add(general)
+			timeout = general
+		}
+
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			if h.logger != nil {
+				h.logger.Infow("RTP media timeout",
+					"packets_received", h.packetsReceived.Load(),
+					"timeout", timeout)
+			}
+			h.timeoutCloseOnce.Do(func() {
+				close(h.mediaTimeoutCh)
+			})
+			return
+		}
+
+		next := remaining
+		if next > general {
+			next = general
+		}
+		if !timer.Stop() {
+			select {
+			case <-timer.C:
+			default:
+			}
+		}
+		timer.Reset(next)
+	}
+}
+
+func (h *RTPHandler) closeInboundChannel() {
+	h.inputCloseOnce.Do(func() {
+		if h.audioInChan != nil {
+			close(h.audioInChan)
+		}
+	})
 }
 
 // IsRunning returns whether the RTP handler is running
@@ -475,7 +641,7 @@ func (h *RTPHandler) EnqueueAudio(audio []byte) error {
 	if len(audio) == 0 {
 		return nil
 	}
-	if !h.running.Load() {
+	if h.closed.Load() || !h.running.Load() {
 		return ErrRTPHandlerStopped
 	}
 	if h.audioOutChan == nil {
@@ -689,7 +855,7 @@ func (h *RTPHandler) receiveLoop() {
 		}
 		audioPayloads, acceptedAudio := h.processInboundRTPPacket(packet)
 		if acceptedAudio {
-			h.notifyFirstPacketReceived()
+			h.markInboundAudioPacketReceived()
 		}
 		if h.writeInboundAudioPayloads(audioPayloads, packet.SequenceNumber) {
 			return
@@ -767,6 +933,12 @@ func (h *RTPHandler) notifyFirstPacketReceived() {
 	if fn != nil {
 		fn()
 	}
+}
+
+func (h *RTPHandler) markInboundAudioPacketReceived() {
+	h.lastPacketTime.Store(time.Now().UnixNano())
+	h.notifyFirstPacketReceived()
+	h.kickMediaTimeoutLoop()
 }
 
 func (h *RTPHandler) sendLoop() {

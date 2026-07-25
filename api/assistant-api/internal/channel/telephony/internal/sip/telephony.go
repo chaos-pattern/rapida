@@ -60,12 +60,15 @@ func (t *sipTelephony) parseConfig(vaultCredential *protos.VaultCredential) (*si
 			t.appCfg.SIPConfig.InviteTimeout,
 			t.appCfg.SIPConfig.SessionTimeout,
 		)
-		inboundConfig := t.appCfg.SIPConfig.Inbound
+		cfg.ApplyMediaTimeoutDefaults(
+			t.appCfg.SIPConfig.MediaTimeoutInitial,
+			t.appCfg.SIPConfig.MediaTimeout,
+		)
 		cfg.ApplyInboundAnswerDefaults(
-			sip_infra.InboundAnswerMode(inboundConfig.AnswerMode),
-			inboundConfig.MinRingDuration,
-			inboundConfig.MaxRingDuration,
-			inboundConfig.ACKTimeout,
+			sip_infra.InboundAnswerMode(t.appCfg.SIPConfig.Inbound.AnswerMode),
+			t.appCfg.SIPConfig.Inbound.MinRingDuration,
+			t.appCfg.SIPConfig.Inbound.MaxRingDuration,
+			t.appCfg.SIPConfig.Inbound.ACKTimeout,
 		)
 	}
 
