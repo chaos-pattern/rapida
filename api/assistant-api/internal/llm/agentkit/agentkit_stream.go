@@ -31,18 +31,12 @@ func (e *agentkitExecutor) Read(ctx context.Context, comm internal_type.Communic
 		resp, err := connection.Recv()
 		if err != nil {
 			switch {
+			case ctx.Err() != nil:
+				return
 			case errors.Is(err, io.EOF):
-				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
-					ContextID: e.getActiveContextID(),
-					Error:     fmt.Errorf("%w: server closed connection", ErrAgentkitConnectionRecv),
-					Type:      internal_type.LLMSystemPanic,
-				})
+				return
 			case status.Code(err) == codes.Canceled:
-				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
-					ContextID: e.getActiveContextID(),
-					Error:     fmt.Errorf("%w: connection canceled", ErrAgentkitConnectionRecv),
-					Type:      internal_type.LLMSystemPanic,
-				})
+				return
 			case status.Code(err) == codes.Unavailable:
 				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
 					ContextID: e.getActiveContextID(),

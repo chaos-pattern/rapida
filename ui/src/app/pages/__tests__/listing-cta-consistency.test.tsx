@@ -128,10 +128,23 @@ jest.mock('@carbon/react', () => {
       <th className={className}>{children}</th>
     ),
     TableBody: ({ children }: any) => <tbody>{children}</tbody>,
+    TableCell: ({ children, className }: any) => (
+      <td className={className}>{children}</td>
+    ),
     DataTableSkeleton: ({ className, headers, rowCount }: any) => (
       <div className={className}>
         Loading table {headers?.length} columns {rowCount} rows
       </div>
+    ),
+    SkeletonPlaceholder: ({ className }: any) => (
+      <span className={className} data-testid="skeleton-placeholder" />
+    ),
+    SkeletonText: ({ className, width }: any) => (
+      <span
+        className={className}
+        data-testid="skeleton-text"
+        style={{ width }}
+      />
     ),
     TableToolbar: Div,
     TableToolbarContent: Div,
@@ -265,9 +278,16 @@ describe('listing page create CTAs', () => {
 
     render(<AssistantPage />);
 
-    expect(screen.getByText('Loading table 13 columns 10 rows')).toHaveClass(
-      'min-w-max',
+    expect(screen.getByRole('columnheader', { name: 'Assistant' })).toHaveClass(
+      'min-w-56',
+      'whitespace-nowrap',
     );
+    expect(screen.getByRole('columnheader', { name: 'Actions' })).toHaveClass(
+      'min-w-28',
+      'whitespace-nowrap',
+    );
+    expect(screen.getAllByTestId('skeleton-text')).toHaveLength(100);
+    expect(screen.getAllByTestId('skeleton-placeholder')).toHaveLength(100);
     expect(
       screen.getByRole('button', { name: 'Create new assistant' }),
     ).toBeInTheDocument();

@@ -20,6 +20,8 @@ export interface CarbonIconIndicatorProps {
   kind?: CarbonIconIndicatorKind;
   label?: string;
   size?: 16 | 20 | 24 | 32;
+  align?: 'top' | 'bottom' | 'left' | 'right';
+  iconDescription?: string;
 }
 
 export const CarbonIconIndicator: FC<CarbonIconIndicatorProps> = ({
@@ -27,6 +29,8 @@ export const CarbonIconIndicator: FC<CarbonIconIndicatorProps> = ({
   kind,
   label,
   size = 16,
+  align,
+  iconDescription,
 }) => {
   const resolved = state
     ? recordStateToIconIndicator[state] || defaultRecordIconIndicator
@@ -37,6 +41,8 @@ export const CarbonIconIndicator: FC<CarbonIconIndicatorProps> = ({
 
   return (
     <RawIconIndicator
+      align={align}
+      iconDescription={iconDescription}
       kind={resolved.kind as any}
       label={resolved.label}
       size={size}
