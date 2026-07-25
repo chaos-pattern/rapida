@@ -1,5 +1,6 @@
 import { FC } from 'react';
 import { unstable__ShapeIndicator as ShapeIndicatorModule } from '@carbon/react';
+import { CarbonIconIndicator } from '@/app/components/carbon/icon-indicator';
 
 const statusMap: Record<string, { kind: string; label: string }> = {
   // Success / complete — stable (green)
@@ -72,6 +73,30 @@ export const CarbonStatusIndicator: FC<CarbonStatusIndicatorProps> = ({
   state,
   textSize = 12,
 }) => {
+  if (state === 'IN_PROGRESS') {
+    return (
+      <CarbonIconIndicator
+        align="right"
+        iconDescription="Icon"
+        kind="in-progress"
+        label="In progress"
+        size={16}
+      />
+    );
+  }
+
+  if (state === 'RINGING') {
+    return (
+      <CarbonIconIndicator
+        align="right"
+        iconDescription="Icon"
+        kind="pending"
+        label="Ringing"
+        size={16}
+      />
+    );
+  }
+
   const { kind, label } = statusMap[state] || defaultStatus;
 
   return (

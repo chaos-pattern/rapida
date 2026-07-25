@@ -2815,6 +2815,9 @@
   .\!h-5 {
     height: calc(var(--spacing) * 5) !important;
   }
+  .\!h-6 {
+    height: calc(var(--spacing) * 6) !important;
+  }
   .\!h-7 {
     height: calc(var(--spacing) * 7) !important;
   }
@@ -3142,6 +3145,9 @@
   .\!w-5 {
     width: calc(var(--spacing) * 5) !important;
   }
+  .\!w-6 {
+    width: calc(var(--spacing) * 6) !important;
+  }
   .\!w-7 {
     width: calc(var(--spacing) * 7) !important;
   }
@@ -3153,6 +3159,12 @@
   }
   .\!w-12 {
     width: calc(var(--spacing) * 12) !important;
+  }
+  .\!w-14 {
+    width: calc(var(--spacing) * 14) !important;
+  }
+  .\!w-16 {
+    width: calc(var(--spacing) * 16) !important;
   }
   .\!w-\[48rem\] {
     width: 48rem !important;
