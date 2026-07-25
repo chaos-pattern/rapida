@@ -267,6 +267,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				occurredAt = record.Log.GetOccurredAt().AsTime()
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityLogRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordLog{
 					ID:         record.Log.GetId(),
 					Message:    record.Log.GetMessage(),
@@ -289,6 +290,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				component = AgentkitObservabilityPrefix + component
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityEventRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordEvent{
 					ID:         record.Event.GetId(),
 					Component:  observability.ComponentName(component),
@@ -307,6 +309,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				name = AgentkitObservabilityPrefix + name
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityMetricRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordMetric{
 					ID: record.Metric.GetId(),
 					Metrics: []*protos.Metric{{
