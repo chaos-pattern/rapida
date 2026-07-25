@@ -1,5 +1,5 @@
 import { FC } from 'react';
-import RawIconIndicator from '@carbon/react/es/components/IconIndicator';
+import { preview__IconIndicator as IconIndicatorModule } from '@carbon/react';
 
 export type CarbonIconIndicatorKind =
   | 'failed'
@@ -40,7 +40,7 @@ export const CarbonIconIndicator: FC<CarbonIconIndicatorProps> = ({
       };
 
   return (
-    <RawIconIndicator
+    <IconIndicator
       align={align}
       iconDescription={iconDescription}
       kind={resolved.kind as any}
@@ -49,6 +49,10 @@ export const CarbonIconIndicator: FC<CarbonIconIndicatorProps> = ({
     />
   );
 };
+
+const IconIndicator =
+  (IconIndicatorModule as unknown as { default?: FC<any> }).default ||
+  (IconIndicatorModule as unknown as FC<any>);
 
 export const recordStateToIconIndicator: Record<
   string,
