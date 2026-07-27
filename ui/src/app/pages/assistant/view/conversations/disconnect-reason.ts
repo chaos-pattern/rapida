@@ -1,86 +1,116 @@
+import { Metadata } from '@rapidaai/react';
+
+export type DisconnectReasonDetail = {
+  label: string;
+  value: string;
+};
+
 export type DisconnectReasonDisplay = {
   label: string;
   tooltip: string;
+  details: DisconnectReasonDetail[];
 };
 
-const UNKNOWN_REASON: DisconnectReasonDisplay = {
-  label: 'unknown',
-  tooltip: 'No disconnect reason metadata was recorded for this session.',
-};
+const DETAIL_FIELDS = [
+  { key: 'call_status', label: 'Call status' },
+  { key: 'disconnect_reason', label: 'Disconnect reason' },
+  { key: 'failure_class', label: 'Failure class' },
+  { key: 'failure_reason', label: 'Failure reason' },
+  { key: 'sli_result', label: 'SLI result' },
+  { key: 'sli_reason', label: 'SLI reason' },
+  { key: 'provider_status_code', label: 'Provider status' },
+  { key: 'call_error', label: 'Call error' },
+] as const;
 
-const DISCONNECT_REASON_BY_TYPE: Record<string, DisconnectReasonDisplay> = {
-  tool: {
-    label: 'Tool ended',
-    tooltip:
-      'A configured tool or assistant flow intentionally ended the session.',
-  },
-  user: {
-    label: 'User disconnected',
-    tooltip: 'The user disconnected, hung up, or cut the call.',
-  },
-  idle_timeout: {
-    label: 'Idle timeout',
-    tooltip:
-      'The session ended because the user stopped responding for the configured idle timeout.',
-  },
-  max_duration: {
-    label: 'Max duration',
-    tooltip: 'The session reached the configured maximum session duration.',
-  },
-  error: {
-    label: 'Error',
-    tooltip:
-      'The session ended because an error occurred during the conversation.',
-  },
-};
+const getMetadataValue = (metadata: Metadata[] | undefined, key: string): string =>
+  metadata?.find(item => item.getKey() === key)?.getValue()?.trim() ?? '';
 
-const DISCONNECT_REASON_ALIASES: Record<
-  string,
-  keyof typeof DISCONNECT_REASON_BY_TYPE
-> = {
-  '1': 'tool',
-  '2': 'user',
-  '3': 'idle_timeout',
-  '4': 'max_duration',
-  '5': 'error',
-  TOOL: 'tool',
-  USER: 'user',
-  IDLE_TIMEOUT: 'idle_timeout',
-  MAX_DURATION: 'max_duration',
-  ERROR: 'error',
-  DISCONNECTION_TYPE_TOOL: 'tool',
-  DISCONNECTION_TYPE_USER: 'user',
-  DISCONNECTION_TYPE_IDLE_TIMEOUT: 'idle_timeout',
-  DISCONNECTION_TYPE_MAX_DURATION: 'max_duration',
-  DISCONNECTION_TYPE_ERROR: 'error',
-};
-
-const extractReasonToken = (reason: string): string => {
-  const trimmed = reason.trim();
-  const enumToken = trimmed.match(/DISCONNECTION_TYPE_[A-Z_]+/)?.[0];
-  if (enumToken) return enumToken;
-  return trimmed.toUpperCase().replace(/[\s-]+/g, '_');
-};
-
-const humanizeReason = (reason: string): string =>
-  reason
+const humanize = (value: string): string =>
+  value
+    .trim()
     .replace(/^DISCONNECTION_TYPE_/, '')
     .replace(/^CONVERSATIONDISCONNECTION_/, '')
-    .replace(/_/g, ' ')
+    .replace(/[_-]+/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, char => char.toUpperCase());
 
-export const normalizeDisconnectReason = (
-  reason?: string | null,
-): DisconnectReasonDisplay => {
-  if (!reason?.trim()) return UNKNOWN_REASON;
+const isTerminalStatus = (status?: string): boolean => {
+  const value = status?.trim().toUpperCase();
+  return ['FAILED', 'CANCELLED', 'CANCELED', 'COMPLETE', 'COMPLETED'].includes(
+    value || '',
+  );
+};
 
-  const token = extractReasonToken(reason);
-  const reasonType = DISCONNECT_REASON_ALIASES[token];
-  if (reasonType) return DISCONNECT_REASON_BY_TYPE[reasonType];
+const isBusy = (reason?: string | null, metadata?: Metadata[]): boolean => {
+  const failureClass = getMetadataValue(metadata, 'failure_class').toLowerCase();
+  const failureReason = getMetadataValue(metadata, 'failure_reason').toLowerCase();
+  const sliReason = getMetadataValue(metadata, 'sli_reason').toLowerCase();
+  const providerStatusCode = getMetadataValue(metadata, 'provider_status_code');
+  const rawReason = reason?.trim().toLowerCase();
+
+  return (
+    providerStatusCode === '486' ||
+    failureClass === 'busy' ||
+    sliReason === 'outbound_busy' ||
+    rawReason === 'outbound_busy' ||
+    failureReason.includes('busy')
+  );
+};
+
+const getDetails = (
+  reason?: string | null,
+  status?: string,
+  metadata?: Metadata[],
+): DisconnectReasonDetail[] => {
+  const values = new Map<string, string>();
+  if (status?.trim()) values.set('call_status', status.trim());
+  if (reason?.trim()) values.set('disconnect_reason', reason.trim());
+
+  DETAIL_FIELDS.forEach(field => {
+    const value = getMetadataValue(metadata, field.key);
+    if (value) values.set(field.key, value);
+  });
+
+  return DETAIL_FIELDS.flatMap(field => {
+    const value = values.get(field.key);
+    return value ? [{ label: field.label, value }] : [];
+  });
+};
+
+export const getDisconnectReasonDisplay = (
+  reason?: string | null,
+  status?: string,
+  metadata?: Metadata[],
+): DisconnectReasonDisplay => {
+  const details = getDetails(reason, status, metadata);
+
+  if (isBusy(reason, metadata)) {
+    return {
+      label: 'User busy',
+      tooltip: 'The outbound call was rejected because the callee was busy.',
+      details,
+    };
+  }
+
+  if (reason?.trim()) {
+    return {
+      label: humanize(reason),
+      tooltip: 'The backend reported this disconnect reason for the session.',
+      details,
+    };
+  }
+
+  if (!isTerminalStatus(status)) {
+    return {
+      label: 'In progress',
+      tooltip: 'The session has not ended yet, so no disconnect reason is available.',
+      details,
+    };
+  }
 
   return {
-    label: humanizeReason(token),
-    tooltip: 'The backend reported this disconnect reason for the session.',
+    label: 'No reason',
+    tooltip: 'No disconnect reason metadata was recorded for this session.',
+    details,
   };
 };

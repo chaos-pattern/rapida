@@ -17,7 +17,7 @@ import { ConversationDirectionIndicator } from '@/app/components/indicators/conv
 import { CONFIG } from '@/configs';
 import { AssistantConversationTelephonyEventDialog } from '@/app/components/base/modal/assistant-conversation-telephony-event-modal';
 import { ChannelIndicator } from './channel-indicator';
-import { normalizeDisconnectReason } from './disconnect-reason';
+import { getDisconnectReasonDisplay } from './disconnect-reason';
 import { DisconnectReasonIndicator } from './disconnect-reason-indicator';
 import { DurationBreakdownToggletip } from './duration-breakdown-toggletip';
 import {
@@ -187,8 +187,10 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                 case 'status':
                   return getStatusMetric(row.getMetricsList());
                 case 'disconnect_reason':
-                  return normalizeDisconnectReason(
+                  return getDisconnectReasonDisplay(
                     getDisconnectReasonValue(row),
+                    getStatusMetric(row.getMetricsList()),
+                    row.getMetadataList(),
                   ).label;
                 case 'created_date':
                   return row.getCreateddate()
@@ -315,6 +317,8 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                       <TableCell className="min-w-[180px] whitespace-nowrap text-sm">
                         <DisconnectReasonIndicator
                           reason={getDisconnectReasonValue(row)}
+                          status={getStatusMetric(row.getMetricsList())}
+                          metadata={row.getMetadataList()}
                         />
                       </TableCell>
                     )}

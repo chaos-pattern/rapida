@@ -1,14 +1,43 @@
-import { Tag, Tooltip } from '@carbon/react';
-import { normalizeDisconnectReason } from './disconnect-reason';
+import { useState } from 'react';
+import { Information } from '@carbon/icons-react';
+import { Metadata } from '@rapidaai/react';
+import { Tag } from '@carbon/react';
+import { getDisconnectReasonDisplay } from './disconnect-reason';
+import { IconOnlyButton } from '@/app/components/carbon/button';
+import { DisconnectDetailsDialog } from '@/app/components/base/modal/disconnect-details-modal';
 
-export const DisconnectReasonIndicator = ({ reason }: { reason: string }) => {
-  const display = normalizeDisconnectReason(reason);
+export const DisconnectReasonIndicator = ({
+  reason,
+  status,
+  metadata,
+}: {
+  reason: string;
+  status?: string;
+  metadata?: Metadata[];
+}) => {
+  const [isDetailsOpen, setDetailsOpen] = useState(false);
+  const display = getDisconnectReasonDisplay(reason, status, metadata);
 
   return (
-    <Tooltip align="bottom" label={display.tooltip}>
-      <Tag size="md" type="gray" className="inline-flex whitespace-nowrap">
-        {display.label}
-      </Tag>
-    </Tooltip>
+    <>
+      <div className="inline-flex items-center gap-1 whitespace-nowrap">
+        <Tag size="md" type="gray">
+          {display.label}
+        </Tag>
+        <IconOnlyButton
+          kind="ghost"
+          size="sm"
+          renderIcon={Information}
+          iconDescription="View disconnect details"
+          tooltipPosition="bottom"
+          onClick={() => setDetailsOpen(true)}
+        />
+      </div>
+      <DisconnectDetailsDialog
+        modalOpen={isDetailsOpen}
+        setModalOpen={setDetailsOpen}
+        details={display.details}
+      />
+    </>
   );
 };
