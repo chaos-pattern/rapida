@@ -44,6 +44,7 @@ func TestOutboundCallStatus_Values(t *testing.T) {
 	assert.Equal(t, "ringing", string(OutboundCallStatusRinging))
 	assert.Equal(t, "answered", string(OutboundCallStatusAnswered))
 	assert.Equal(t, "failed", string(OutboundCallStatusFailed))
+	assert.Equal(t, "completed", string(OutboundCallStatusCompleted))
 	assert.Equal(t, "cancelled", string(OutboundCallStatusCancelled))
 }
 
@@ -460,6 +461,82 @@ func TestOutboundCall_ApplicationFailureRecordsFailure(t *testing.T) {
 	assert.Equal(t, LifecycleReasonPipelineSetupFailed.String(), failedStatus.DisconnectReason)
 }
 
+func TestOutboundCall_MediaTimeoutWithoutReceivedRTPFails(t *testing.T) {
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    "call-media-timeout-no-rtp",
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	session.SetRTPHandler(&RTPHandler{})
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+
+	outboundCall.mediaTimeout()
+
+	assert.Equal(t, CallStateFailed, session.GetState())
+	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
+	assert.Equal(t, string(OutboundFailureMedia), failedStatus.FailureClass)
+	assert.Equal(t, ErrRTPMediaTimeout.Error(), failedStatus.FailureReason)
+	assert.Equal(t, LifecycleReasonOutboundMediaTimeout.String(), failedStatus.DisconnectReason)
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureMedia))
+	assertSessionMetadata(t, session, "sip.failure_reason", ErrRTPMediaTimeout.Error())
+}
+
+func TestOutboundCall_MediaTimeoutAfterReceivedRTPEndsCompleted(t *testing.T) {
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    "call-media-timeout-established",
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	rtpHandler := &RTPHandler{}
+	rtpHandler.packetsReceived.Store(12)
+	session.SetRTPHandler(rtpHandler)
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+
+	outboundCall.mediaTimeout()
+
+	assert.True(t, session.IsEnded())
+	assert.Equal(t, CallStateEnded, session.GetState())
+	completedStatus := statusRecorder.LastStatus(t, OutboundCallStatusCompleted)
+	assert.Equal(t, DisconnectReasonRemoteHangup, completedStatus.DisconnectReason)
+	assert.False(t, statusRecorder.HasStatus(OutboundCallStatusFailed), "established media timeout must not report failed")
+	assertSessionMetadata(t, session, "sip.media_timeout", true)
+	assertSessionMetadata(t, session, "sip.media_timeout_after_established_media", true)
+	metadata := session.GetDisconnectMetadata()
+	assert.Equal(t, DisconnectReasonRemoteHangup, metadata.Reason)
+}
+
 type outboundStatusRecorder struct {
 	mu      sync.Mutex
 	updates []internal_type.ProviderCallStatusUpdate
@@ -490,6 +567,17 @@ func (r *outboundStatusRecorder) LastStatus(t *testing.T, status OutboundCallSta
 		return false
 	}, time.Second, 10*time.Millisecond)
 	return update
+}
+
+func (r *outboundStatusRecorder) HasStatus(status OutboundCallStatus) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, update := range r.updates {
+		if update.CallStatus == string(status) {
+			return true
+		}
+	}
+	return false
 }
 
 type cancelTrackingRequester struct {

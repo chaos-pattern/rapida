@@ -54,6 +54,7 @@ const (
 	OutboundCallStatusRinging   OutboundCallStatus = callcontext.CallStatusRinging
 	OutboundCallStatusAnswered  OutboundCallStatus = callcontext.CallStatusAnswered
 	OutboundCallStatusFailed    OutboundCallStatus = callcontext.CallStatusFailed
+	OutboundCallStatusCompleted OutboundCallStatus = callcontext.CallStatusCompleted
 	OutboundCallStatusCancelled OutboundCallStatus = callcontext.CallStatusCancelled
 )
 

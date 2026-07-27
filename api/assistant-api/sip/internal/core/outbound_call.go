@@ -323,6 +323,13 @@ func (outboundCall *Outbound) reportFailure(failure OutboundFailure) {
 	outboundCall.ReportStatus(failure.StatusUpdate(outboundCall.session.GetCallID()))
 }
 
+func (outboundCall *Outbound) reportCompleted(disconnectReason string) {
+	outboundCall.ReportStatus(internal_type.ProviderCallStatusUpdate{
+		CallStatus:       string(OutboundCallStatusCompleted),
+		DisconnectReason: disconnectReason,
+	})
+}
+
 func (outboundCall *Outbound) recordFailure(failure OutboundFailure) {
 	failure.Record(outboundCall.session)
 }
@@ -399,6 +406,10 @@ func (outboundCall *Outbound) mediaTimeout() {
 	if outboundCall.session == nil || outboundCall.session.IsEnded() {
 		return
 	}
+	if outboundCall.hasReceivedRTP() {
+		outboundCall.completeAfterEstablishedMediaTimeout()
+		return
+	}
 	if outboundCall.server.logger != nil {
 		outboundCall.server.logger.Warnw("Outbound SIP RTP media timed out",
 			"call_id", outboundCall.session.GetCallID(),
@@ -414,6 +425,36 @@ func (outboundCall *Outbound) mediaTimeout() {
 	})
 }
 
+func (outboundCall *Outbound) hasReceivedRTP() bool {
+	if outboundCall == nil || outboundCall.session == nil {
+		return false
+	}
+	rtpHandler := outboundCall.session.GetRTPHandler()
+	if rtpHandler == nil && outboundCall.media != nil {
+		rtpHandler = outboundCall.media.rtpHandler
+	}
+	if rtpHandler == nil {
+		return false
+	}
+	_, received := rtpHandler.GetStats()
+	return received > 0
+}
+
+func (outboundCall *Outbound) completeAfterEstablishedMediaTimeout() {
+	outboundCall.closeOnce.Do(func() {
+		if outboundCall.session == nil || outboundCall.session.IsEnded() {
+			return
+		}
+		outboundCall.session.SetDisconnectMetadata(DisconnectMetadata{
+			Reason: DisconnectReasonRemoteHangup,
+		})
+		outboundCall.session.SetMetadata("sip.media_timeout", true)
+		outboundCall.session.SetMetadata("sip.media_timeout_after_established_media", true)
+		outboundCall.reportCompleted(DisconnectReasonRemoteHangup)
+		_ = outboundCall.server.EndCallWithReason(outboundCall.session, LifecycleReasonOutboundMediaTimeout)
+	})
+}
+
 func (outboundCall *Outbound) waitForSessionEnd(answerTime time.Time) {
 	maxCallDuration := outboundCall.request.Config.EffectiveMaxCallDuration()
 
@@ -425,8 +466,6 @@ func (outboundCall *Outbound) waitForSessionEnd(answerTime time.Time) {
 		defer maxDurationTimer.Stop()
 	}
 
-	outboundCall.server.logger.Debugw("Outbound dialog waiting for session to end",
-		"call_id", outboundCall.session.GetCallID())
 	select {
 	case <-maxDurationC:
 		outboundCall.server.logger.Infow("Outbound call max duration reached; ending dialog",
@@ -436,17 +475,11 @@ func (outboundCall *Outbound) waitForSessionEnd(answerTime time.Time) {
 			_ = outboundCall.server.EndCallWithReason(outboundCall.session, LifecycleReasonOutboundMaxDuration)
 		})
 	case <-outboundCall.session.Context().Done():
-		outboundCall.server.logger.Infow("Outbound dialog ending; session ended",
-			"call_id", outboundCall.session.GetCallID(),
-			"call_duration_ms", time.Since(answerTime).Milliseconds())
+		return
 	case <-outboundCall.dialog.Done():
-		outboundCall.server.logger.Infow("Outbound dialog BYE received; waiting for session teardown",
-			"call_id", outboundCall.session.GetCallID(),
-			"call_duration_ms", time.Since(answerTime).Milliseconds())
 		select {
 		case <-outboundCall.session.Context().Done():
-			outboundCall.server.logger.Debugw("Outbound dialog session ended after BYE",
-				"call_id", outboundCall.session.GetCallID())
+			return
 		case <-time.After(30 * time.Second):
 			outboundCall.server.logger.Warnw("Outbound dialog session did not end within 30s after BYE; forcing teardown",
 				"call_id", outboundCall.session.GetCallID())

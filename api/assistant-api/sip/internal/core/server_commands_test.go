@@ -410,6 +410,12 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	session.SetOnDisconnect(func(*Session) {
 		disconnectCalled = true
 	})
+	onByeCalled := false
+	s.SetOnBye(func(byeSession *Session) error {
+		onByeCalled = true
+		assert.True(t, byeSession.IsEnded(), "inbound remote BYE should end before onBye callback")
+		return s.EndCallWithReason(byeSession, LifecycleReasonRemoteBye)
+	})
 	req := newInboundDialogRequest(t, session, sip.BYE)
 	req.AppendHeader(sip.NewHeader("Reason", `Q.850;cause=16;text="Normal call clearing"`))
 	tx := newTestServerTx()
@@ -424,6 +430,7 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	}
 	require.NotEmpty(t, tx.responses)
 	assert.Equal(t, 200, tx.lastStatus())
+	assert.True(t, onByeCalled)
 	metadata := session.GetDisconnectMetadata()
 	assert.Equal(t, DisconnectReasonNormalClearing, metadata.Reason)
 	assert.Equal(t, 16, metadata.ProviderStatusCode)
@@ -441,6 +448,49 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	assert.Equal(t, `Q.850;cause=16;text="Normal call clearing"`, metadataValue)
 }
 
+func TestSIPCommand_BYE_OutboundSession_NotifiesAndEndsWithoutLocalBYE(t *testing.T) {
+	s := newServerForCommandTests(t)
+	session := newTestSession(t, "call-bye-outbound", CallDirectionOutbound)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	s.registerSession(session, "call-bye-outbound")
+
+	disconnectCalled := false
+	session.SetOnDisconnect(func(*Session) {
+		disconnectCalled = true
+	})
+	onByeCalled := false
+	s.SetOnBye(func(byeSession *Session) error {
+		onByeCalled = true
+		assert.True(t, byeSession.IsEnded(), "outbound remote BYE should end before onBye callback")
+		return s.EndCallWithReason(byeSession, LifecycleReasonRemoteBye)
+	})
+
+	req := newSIPRequest(sip.BYE, "call-bye-outbound")
+	req.AppendHeader(sip.NewHeader("Reason", `Q.850;cause=16;text="Normal call clearing"`))
+	tx := newTestServerTx()
+
+	s.handleBye(req, tx)
+
+	assert.True(t, session.IsEnded())
+	select {
+	case <-session.ByeReceived():
+	default:
+		t.Fatalf("expected ByeReceived signal")
+	}
+	require.NotEmpty(t, tx.responses)
+	assert.Equal(t, 200, tx.lastStatus())
+	assert.True(t, onByeCalled)
+	assert.False(t, disconnectCalled, "remote outbound BYE must not trigger local BYE")
+
+	metadata := session.GetDisconnectMetadata()
+	assert.Equal(t, DisconnectReasonNormalClearing, metadata.Reason)
+	assert.Equal(t, 16, metadata.ProviderStatusCode)
+	assert.Equal(t, "Normal call clearing", metadata.Text)
+	_, ok := s.GetSession("call-bye-outbound")
+	assert.False(t, ok, "remote outbound BYE should remove the ended session")
+}
+
 func TestSIPCommand_BYE_InboundSessionWithoutDialogReturns481(t *testing.T) {
 	s := newServerForCommandTests(t)
 	req := newSIPRequest(sip.BYE, "call-bye-missing-dialog")
@@ -449,10 +499,21 @@ func TestSIPCommand_BYE_InboundSessionWithoutDialogReturns481(t *testing.T) {
 	session := newTestSession(t, "call-bye-missing-dialog", CallDirectionInbound)
 	session.SetState(CallStateConnected)
 	s.sessions["call-bye-missing-dialog"] = session
+	onByeCalled := false
+	s.SetOnBye(func(*Session) error {
+		onByeCalled = true
+		return nil
+	})
 
 	s.handleBye(req, tx)
 
 	assert.False(t, session.IsEnded())
+	select {
+	case <-session.ByeReceived():
+		t.Fatalf("unexpected ByeReceived signal for invalid inbound BYE")
+	default:
+	}
+	assert.False(t, onByeCalled)
 	require.NotEmpty(t, tx.responses)
 	assert.Equal(t, 481, tx.lastStatus())
 }
