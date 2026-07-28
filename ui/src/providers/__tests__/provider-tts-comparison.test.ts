@@ -283,3 +283,50 @@ describe('OpenAI TTS — config vs original', () => {
     expect(findMeta(result, 'speaker.speed')).toBe('1.5');
   });
 });
+
+describe('Smallest TTS — config resolution', () => {
+  const config = loadProviderConfig('smallest')!;
+
+  it('config has tts section', () => {
+    expect(config.tts).toBeDefined();
+  });
+
+  it('produces the expected default keys and values', () => {
+    const result = getDefaultsFromConfig(config, 'tts', [], 'smallest');
+    expect(findMeta(result, 'speak.model')).toBe('lightning_v3.1');
+    expect(findMeta(result, 'speak.voice.id')).toBe('magnus');
+    expect(findMeta(result, 'speak.language')).toBe('en');
+  });
+
+  it('validates: valid options returns undefined', () => {
+    const opts = [
+      cred(),
+      createMetadata('speak.model', 'lightning_v3.1'),
+      createMetadata('speak.voice.id', 'magnus'),
+      createMetadata('speak.language', 'en'),
+    ];
+    expect(validateFromConfig(config, 'tts', 'smallest', opts)).toBeUndefined();
+  });
+
+  it('validates: invalid model returns error', () => {
+    const opts = [
+      cred(),
+      createMetadata('speak.model', 'nonexistent'),
+      createMetadata('speak.voice.id', 'magnus'),
+      createMetadata('speak.language', 'en'),
+    ];
+    expect(validateFromConfig(config, 'tts', 'smallest', opts)).toBe(
+      'Please select a valid model for text to speech.',
+    );
+  });
+
+  it('validates: voice.id accepts any value (strict:false, customValue:true)', () => {
+    const opts = [
+      cred(),
+      createMetadata('speak.model', 'lightning_v3.1'),
+      createMetadata('speak.voice.id', 'voice_custom-clone-id'),
+      createMetadata('speak.language', 'en'),
+    ];
+    expect(validateFromConfig(config, 'tts', 'smallest', opts)).toBeUndefined();
+  });
+});

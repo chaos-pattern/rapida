@@ -74,6 +74,11 @@ func TestAudioTransformerString(t *testing.T) {
 			input:    ASSEMBLYAI,
 			expected: "assemblyai",
 		},
+		{
+			name:     "Smallest",
+			input:    SMALLEST,
+			expected: "smallest",
+		},
 	}
 
 	for _, tt := range tests {
@@ -298,6 +303,7 @@ func TestAllTextToSpeechTransformersCallFactory(t *testing.T) {
 		REVAI,
 		SARVAM,
 		ELEVENLABS,
+		SMALLEST,
 	}
 
 	for _, tt := range transformerTypes {
@@ -324,6 +330,7 @@ func TestAllSpeechToTextTransformersCallFactory(t *testing.T) {
 		SARVAM,
 		CARTESIA,
 		CUSTOM_STT,
+		SMALLEST,
 	}
 
 	for _, tt := range transformerTypes {

@@ -367,6 +367,36 @@ describe('Cartesia STT — config vs original', () => {
   });
 });
 
+describe('Smallest STT — config resolution', () => {
+  const config = loadProviderConfig('smallest')!;
+
+  it('produces the expected default keys and values', () => {
+    const result = getDefaultsFromConfig(config, 'stt', [], 'smallest');
+    expect(findMeta(result, 'listen.model')).toBe('pulse');
+    expect(findMeta(result, 'listen.language')).toBe('en');
+  });
+
+  it('validates: valid options returns undefined', () => {
+    const opts = [
+      cred(),
+      createMetadata('listen.model', 'pulse'),
+      createMetadata('listen.language', 'en'),
+    ];
+    expect(validateFromConfig(config, 'stt', 'smallest', opts)).toBeUndefined();
+  });
+
+  it('validates: invalid model returns error', () => {
+    const opts = [
+      cred(),
+      createMetadata('listen.model', 'bad-model'),
+      createMetadata('listen.language', 'en'),
+    ];
+    expect(validateFromConfig(config, 'stt', 'smallest', opts)).toBe(
+      'Please provide a valid Smallest AI model for speech to text.',
+    );
+  });
+});
+
 describe('OpenAI STT — config vs original', () => {
   const config = loadProviderConfig('openai')!;
 

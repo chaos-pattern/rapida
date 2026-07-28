@@ -1,0 +1,10 @@
+[
+    {
+        "model_id": "lightning_v3.1",
+        "name": "Lightning v3.1"
+    },
+    {
+        "model_id": "lightning_v3.1_pro",
+        "name": "Lightning v3.1 Pro"
+    }
+]
