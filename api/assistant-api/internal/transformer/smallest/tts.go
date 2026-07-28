@@ -71,6 +71,7 @@ func (ct *smallestTTS) Initialize() error {
 	connectionString := ct.GetTextToSpeechConnectionString()
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+ct.GetKey())
+	setSourceHeaders(header)
 
 	conn, _, err := websocket.DefaultDialer.Dial(connectionString, header)
 	if err != nil {

@@ -68,6 +68,7 @@ func (cst *smallestSpeechToText) Initialize() error {
 	connectionString := cst.GetSpeechToTextConnectionString()
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+cst.GetKey())
+	setSourceHeaders(header)
 
 	conn, _, err := websocket.DefaultDialer.Dial(connectionString, header)
 	if err != nil {

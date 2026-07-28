@@ -1,6 +1,7 @@
 package internal_transformer_smallest
 
 import (
+	"net/http"
 	"testing"
 
 	"github.com/rapidaai/pkg/commons"
@@ -141,4 +142,10 @@ func TestGetTextToSpeechConnectionString(t *testing.T) {
 	cred := newVaultCredential(map[string]interface{}{"key": "my-key"})
 	opt, _ := NewSmallestOption(newTestLogger(), cred, utils.Option{})
 	assert.Equal(t, "wss://api.smallest.ai/waves/v1/tts/live", opt.GetTextToSpeechConnectionString())
+}
+
+func TestSetSourceHeaders(t *testing.T) {
+	header := http.Header{}
+	setSourceHeaders(header)
+	assert.Equal(t, "rapida", header.Get("X-Source"))
 }

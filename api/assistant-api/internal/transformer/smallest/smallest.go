@@ -8,6 +8,7 @@ package internal_transformer_smallest
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 
 	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
@@ -35,7 +36,19 @@ const (
 
 	DefaultTextToSpeechModel = "lightning_v3.1"
 	DefaultVoiceID           = "magnus"
+
+	// SourceHeader/SourceName identify this integration to Smallest so usage
+	// can be attributed to Rapida, mirroring the X-Source header other SDK
+	// integrations send on connect.
+	SourceHeader = "X-Source"
+	SourceName   = "rapida"
 )
+
+// setSourceHeaders stamps the outbound WebSocket upgrade request with this
+// integration's identity so Smallest can attribute traffic to Rapida.
+func setSourceHeaders(header http.Header) {
+	header.Set(SourceHeader, SourceName)
+}
 
 type smallestOption struct {
 	key     string
