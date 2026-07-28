@@ -52,11 +52,11 @@ func TestSmallestTTSLifecycle(t *testing.T) {
 
 	assertTTSInitMetric(t, collector)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 		ContextID: "smallest-tts-lifecycle",
 		Text:      "Hello world, this is a Smallest AI test.",
 	}))
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "smallest-tts-lifecycle",
 	}))
 
@@ -108,13 +108,13 @@ func TestSmallestTTSStreamingDeltas(t *testing.T) {
 		"Pack my box with five dozen liquor jugs.",
 	}
 	for _, chunk := range chunks {
-		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 			ContextID: "smallest-tts-streaming",
 			Text:      chunk,
 		}))
 		time.Sleep(50 * time.Millisecond)
 	}
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "smallest-tts-streaming",
 	}))
 
@@ -151,19 +151,18 @@ func TestSmallestTTSInterruption(t *testing.T) {
 	require.NoError(t, tts.Initialize())
 	defer tts.Close(ctx)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 		ContextID: "smallest-tts-interrupt",
 		Text:      "This sentence should be interrupted before it finishes being spoken aloud.",
 	}))
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "smallest-tts-interrupt",
 	}))
 
 	collector.WaitForAudio(t, 15*time.Second)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechInterruptPacket{
 		ContextID: "smallest-tts-interrupt",
-		Source:    internal_type.InterruptionSourceVad,
 	}))
 
 	time.Sleep(2 * time.Second)
@@ -191,11 +190,11 @@ func TestSmallestTTSReconnect(t *testing.T) {
 		require.NoError(t, err, "attempt %d", attempt)
 		require.NoError(t, tts.Initialize(), "attempt %d", attempt)
 
-		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 			ContextID: fmt.Sprintf("smallest-tts-reconnect-%d", attempt),
 			Text:      "Reconnect test.",
 		}))
-		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 			ContextID: fmt.Sprintf("smallest-tts-reconnect-%d", attempt),
 		}))
 
@@ -231,24 +230,24 @@ func TestSmallestTTSFlow_DeltaInterruptDeltaDone(t *testing.T) {
 	require.NoError(t, tts.Initialize())
 	defer tts.Close(ctx)
 
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 		ContextID: "ctx-1", Text: "The weather today is sunny with clear skies."}))
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "ctx-1"}))
 	collector.WaitForAudio(t, 15*time.Second)
 	t.Logf("phase1: audio_packets=%d", len(collector.AudioPackets()))
 
-	require.NoError(t, tts.Transform(ctx, internal_type.InterruptionDetectedPacket{
-		ContextID: "ctx-1", Source: internal_type.InterruptionSourceVad}))
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechInterruptPacket{
+		ContextID: "ctx-1"}))
 	time.Sleep(500 * time.Millisecond)
 
 	eventsAfterInterrupt := ttsEventTypes(collector.EventPackets())
 	assert.Contains(t, eventsAfterInterrupt, "interrupted")
 
 	collector.Clear()
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 		ContextID: "ctx-2", Text: "Actually, it will rain later this evening."}))
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "ctx-2"}))
 
 	collector.WaitForTTSEnd(t, 15*time.Second)
@@ -281,10 +280,10 @@ func TestSmallestTTSFlow_RapidDeltasDone(t *testing.T) {
 
 	words := []string{"Hello", " there,", " how", " are", " you", " doing", " today?"}
 	for _, w := range words {
-		require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDeltaPacket{
+		require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
 			ContextID: "ctx-rapid", Text: w}))
 	}
-	require.NoError(t, tts.Transform(ctx, internal_type.LLMResponseDonePacket{
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
 		ContextID: "ctx-rapid"}))
 
 	collector.WaitForTTSEnd(t, 20*time.Second)
@@ -591,15 +590,15 @@ func assertTTSInitMetricCountAtLeast(t *testing.T, collector *testutil.PacketCol
 	count := 0
 	for _, m := range collector.MetricPackets() {
 		for _, metric := range m.Record.Metrics {
-			if metric.Name == "tts_init_latency_ms" {
+			if metric.Name == "tts_init_ms" {
 				ms, err := strconv.Atoi(metric.Value)
 				assert.NoError(t, err)
-				assert.GreaterOrEqual(t, ms, 0, "tts_init_latency_ms should be non-negative")
+				assert.GreaterOrEqual(t, ms, 0, "tts_init_ms should be non-negative")
 				count++
 			}
 		}
 	}
-	assert.GreaterOrEqual(t, count, minimumCount, "should have enough tts_init_latency_ms metrics")
+	assert.GreaterOrEqual(t, count, minimumCount, "should have enough tts_init_ms metrics")
 }
 
 func assertSTTLatencyMetric(t *testing.T, collector *testutil.PacketCollector) {
@@ -622,13 +621,13 @@ func assertSTTInitMetric(t *testing.T, collector *testutil.PacketCollector) {
 	t.Helper()
 	for _, m := range collector.MetricPackets() {
 		for _, metric := range m.Record.Metrics {
-			if metric.Name == "stt_init_latency_ms" {
+			if metric.Name == "stt_init_ms" {
 				ms, err := strconv.Atoi(metric.Value)
 				assert.NoError(t, err)
-				assert.GreaterOrEqual(t, ms, 0, "stt_init_latency_ms should be non-negative")
+				assert.GreaterOrEqual(t, ms, 0, "stt_init_ms should be non-negative")
 				return
 			}
 		}
 	}
-	t.Error("should have stt_init_latency_ms metric")
+	t.Error("should have stt_init_ms metric")
 }
