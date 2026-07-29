@@ -162,6 +162,56 @@ func (cst *smallestTTS) handleFlushComplete(conn *websocket.Conn) {
 	conn.Close()
 }
 
+// handleServerError is called when Smallest signals status:"error" (e.g. a
+// voice_id/model pairing it rejects, such as a Pro-only voice on
+// lightning_v3.1). The server sends exactly one such frame and then holds
+// the connection open without ever sending "complete", so this must be
+// treated as terminal for the turn — otherwise the turn hangs forever
+// waiting for audio that will never arrive.
+func (cst *smallestTTS) handleServerError(conn *websocket.Conn, payload smallest_internal.TextToSpeechOutput) {
+	cst.mu.Lock()
+	if cst.connection != conn {
+		cst.mu.Unlock()
+		conn.Close()
+		return
+	}
+	contextID := cst.contextId
+	cst.connection = nil // mark before Close so the write-path sees this as intentional
+	cst.mu.Unlock()
+
+	msg := payload.Message
+	if len(payload.Errors) > 0 && payload.Errors[0].Message != "" {
+		msg = payload.Errors[0].Message
+	}
+	if msg == "" {
+		msg = "unknown error"
+	}
+
+	cst.logger.Errorf("smallest-tts: server error: %s", msg)
+	cst.onPacket(
+		internal_type.TextToSpeechErrorPacket{
+			ContextID: contextID,
+			Error:     fmt.Errorf("smallest-tts: server error: %s", msg),
+			Type:      internal_type.TTSInvalidInput,
+		},
+		internal_type.ObservabilityLogRecordPacket{
+			ContextID: contextID,
+			Scope:     internal_type.ObservabilityRecordScopeAssistantMessage,
+			Record: observability.RecordLog{
+				Level:   observability.LevelError,
+				Message: "smallest-tts: server error",
+				Attributes: observability.Attributes{
+					"component": observability.ComponentTTS.String(),
+					"provider":  cst.Name(),
+					"error":     observability.AttributeValue(msg),
+				},
+				OccurredAt: time.Now(),
+			},
+		},
+	)
+	conn.Close()
+}
+
 // readLoop owns a single WebSocket connection for the duration of one TTS turn.
 // It exits when the connection closes — intentionally (interrupt / flush complete)
 // or unexpectedly (network drop).
@@ -196,6 +246,9 @@ func (cst *smallestTTS) readLoop(conn *websocket.Conn) {
 		switch payload.Status {
 		case "complete":
 			cst.handleFlushComplete(conn)
+			return
+		case "error":
+			cst.handleServerError(conn, payload)
 			return
 		case "word_timestamp":
 			// Word-level timestamps are opt-in (word_timestamps=true) and not

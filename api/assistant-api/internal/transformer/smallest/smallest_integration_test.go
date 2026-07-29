@@ -299,6 +299,58 @@ func TestSmallestTTSFlow_RapidDeltasDone(t *testing.T) {
 	t.Logf("words=%d speaking=%d audio=%d", len(words), speakingCount, len(collector.AudioPackets()))
 }
 
+// TestSmallestTTSVoiceModelMismatch verifies that pairing a voice with the
+// wrong model pool (e.g. a Pro-only voice on lightning_v3.1) surfaces a
+// TextToSpeechErrorPacket instead of hanging forever. Smallest sends exactly
+// one status:"error" frame for a bad pairing and then holds the connection
+// open without ever sending "complete" — readLoop must treat "error" as
+// terminal for the turn.
+func TestSmallestTTSVoiceModelMismatch(t *testing.T) {
+	cfg := testutil.LoadConfig(t)
+	pcfg := cfg.TTSProvider(t, "smallest")
+	logger := testutil.NewTestLogger()
+	collector := testutil.NewPacketCollector()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	// meher is a lightning_v3.1_pro-only voice; pairing it with lightning_v3.1
+	// is a real user-reachable mismatch since speak.voice.id accepts free text.
+	opts := testutil.BuildOptions(map[string]interface{}{
+		"speak.voice.id": "meher",
+		"speak.model":    "lightning_v3.1",
+	})
+
+	tts, err := NewSmallestTextToSpeech(ctx, logger, testutil.BuildCredential(pcfg.Credential), collector.OnPacket, opts)
+	require.NoError(t, err)
+	require.NoError(t, tts.Initialize())
+	defer tts.Close(ctx)
+
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechTextPacket{
+		ContextID: "smallest-tts-mismatch",
+		Text:      "This pairing should be rejected by the server.",
+	}))
+	require.NoError(t, tts.Transform(ctx, internal_type.TextToSpeechDonePacket{
+		ContextID: "smallest-tts-mismatch",
+	}))
+
+	var errPkt *internal_type.TextToSpeechErrorPacket
+	collector.WaitFor(t, 10*time.Second, "TextToSpeechErrorPacket", func() bool {
+		for _, p := range collector.GetPackets() {
+			if e, ok := p.(internal_type.TextToSpeechErrorPacket); ok {
+				errPkt = &e
+				return true
+			}
+		}
+		return false
+	})
+
+	require.NotNil(t, errPkt, "should surface a TextToSpeechErrorPacket instead of hanging")
+	assert.Contains(t, errPkt.Error.Error(), "Invalid Voice ID")
+	assert.Empty(t, collector.AudioPackets(), "mismatched pairing should not produce audio")
+	assert.Empty(t, collector.EndPackets(), "mismatched pairing has no normal completion")
+	t.Logf("mismatch error surfaced: %v", errPkt.Error)
+}
+
 // ---------------------------------------------------------------------------
 // Smallest STT Integration Tests
 // ---------------------------------------------------------------------------

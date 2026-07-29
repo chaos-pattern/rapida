@@ -33,14 +33,28 @@ type TextToSpeechOutputData struct {
 	End   float64 `json:"end"`
 }
 
+// TextToSpeechOutputError is one entry of the "errors" array on an
+// error-status TTS response frame (e.g. a voice_id/model pairing rejected by
+// the server).
+type TextToSpeechOutputError struct {
+	Code    string   `json:"code"`
+	Path    []string `json:"path"`
+	Message string   `json:"message"`
+}
+
 // TextToSpeechOutput mirrors Smallest's TtsResponseMessage. Status is the
-// frame discriminator: "chunk" | "word_timestamp" | "complete".
+// frame discriminator: "chunk" | "word_timestamp" | "complete" | "error".
+// Message/Errors are only populated on "error" frames; the server sends
+// exactly one such frame and then holds the connection open without ever
+// sending "complete", so callers must treat "error" as terminal.
 type TextToSpeechOutput struct {
-	SessionID         string                 `json:"session_id"`
-	RequestID         string                 `json:"request_id"`
-	ExternalSessionID string                 `json:"external_session_id"`
-	Status            string                 `json:"status"`
-	Data              TextToSpeechOutputData `json:"data"`
+	SessionID         string                    `json:"session_id"`
+	RequestID         string                    `json:"request_id"`
+	ExternalSessionID string                    `json:"external_session_id"`
+	Status            string                    `json:"status"`
+	Message           string                    `json:"message"`
+	Errors            []TextToSpeechOutputError `json:"errors"`
+	Data              TextToSpeechOutputData    `json:"data"`
 }
 
 // SpeechToTextWord is a per-word timestamp entry (present when
