@@ -113,7 +113,8 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 			return
 		}
 		comm.OnPacket(ctx, internal_type.UserInputPacket{
-			Text: data.User.GetText(),
+			ContextID: data.User.Id,
+			Text:      data.User.GetText(),
 		})
 
 	case *protos.TalkOutput_Assistant:
