@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 
 	internal_options "github.com/rapidaai/api/assistant-api/internal/options"
 	smallest_internal "github.com/rapidaai/api/assistant-api/internal/transformer/smallest/internal"
@@ -93,6 +94,33 @@ func (so *smallestOption) GetSpeechToTextConnectionString() string {
 
 	if language, err := so.mdlOpts.GetString(internal_options.ListenOptionLanguage); err == nil && language != "" {
 		params.Add("language", language)
+	}
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionWordTimestamps); err == nil {
+		params.Add("word_timestamps", strconv.FormatBool(v))
+	}
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionSentenceTimestamps); err == nil {
+		params.Add("sentence_timestamps", strconv.FormatBool(v))
+	}
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionDiarize); err == nil {
+		params.Add("diarize", strconv.FormatBool(v))
+	}
+	// PII/PCI redaction: Names, addresses, phone numbers (PII) and card
+	// numbers, CVVs, ZIP codes, account numbers (PCI) are replaced with
+	// [ENTITYTYPE_N] placeholder tokens in the finalized transcript.
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionRedactPII); err == nil {
+		params.Add("redact_pii", strconv.FormatBool(v))
+	}
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionRedactPCI); err == nil {
+		params.Add("redact_pci", strconv.FormatBool(v))
+	}
+	if numerals, err := so.mdlOpts.GetString(internal_options.ListenOptionNumerals); err == nil && numerals != "" {
+		params.Add("numerals", numerals)
+	}
+	// format controls punctuation/capitalization in the transcript (Smallest
+	// defaults this to true server-side; disabling returns raw lowercase text).
+	// Reuses the shared smart-format option key rather than a Smallest-only one.
+	if v, err := so.mdlOpts.GetBool(internal_options.ListenOptionSmartFormat); err == nil {
+		params.Add("format", strconv.FormatBool(v))
 	}
 	return fmt.Sprintf("%s?%s", SPEECH_TO_TEXT_URL, params.Encode())
 }

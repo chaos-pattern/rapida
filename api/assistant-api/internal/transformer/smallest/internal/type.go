@@ -60,11 +60,21 @@ type TextToSpeechOutput struct {
 // SpeechToTextWord is a per-word timestamp entry (present when
 // word_timestamps=true was requested on connect).
 type SpeechToTextWord struct {
-	Word       string  `json:"word"`
-	Start      float64 `json:"start"`
-	End        float64 `json:"end"`
-	Confidence float64 `json:"confidence"`
-	Speaker    int     `json:"speaker"`
+	Word              string  `json:"word"`
+	Start             float64 `json:"start"`
+	End               float64 `json:"end"`
+	Confidence        float64 `json:"confidence"`
+	Speaker           int     `json:"speaker"`
+	SpeakerConfidence float64 `json:"speaker_confidence"`
+}
+
+// SpeechToTextUtterance is a sentence-level segment (present when
+// sentence_timestamps=true was requested on connect).
+type SpeechToTextUtterance struct {
+	Text    string  `json:"text"`
+	Start   float64 `json:"start"`
+	End     float64 `json:"end"`
+	Speaker int     `json:"speaker"`
 }
 
 // SpeechToTextOutput mirrors Smallest's Pulse realtime WebSocket messages.
@@ -74,15 +84,16 @@ type SpeechToTextWord struct {
 //   - VAD events ("type": "speech_started" | "speech_ended"): Type, SessionID,
 //     Timestamp.
 type SpeechToTextOutput struct {
-	Type             string             `json:"type"`
-	SessionID        string             `json:"session_id"`
-	Transcript       string             `json:"transcript"`
-	IsFinal          bool               `json:"is_final"`
-	IsLast           bool               `json:"is_last"`
-	FromFinalize     bool               `json:"from_finalize"`
-	Words            []SpeechToTextWord `json:"words"`
-	Language         string             `json:"language"`
-	Languages        []string           `json:"languages"`
-	RedactedEntities []string           `json:"redacted_entities"`
-	Timestamp        float64            `json:"timestamp"`
+	Type             string                  `json:"type"`
+	SessionID        string                  `json:"session_id"`
+	Transcript       string                  `json:"transcript"`
+	IsFinal          bool                    `json:"is_final"`
+	IsLast           bool                    `json:"is_last"`
+	FromFinalize     bool                    `json:"from_finalize"`
+	Words            []SpeechToTextWord      `json:"words"`
+	Utterances       []SpeechToTextUtterance `json:"utterances"`
+	Language         string                  `json:"language"`
+	Languages        []string                `json:"languages"`
+	RedactedEntities []string                `json:"redacted_entities"`
+	Timestamp        float64                 `json:"timestamp"`
 }

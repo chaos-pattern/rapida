@@ -221,6 +221,27 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 		}
 		cst.mu.Unlock()
 
+		attrs := observability.Attributes{
+			"type":       "completed",
+			"script":     resp.Transcript,
+			"confidence": "0.9000",
+			"language":   resp.Language,
+			"word_count": fmt.Sprintf("%d", len(strings.Fields(resp.Transcript))),
+			"char_count": fmt.Sprintf("%d", len(resp.Transcript)),
+		}
+		// Populated only when the corresponding feature (word_timestamps,
+		// sentence_timestamps, diarize, redact_pii/redact_pci) was requested
+		// via listen.* options — see GetSpeechToTextConnectionString.
+		if len(resp.Words) > 0 {
+			attrs["word_timestamp_count"] = fmt.Sprintf("%d", len(resp.Words))
+		}
+		if len(resp.Utterances) > 0 {
+			attrs["utterance_count"] = fmt.Sprintf("%d", len(resp.Utterances))
+		}
+		if len(resp.RedactedEntities) > 0 {
+			attrs["redacted_entities"] = strings.Join(resp.RedactedEntities, ",")
+		}
+
 		packets := []internal_type.Packet{
 			internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 			internal_type.SpeechToTextPacket{
@@ -233,16 +254,9 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 				ContextID: ctxID,
 				Scope:     internal_type.ObservabilityRecordScopeUserMessage,
 				Record: observability.RecordEvent{
-					Component: observability.ComponentSTT,
-					Event:     observability.STTCompleted,
-					Attributes: observability.Attributes{
-						"type":       "completed",
-						"script":     resp.Transcript,
-						"confidence": "0.9000",
-						"language":   resp.Language,
-						"word_count": fmt.Sprintf("%d", len(strings.Fields(resp.Transcript))),
-						"char_count": fmt.Sprintf("%d", len(resp.Transcript)),
-					},
+					Component:  observability.ComponentSTT,
+					Event:      observability.STTCompleted,
+					Attributes: attrs,
 					OccurredAt: now,
 				},
 			},

@@ -138,6 +138,43 @@ func TestGetSpeechToTextConnectionString_WithLanguage(t *testing.T) {
 	assert.Contains(t, connStr, "sample_rate=16000")
 }
 
+func TestGetSpeechToTextConnectionString_Default_OmitsFeatureFlags(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{"key": "my-key"})
+	opt, _ := NewSmallestOption(newTestLogger(), cred, utils.Option{})
+	connStr := opt.GetSpeechToTextConnectionString()
+	for _, absent := range []string{"word_timestamps", "sentence_timestamps", "diarize", "redact_pii", "redact_pci", "numerals", "format"} {
+		assert.NotContains(t, connStr, absent+"=", "should not set %s unless explicitly requested", absent)
+	}
+}
+
+func TestGetSpeechToTextConnectionString_WithFormat(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{"key": "my-key"})
+	opts := utils.Option{"listen.smart_format": false}
+	opt, _ := NewSmallestOption(newTestLogger(), cred, opts)
+	connStr := opt.GetSpeechToTextConnectionString()
+	assert.Contains(t, connStr, "format=false")
+}
+
+func TestGetSpeechToTextConnectionString_WithFeatureFlags(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{"key": "my-key"})
+	opts := utils.Option{
+		"listen.word_timestamps":     true,
+		"listen.sentence_timestamps": true,
+		"listen.diarize":             true,
+		"listen.redact_pii":          true,
+		"listen.redact_pci":          false,
+		"listen.numerals":            "auto",
+	}
+	opt, _ := NewSmallestOption(newTestLogger(), cred, opts)
+	connStr := opt.GetSpeechToTextConnectionString()
+	assert.Contains(t, connStr, "word_timestamps=true")
+	assert.Contains(t, connStr, "sentence_timestamps=true")
+	assert.Contains(t, connStr, "diarize=true")
+	assert.Contains(t, connStr, "redact_pii=true")
+	assert.Contains(t, connStr, "redact_pci=false")
+	assert.Contains(t, connStr, "numerals=auto")
+}
+
 func TestGetTextToSpeechConnectionString(t *testing.T) {
 	cred := newVaultCredential(map[string]interface{}{"key": "my-key"})
 	opt, _ := NewSmallestOption(newTestLogger(), cred, utils.Option{})
