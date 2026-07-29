@@ -149,7 +149,6 @@ func (tws *telnyxWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -220,7 +219,6 @@ func (tws *telnyxWebsocketStreamer) runWebSocketReader() {
 				Metadata: []*protos.Metadata{
 					{Key: observability.MetadataClientChannel, Value: internal_telnyx.Provider},
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
-					{Key: observability.MetadataCallStatus, Value: "connected"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
@@ -252,7 +250,6 @@ func (tws *telnyxWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
 					{Key: observability.MetadataClientCodec, Value: "mulaw"},
 					{Key: observability.MetadataClientSampleRate, Value: "8000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "telnyx.stream_id", Value: tws.streamID},
 					{Key: "telnyx.call_control_id", Value: tws.callControlID},
 				},
@@ -313,7 +310,6 @@ func (tws *telnyxWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
@@ -409,7 +405,6 @@ func (tws *telnyxWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "completed"},
 						{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 					},
 				}, observability.RecordMetric{
@@ -464,7 +459,6 @@ func (tws *telnyxWebsocketStreamer) Send(response internal_type.Stream) error {
 						},
 					}, observability.RecordMetadata{
 						Metadata: []*protos.Metadata{
-							{Key: observability.MetadataCallStatus, Value: "completed"},
 							{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 						},
 					}, observability.RecordMetric{
@@ -498,7 +492,6 @@ func (tws *telnyxWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for Telnyx"},
 				},
 			}, observability.RecordMetric{

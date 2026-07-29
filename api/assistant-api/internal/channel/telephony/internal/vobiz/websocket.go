@@ -122,7 +122,6 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -182,7 +181,6 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: vws.ChannelUUID},
 					{Key: observability.MetadataClientCodec, Value: "mulaw"},
 					{Key: observability.MetadataClientSampleRate, Value: "8000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "vobiz.stream_id", Value: vws.streamID},
 				},
 			}, observability.RecordMetric{
@@ -228,7 +226,6 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
@@ -294,7 +291,6 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 			},
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "completed"},
 				{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 			},
 		}, observability.RecordMetric{
@@ -323,7 +319,6 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 				},
 			}, observability.RecordMetric{
@@ -355,7 +350,6 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for Vobiz"},
 				},
 			}, observability.RecordMetric{

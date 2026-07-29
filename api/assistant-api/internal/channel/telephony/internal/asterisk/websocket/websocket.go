@@ -176,7 +176,6 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -263,7 +262,6 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 						{Key: observability.MetadataClientProviderCallID, Value: event.Channel},
 						{Key: observability.MetadataClientCodec, Value: "mulaw"},
 						{Key: observability.MetadataClientSampleRate, Value: "8000"},
-						{Key: observability.MetadataCallStatus, Value: "media_started"},
 						{Key: "asterisk.channel_name", Value: aws.channelName},
 						{Key: "asterisk.optimal_frame_size", Value: fmt.Sprintf("%d", event.OptimalFrameSize)},
 					},
@@ -288,7 +286,6 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 						{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 					},
 				}, observability.RecordMetric{
@@ -474,7 +471,6 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 				},
 			}, observability.RecordMetric{
@@ -525,7 +521,6 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "completed"},
 						{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 					},
 				}, observability.RecordMetric{
@@ -562,7 +557,6 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: "missing target or channel name"},
 					},
 				}, observability.RecordMetric{
@@ -611,7 +605,6 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: err.Error()},
 					},
 				}, observability.RecordMetric{
@@ -641,7 +634,6 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_dispatched"},
 						{Key: observability.MetadataBridgeTransferTarget, Value: to},
 						{Key: observability.MetadataBridgeTransferStatus, Value: "dispatched"},
 					},

@@ -135,7 +135,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -187,7 +186,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				Metadata: []*protos.Metadata{
 					{Key: observability.MetadataClientChannel, Value: internal_twilio.TwilioProvider},
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
-					{Key: observability.MetadataCallStatus, Value: "connected"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
@@ -217,7 +215,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
 					{Key: observability.MetadataClientCodec, Value: "mulaw"},
 					{Key: observability.MetadataClientSampleRate, Value: "8000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "twilio.stream_id", Value: tws.streamID},
 				},
 			}, observability.RecordMetric{
@@ -262,7 +259,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
@@ -376,7 +372,6 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 						},
 					}, observability.RecordMetadata{
 						Metadata: []*protos.Metadata{
-							{Key: observability.MetadataCallStatus, Value: "completed"},
 							{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 						},
 					}, observability.RecordMetric{
@@ -452,7 +447,6 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 							},
 						}, observability.RecordMetadata{
 							Metadata: []*protos.Metadata{
-								{Key: observability.MetadataCallStatus, Value: "completed"},
 								{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 							},
 						}, observability.RecordMetric{
@@ -490,7 +484,6 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: "missing target or call ID"},
 					},
 				}, observability.RecordMetric{
@@ -565,7 +558,6 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: err.Error()},
 					},
 				}, observability.RecordMetric{
@@ -594,7 +586,6 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_dispatched"},
 						{Key: observability.MetadataBridgeTransferTarget, Value: to},
 						{Key: observability.MetadataBridgeTransferStatus, Value: "dispatched"},
 					},

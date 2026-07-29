@@ -8,6 +8,7 @@ package internal_asterisk_telephony
 
 import (
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -24,6 +25,96 @@ func newAsteriskTelephonyForTest(t *testing.T) *asteriskTelephony {
 	return &asteriskTelephony{
 		appCfg: &config.AssistantConfig{},
 		logger: logger,
+	}
+}
+
+func TestStatusCallback_NormalizesChannelDestroyedCompleted(t *testing.T) {
+	tel := newAsteriskTelephonyForTest(t)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"type":"ChannelDestroyed","channel":{"id":"ast-chan-1"},"cause":16,"cause_txt":"NORMAL_CLEARING","duration_ms":2450}`
+	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+
+	info, err := tel.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Event != "ChannelDestroyed" {
+		t.Fatalf("expected ChannelDestroyed event, got %q", info.Event)
+	}
+	if !info.Completed {
+		t.Fatal("expected completed callback")
+	}
+	if info.Error != nil {
+		t.Fatalf("expected no error, got %+v", info.Error)
+	}
+	if info.ChannelUUID != "ast-chan-1" {
+		t.Fatalf("expected ChannelUUID ast-chan-1, got %q", info.ChannelUUID)
+	}
+	if info.Duration == nil || info.Duration.Milliseconds() != 2450 {
+		t.Fatalf("expected duration 2450ms, got %v", info.Duration)
+	}
+	if info.RawPayload != body {
+		t.Fatalf("expected raw payload %q, got %q", body, info.RawPayload)
+	}
+}
+
+func TestStatusCallback_NormalizesDialFailure(t *testing.T) {
+	tel := newAsteriskTelephonyForTest(t)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"type":"Dial","dialstatus":"BUSY","channel":{"id":"ast-chan-2"}}`
+	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+
+	info, err := tel.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Error == nil {
+		t.Fatal("expected failed status error")
+	}
+	if info.Error.Reason != "BUSY" {
+		t.Fatalf("expected failure reason BUSY, got %q", info.Error.Reason)
+	}
+	if info.ChannelUUID != "ast-chan-2" {
+		t.Fatalf("expected ChannelUUID ast-chan-2, got %q", info.ChannelUUID)
+	}
+}
+
+func TestStatusCallback_NormalizesRingingStateChange(t *testing.T) {
+	tel := newAsteriskTelephonyForTest(t)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"type":"ChannelStateChange","channel":{"id":"ast-chan-3","state":"Ring"}}`
+	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+
+	info, err := tel.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Event != "ringing" {
+		t.Fatalf("expected ringing event, got %q", info.Event)
+	}
+	if info.Completed || info.Error != nil {
+		t.Fatalf("ringing callback must not be terminal: completed=%v error=%+v", info.Completed, info.Error)
+	}
+	if info.ChannelUUID != "ast-chan-3" {
+		t.Fatalf("expected ChannelUUID ast-chan-3, got %q", info.ChannelUUID)
 	}
 }
 

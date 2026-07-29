@@ -326,9 +326,6 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	if metadataByKey[observability.MetadataDisconnectReason] != "outbound_rejected" {
 		t.Fatalf("expected disconnect reason metadata, got %q", metadataByKey[observability.MetadataDisconnectReason])
 	}
-	if metadataByKey[observability.MetadataCallStatus] != callcontext.CallStatusFailed {
-		t.Fatalf("expected call status metadata, got %q", metadataByKey[observability.MetadataCallStatus])
-	}
 	if metadataByKey[observability.MetadataFailureClass] != "busy" {
 		t.Fatalf("expected failure class metadata, got %q", metadataByKey[observability.MetadataFailureClass])
 	}

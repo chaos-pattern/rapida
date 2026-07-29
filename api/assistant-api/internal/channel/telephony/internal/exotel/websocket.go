@@ -135,7 +135,6 @@ func (exotel *exotelWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -188,7 +187,6 @@ func (exotel *exotelWebsocketStreamer) runWebSocketReader() {
 				Metadata: []*protos.Metadata{
 					{Key: observability.MetadataClientChannel, Value: internal_exotel.Provider},
 					{Key: observability.MetadataClientProviderCallID, Value: exotel.ChannelUUID},
-					{Key: observability.MetadataCallStatus, Value: "connected"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
@@ -218,7 +216,6 @@ func (exotel *exotelWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: exotel.ChannelUUID},
 					{Key: observability.MetadataClientCodec, Value: "linear16"},
 					{Key: observability.MetadataClientSampleRate, Value: "16000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "exotel.stream_id", Value: exotel.streamID},
 				},
 			}, observability.RecordMetric{
@@ -275,7 +272,6 @@ func (exotel *exotelWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
@@ -348,7 +344,6 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 			},
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "completed"},
 				{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 			},
 		}, observability.RecordMetric{
@@ -376,7 +371,6 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 				},
 			}, observability.RecordMetric{
@@ -413,7 +407,6 @@ func (exotel *exotelWebsocketStreamer) Send(response internal_type.Stream) error
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for Exotel"},
 				},
 			}, observability.RecordMetric{

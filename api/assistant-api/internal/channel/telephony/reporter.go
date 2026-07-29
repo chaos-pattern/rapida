@@ -252,7 +252,6 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 			)
 			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
 			metadata = append(metadata,
-				&protos.Metadata{Key: observability.MetadataCallStatus, Value: update.CallStatus},
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},
@@ -355,7 +354,6 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 			)
 			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
 			metadata = append(metadata,
-				&protos.Metadata{Key: observability.MetadataCallStatus, Value: update.CallStatus},
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},

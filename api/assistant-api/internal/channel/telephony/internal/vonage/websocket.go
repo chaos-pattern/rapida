@@ -132,7 +132,6 @@ func (vng *vonageWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
@@ -191,7 +190,6 @@ func (vng *vonageWebsocketStreamer) runWebSocketReader() {
 						{Key: observability.MetadataClientProviderCallID, Value: vng.GetConversationUuid()},
 						{Key: observability.MetadataClientCodec, Value: "linear16"},
 						{Key: observability.MetadataClientSampleRate, Value: "16000"},
-						{Key: observability.MetadataCallStatus, Value: "connected"},
 					},
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
@@ -213,7 +211,6 @@ func (vng *vonageWebsocketStreamer) runWebSocketReader() {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 						{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 					},
 				}, observability.RecordMetric{
@@ -357,7 +354,6 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 						},
 					}, observability.RecordMetadata{
 						Metadata: []*protos.Metadata{
-							{Key: observability.MetadataCallStatus, Value: "completed"},
 							{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 						},
 					}, observability.RecordMetric{
@@ -429,7 +425,6 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 						},
 					}, observability.RecordMetadata{
 						Metadata: []*protos.Metadata{
-							{Key: observability.MetadataCallStatus, Value: "completed"},
 							{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 						},
 					}, observability.RecordMetric{
@@ -468,7 +463,6 @@ func (vng *vonageWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for Vonage"},
 				},
 			}, observability.RecordMetric{

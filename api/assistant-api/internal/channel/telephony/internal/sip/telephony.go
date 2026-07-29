@@ -11,7 +11,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rapidaai/api/assistant-api/config"
@@ -87,23 +90,101 @@ func (t *sipTelephony) StatusCallback(
 	assistantConversationId uint64,
 ) (*internal_type.StatusInfo, error) {
 	payload := make(map[string]interface{})
+	rawPayload := ""
 	if body, err := c.GetRawData(); err == nil && len(body) > 0 {
+		rawPayload = string(body)
 		if json.Unmarshal(body, &payload) != nil {
-			if formErr := c.Request.ParseForm(); formErr == nil {
-				for k, v := range c.Request.PostForm {
+			if formValues, formErr := url.ParseQuery(rawPayload); formErr == nil {
+				for k, v := range formValues {
+					if len(v) == 0 {
+						continue
+					}
 					payload[k] = v[0]
 				}
 			}
 		}
 	}
 	if len(payload) == 0 {
+		rawPayload = c.Request.URL.RawQuery
 		for k, v := range c.Request.URL.Query() {
+			if len(v) == 0 {
+				continue
+			}
 			payload[k] = v[0]
 		}
 	}
 
 	eventType, _ := payload["event"].(string)
+	if eventType == "" {
+		eventType, _ = payload["status"].(string)
+	}
+	if eventType == "" {
+		eventType, _ = payload["state"].(string)
+	}
 	callID, _ := payload["call_id"].(string)
+	if callID == "" {
+		callID, _ = payload["callId"].(string)
+	}
+	if callID == "" {
+		callID, _ = payload["call-id"].(string)
+	}
+	if callID == "" {
+		callID, _ = payload["Call-ID"].(string)
+	}
+	if callID == "" {
+		callID, _ = payload["channel_uuid"].(string)
+	}
+
+	var durationPtr *time.Duration
+	duration, err := utils.Option(payload).GetDuration("duration")
+	if err != nil {
+		duration, err = utils.Option(payload).GetDuration("call_duration")
+	}
+	if err != nil {
+		duration, err = utils.Option(payload).GetDuration("CallDuration")
+	}
+	if err == nil {
+		durationPtr = utils.Ptr(duration)
+	}
+	if durationPtr == nil {
+		switch v := payload["duration_ms"].(type) {
+		case string:
+			if ms, parseErr := strconv.ParseFloat(strings.TrimSpace(v), 64); parseErr == nil {
+				duration := time.Duration(ms * float64(time.Millisecond))
+				durationPtr = utils.Ptr(duration)
+			}
+		case float64:
+			duration := time.Duration(v * float64(time.Millisecond))
+			durationPtr = utils.Ptr(duration)
+		case int:
+			duration := time.Duration(v) * time.Millisecond
+			durationPtr = utils.Ptr(duration)
+		case int64:
+			duration := time.Duration(v) * time.Millisecond
+			durationPtr = utils.Ptr(duration)
+		}
+	}
+
+	price, _ := payload["price"].(string)
+	if price == "" {
+		price, _ = payload["cost"].(string)
+	}
+	reason, _ := payload["reason"].(string)
+	if reason == "" {
+		reason, _ = payload["disconnect_reason"].(string)
+	}
+	if reason == "" {
+		reason, _ = payload["failure_reason"].(string)
+	}
+	if reason == "" {
+		reason, _ = payload["error_message"].(string)
+	}
+	if reason == "" {
+		reason, _ = payload["error"].(string)
+	}
+	if reason == "" {
+		reason, _ = payload["sip_code"].(string)
+	}
 
 	t.logger.Debug("SIP status callback received",
 		"event", eventType,
@@ -111,7 +192,30 @@ func (t *sipTelephony) StatusCallback(
 		"assistant_id", assistantId,
 		"conversation_id", assistantConversationId)
 
-	return &internal_type.StatusInfo{Event: eventType, Payload: payload}, nil
+	statusInfo := &internal_type.StatusInfo{
+		Event:       eventType,
+		ChannelUUID: callID,
+		Duration:    durationPtr,
+		Price:       price,
+		RawPayload:  rawPayload,
+		Payload:     payload,
+	}
+	switch strings.ToLower(eventType) {
+	case "completed", "complete", "ended", "end", "hangup", "bye", "terminated":
+		statusInfo.Completed = true
+	case "failed", "failure", "busy", "no-answer", "no_answer", "unanswered", "rejected", "timeout", "error":
+		if reason == "" {
+			reason = eventType
+		}
+		statusInfo.Error = &internal_type.StatusError{Error: "failed", Reason: reason}
+	}
+	if statusInfo.Error == nil && reason != "" {
+		errorCode, _ := payload["error_code"].(string)
+		if errorCode != "" {
+			statusInfo.Error = &internal_type.StatusError{Error: "failed", Reason: reason}
+		}
+	}
+	return statusInfo, nil
 }
 
 func (t *sipTelephony) CatchAllStatusCallback(ctx *gin.Context) (*internal_type.StatusInfo, error) {
@@ -265,7 +369,24 @@ func (t *sipTelephony) OutboundCall(
 		"assistant_id", assistant.Id,
 		"conversation_id", assistantConversationId)
 
-	return newOutboundInitiatedCallInfo(session, toPhone, fromUser, assistant.Id, assistantConversationId), nil
+	return &internal_type.CallInfo{
+		Provider:    internal_sip.Provider,
+		ChannelUUID: session.GetCallID(),
+		Status:      string(sip_infra.OutboundCallStatusInitiated),
+		StatusInfo: internal_type.StatusInfo{
+			Event: string(sip_infra.OutboundCallStatusInitiated),
+			Payload: map[string]interface{}{
+				"to":              toPhone,
+				"from":            fromUser,
+				"call_id":         session.GetCallID(),
+				"assistant_id":    assistant.Id,
+				"conversation_id": assistantConversationId,
+			},
+		},
+		Extra: map[string]string{
+			observability.MetricCallStatus: string(sip_infra.OutboundCallStatusInitiated),
+		},
+	}, nil
 }
 
 func (t *sipTelephony) outboundHealthGateEnabled(appCfg *config.AssistantConfig) bool {
@@ -273,29 +394,6 @@ func (t *sipTelephony) outboundHealthGateEnabled(appCfg *config.AssistantConfig)
 		return true
 	}
 	return *appCfg.SIPConfig.OutboundHealthGate
-}
-
-func newOutboundInitiatedCallInfo(session *sip_infra.Session, toPhone string, fromUser string, assistantID uint64, assistantConversationID uint64) *internal_type.CallInfo {
-	initiatedStatus := string(sip_infra.OutboundCallStatusInitiated)
-	callID := session.GetCallID()
-	return &internal_type.CallInfo{
-		Provider:    internal_sip.Provider,
-		ChannelUUID: callID,
-		Status:      initiatedStatus,
-		StatusInfo: internal_type.StatusInfo{
-			Event: initiatedStatus,
-			Payload: map[string]interface{}{
-				"to":              toPhone,
-				"from":            fromUser,
-				"call_id":         callID,
-				"assistant_id":    assistantID,
-				"conversation_id": assistantConversationID,
-			},
-		},
-		Extra: map[string]string{
-			observability.MetricCallStatus: initiatedStatus,
-		},
-	}
 }
 
 func (t *sipTelephony) InboundCall(

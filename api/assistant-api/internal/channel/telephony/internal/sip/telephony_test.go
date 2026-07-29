@@ -1,8 +1,8 @@
 package internal_sip_telephony
 
 import (
-	"context"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +41,103 @@ func newSIPTelephonyForTest() *sipTelephony {
 				MediaTimeout:        10 * time.Second,
 			},
 		},
+	}
+}
+
+func TestStatusCallback_NormalizesCompletedJSONPayload(t *testing.T) {
+	telephony := newSIPTelephonyForTest()
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := `{"event":"completed","call_id":"sip-call-1","duration_ms":1234,"price":"0.01"}`
+	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	c.Request = req
+
+	info, err := telephony.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Event != "completed" {
+		t.Fatalf("expected completed event, got %q", info.Event)
+	}
+	if !info.Completed {
+		t.Fatal("expected completed callback")
+	}
+	if info.Error != nil {
+		t.Fatalf("expected no error, got %+v", info.Error)
+	}
+	if info.ChannelUUID != "sip-call-1" {
+		t.Fatalf("expected ChannelUUID sip-call-1, got %q", info.ChannelUUID)
+	}
+	if info.Duration == nil || info.Duration.Milliseconds() != 1234 {
+		t.Fatalf("expected duration 1234ms, got %v", info.Duration)
+	}
+	if info.Price != "0.01" {
+		t.Fatalf("expected price 0.01, got %q", info.Price)
+	}
+	if info.RawPayload != body {
+		t.Fatalf("expected raw payload %q, got %q", body, info.RawPayload)
+	}
+}
+
+func TestStatusCallback_NormalizesFailedFormPayload(t *testing.T) {
+	telephony := newSIPTelephonyForTest()
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	body := "event=failed&call_id=sip-call-2&reason=no_answer"
+	req := httptest.NewRequest("POST", "/", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	c.Request = req
+
+	info, err := telephony.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Event != "failed" {
+		t.Fatalf("expected failed event, got %q", info.Event)
+	}
+	if info.Error == nil {
+		t.Fatal("expected failed status error")
+	}
+	if info.Error.Reason != "no_answer" {
+		t.Fatalf("expected failure reason no_answer, got %q", info.Error.Reason)
+	}
+	if info.ChannelUUID != "sip-call-2" {
+		t.Fatalf("expected ChannelUUID sip-call-2, got %q", info.ChannelUUID)
+	}
+}
+
+func TestStatusCallback_NormalizesCancelledQueryPayload(t *testing.T) {
+	telephony := newSIPTelephonyForTest()
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	req := httptest.NewRequest("GET", "/?event=cancelled&call_id=sip-call-3", nil)
+	c.Request = req
+
+	info, err := telephony.StatusCallback(c, nil, 42, 99)
+	if err != nil {
+		t.Fatalf("StatusCallback() error = %v", err)
+	}
+
+	if info.Event != "cancelled" {
+		t.Fatalf("expected cancelled event, got %q", info.Event)
+	}
+	if info.Completed {
+		t.Fatal("cancelled callback must not be completed")
+	}
+	if info.Error != nil {
+		t.Fatalf("cancelled callback should be reported as cancelled, not failed: %+v", info.Error)
+	}
+	if info.ChannelUUID != "sip-call-3" {
+		t.Fatalf("expected ChannelUUID sip-call-3, got %q", info.ChannelUUID)
 	}
 }
 
@@ -213,39 +310,6 @@ func TestParseConfig_NoCustomHeadersWhenMissing(t *testing.T) {
 
 	if cfg.CustomHeaders != nil {
 		t.Fatalf("expected nil custom headers, got %v", cfg.CustomHeaders)
-	}
-}
-
-func TestNewOutboundInitiatedCallInfo_UsesInitiatedStatus(t *testing.T) {
-	session, err := sip_infra.NewSession(context.Background(), &sip_infra.SessionConfig{
-		Config: &sip_infra.Config{
-			Server:            "trunk.example.org",
-			Port:              5060,
-			Transport:         sip_infra.TransportUDP,
-			RTPPortRangeStart: 10000,
-			RTPPortRangeEnd:   10100,
-		},
-		Direction: sip_infra.CallDirectionOutbound,
-		CallID:    "sip-call-1",
-		Codec:     &sip_infra.CodecPCMU,
-	})
-	if err != nil {
-		t.Fatalf("NewSession() error = %v", err)
-	}
-
-	info := newOutboundInitiatedCallInfo(session, "+15551234567", "+15557654321", 42, 99)
-
-	if info.Status != string(sip_infra.OutboundCallStatusInitiated) {
-		t.Fatalf("expected initiated status, got %q", info.Status)
-	}
-	if info.Status == "SUCCESS" {
-		t.Fatal("outbound call must not report SUCCESS before answer")
-	}
-	if info.StatusInfo.Event != string(sip_infra.OutboundCallStatusInitiated) {
-		t.Fatalf("expected initiated event, got %q", info.StatusInfo.Event)
-	}
-	if info.Extra["call.status"] != string(sip_infra.OutboundCallStatusInitiated) {
-		t.Fatalf("expected call.status initiated, got %q", info.Extra["call.status"])
 	}
 }
 

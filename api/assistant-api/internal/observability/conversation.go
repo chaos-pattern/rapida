@@ -53,7 +53,6 @@ const (
 	MetadataDisconnectText      = "disconnect_text"
 	MetadataDisconnectRawReason = "disconnect_raw_reason"
 
-	MetadataCallStatus         = "call_status"
 	MetadataCallError          = "call_error"
 	MetadataFailureClass       = "failure_class"
 	MetadataFailureReason      = "failure_reason"
