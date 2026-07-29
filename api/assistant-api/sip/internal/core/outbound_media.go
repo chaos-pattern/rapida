@@ -62,12 +62,7 @@ func (media *outboundMedia) Prepare() error {
 		return fmt.Errorf("no RTP ports available: %w", err)
 	}
 
-	rtpHandlerFactory := media.server.newRTPHandler
-	if rtpHandlerFactory == nil {
-		rtpHandlerFactory = NewRTPHandler
-	}
-
-	rtpHandler, err := rtpHandlerFactory(context.Background(), &RTPConfig{
+	rtpHandler, err := NewRTPHandler(context.Background(), &RTPConfig{
 		LocalIP:             media.server.listenConfig.GetBindAddress(),
 		LocalPort:           media.allocatedRTPPort,
 		PayloadType:         CodecPCMU.PayloadType,
@@ -83,6 +78,13 @@ func (media *outboundMedia) Prepare() error {
 	}
 
 	_, media.localRTPPort = rtpHandler.LocalAddr()
+	if media.localRTPPort != media.allocatedRTPPort {
+		_ = rtpHandler.Stop()
+		media.server.rtpAllocator.Release(media.allocatedRTPPort)
+		allocatedPort := media.allocatedRTPPort
+		media.allocatedRTPPort = 0
+		return fmt.Errorf("RTP handler bound unexpected port %d, allocated %d", media.localRTPPort, allocatedPort)
+	}
 	media.rtpHandler = rtpHandler
 	media.externalIP = media.server.listenConfig.GetExternalIP()
 	media.session.SetLocalRTP(media.externalIP, media.localRTPPort)

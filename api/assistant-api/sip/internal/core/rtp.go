@@ -54,8 +54,6 @@ type RTPPacket struct {
 	Payload        []byte
 }
 
-type RTPHandlerFactory func(context.Context, *RTPConfig) (*RTPHandler, error)
-
 // RTPHandler manages RTP streams for SIP calls
 // No WebSocket needed - audio goes directly over RTP/UDP
 type RTPHandler struct {

@@ -74,12 +74,11 @@ type Server struct {
 	logger commons.Logger
 	state  atomic.Int32
 
-	ua            *sipgo.UserAgent
-	server        *sipgo.Server
-	client        *sipgo.Client
-	listenConfig  *ListenConfig // Shared server listen config (address, port, transport)
-	rtpAllocator  RTPAllocator  // Allocates RTP ports from configured range
-	newRTPHandler RTPHandlerFactory
+	userAgent    *sipgo.UserAgent
+	server       *sipgo.Server
+	client       *sipgo.Client
+	listenConfig *ListenConfig // Shared server listen config (address, port, transport)
+	rtpAllocator RTPAllocator  // Allocates RTP ports from configured range
 
 	// Outbound dialog cache — routes incoming BYE/re-INVITE to the correct
 	// DialogClientSession. Without this, BYE from the remote side is handled
@@ -306,12 +305,11 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 
 	s := &Server{
 		logger:                           cfg.Logger,
-		ua:                               ua,
+		userAgent:                        ua,
 		server:                           server,
 		client:                           client,
 		listenConfig:                     cfg.ListenConfig,
 		rtpAllocator:                     rtpAllocator,
-		newRTPHandler:                    NewRTPHandler,
 		dialogClientCache:                dialogClientCache,
 		dialogServerCache:                dialogServerCache,
 		middlewares:                      append([]Middleware(nil), cfg.Middlewares...),

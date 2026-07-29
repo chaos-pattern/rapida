@@ -130,7 +130,7 @@ func newServerForCommandTests(t *testing.T) *Server {
 		Address: sip.Uri{Scheme: "sip", Host: "127.0.0.1", Port: 5060},
 	}
 
-	return &Server{
+	server := &Server{
 		logger:            bridgeTestLogger(),
 		listenConfig:      &ListenConfig{Address: "127.0.0.1", Port: 5060, ExternalIP: "127.0.0.1"},
 		dialogClientCache: sipgo.NewDialogClientCache(client, contact),
@@ -142,6 +142,21 @@ func newServerForCommandTests(t *testing.T) *Server {
 		inboundACKTimeout: defaultInboundACKTimeout,
 		ctx:               context.Background(),
 	}
+	t.Cleanup(func() {
+		if server.rtpAllocator == nil {
+			return
+		}
+		server.mu.RLock()
+		sessions := make([]*Session, 0, len(server.sessions))
+		for _, session := range server.sessions {
+			sessions = append(sessions, session)
+		}
+		server.mu.RUnlock()
+		for _, session := range sessions {
+			_ = server.EndCallWithReason(session, LifecycleReasonEndCall)
+		}
+	})
+	return server
 }
 
 func newSIPRequest(method sip.RequestMethod, callID string) *sip.Request {

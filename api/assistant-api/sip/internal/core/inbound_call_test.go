@@ -308,7 +308,6 @@ func TestInboundCall_NoPayloadTypesRejects488(t *testing.T) {
 func TestInboundCall_RTPAllocationFailureEndsLifecycle(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = failingInboundRTPAllocator{err: errors.New("rtp exhausted")}
-	server.newRTPHandler = testOutboundRTPHandler
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -326,10 +325,7 @@ func TestInboundCall_RTPAllocationFailureEndsLifecycle(t *testing.T) {
 
 func TestInboundCall_RTPHandlerCreationFailureEndsLifecycle(t *testing.T) {
 	server := newServerForCommandTests(t)
-	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = func(context.Context, *RTPConfig) (*RTPHandler, error) {
-		return nil, errors.New("rtp bind failed")
-	}
+	server.rtpAllocator = &testRTPAllocator{nextPort: 70000}
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -341,7 +337,7 @@ func TestInboundCall_RTPHandlerCreationFailureEndsLifecycle(t *testing.T) {
 
 	require.NotEmpty(t, transaction.responses)
 	assert.Equal(t, 503, transaction.lastStatus())
-	assert.Equal(t, 19000, server.rtpAllocator.(*testRTPAllocator).releasePort)
+	assert.Equal(t, 70000, server.rtpAllocator.(*testRTPAllocator).releasePort)
 	assert.Equal(t, 1, server.rtpAllocator.(*testRTPAllocator).releaseCount)
 	_, exists := server.GetSession("inbound-rtp-handler-failed")
 	assert.False(t, exists)
@@ -426,7 +422,6 @@ func TestInboundCall_CancelBeforeSessionCreationStopsSetup(t *testing.T) {
 func TestInboundCall_ApplicationReadyBeforeAnswerAndMediaStart(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -461,7 +456,6 @@ func TestInboundCall_ApplicationReadyBeforeAnswerAndMediaStart(t *testing.T) {
 func TestInboundCall_ProvisionalResponsesBeforeAnswer(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -481,7 +475,6 @@ func TestInboundCall_ProvisionalResponsesBeforeAnswer(t *testing.T) {
 func TestInboundCall_StartsRTPAfterACK(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -516,7 +509,6 @@ func TestInboundCall_RetransmitsRingingUntilAnswer(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.inboundRingingInterval = 5 * time.Millisecond
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -556,7 +548,6 @@ func TestInboundCall_RetransmitsRingingUntilAnswer(t *testing.T) {
 func TestInboundCall_WaitsForApplicationReadyBeforeAnswer(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -593,7 +584,6 @@ func TestInboundCall_WaitsForApplicationReadyBeforeAnswer(t *testing.T) {
 func TestInboundCall_MinRingPolicyDelaysAnswer(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	minRingDuration := 25 * time.Millisecond
 	config := bridgeTestConfig()
 	config.InboundAnswerMode = InboundAnswerModeAfterMinRingDuration
@@ -637,7 +627,6 @@ func TestInboundCall_MinRingConfigRequiresDuration(t *testing.T) {
 func TestInboundCall_AnswersAfterApplicationReadyWithoutAssistantAudio(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	config := bridgeTestConfig()
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = config
@@ -673,7 +662,6 @@ func TestInboundCall_UDPFinalResponseRetransmitsUntilACKTimeout(t *testing.T) {
 	server.inboundFinalResponseRetryInitial = 5 * time.Millisecond
 	server.inboundFinalResponseRetryMax = 5 * time.Millisecond
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -697,7 +685,6 @@ func TestInboundCall_UDPFinalResponseRetransmitsUntilACKTimeout(t *testing.T) {
 func TestInboundCall_RecordsInboundLatencyMetrics(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -720,7 +707,6 @@ func TestInboundCall_RecordsInboundLatencyMetrics(t *testing.T) {
 func TestInboundCall_ApplicationReadinessFailureRejectsBeforeAnswer(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -751,7 +737,6 @@ func TestInboundCall_ACKTimeoutCleansPreparedApplication(t *testing.T) {
 	server.inboundACKTimeout = time.Millisecond
 	rtpAllocator := &testRTPAllocator{nextPort: 19000}
 	server.rtpAllocator = rtpAllocator
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -793,7 +778,6 @@ func TestInboundCall_ACKTimeoutCleansPreparedApplication(t *testing.T) {
 func TestInboundCall_CancelWhileWaitingForACKDoesNotSend487After200(t *testing.T) {
 	server := newServerForCommandTests(t)
 	server.rtpAllocator = &testRTPAllocator{nextPort: 19000}
-	server.newRTPHandler = inboundNoopRTPHandler(server)
 	server.SetMiddlewares([]Middleware{func(ctx *SIPRequestContext) error {
 		ctx.Config = bridgeTestConfig()
 		return nil
@@ -1083,17 +1067,6 @@ func assertNoSessionMetadata(t *testing.T, session *Session, key string) {
 	t.Helper()
 	_, ok := session.GetMetadata(key)
 	assert.False(t, ok, "metadata %s should be absent", key)
-}
-
-func inboundNoopRTPHandler(server *Server) RTPHandlerFactory {
-	return func(_ context.Context, cfg *RTPConfig) (*RTPHandler, error) {
-		handler := newTestRTPHandler()
-		handler.localIP = cfg.LocalIP
-		handler.localPort = cfg.LocalPort
-		handler.codec = &CodecPCMU
-		handler.logger = server.logger
-		return handler, nil
-	}
 }
 
 func unsupportedInboundOfferSDP() string {

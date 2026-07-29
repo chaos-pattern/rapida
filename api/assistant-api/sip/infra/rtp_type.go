@@ -27,8 +27,6 @@ type RTPPacket struct {
 	Payload        []byte
 }
 
-type RTPHandlerFactory func(context.Context, *RTPConfig) (*RTPHandler, error)
-
 type RTPFallbackAudioSource func(frameSize int) []byte
 
 type RTPHandler struct {

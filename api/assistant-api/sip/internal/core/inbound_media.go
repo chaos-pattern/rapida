@@ -50,18 +50,14 @@ func (media *inboundMedia) Prepare() error {
 		return fmt.Errorf("no RTP ports available: %w", err)
 	}
 
-	rtpHandlerFactory := media.server.newRTPHandler
-	if rtpHandlerFactory == nil {
-		rtpHandlerFactory = NewRTPHandler
-	}
-
 	// The port remains owned by inboundMedia until the session adopts it.
 	// Session teardown releases the port after it is stored on the session.
-	rtpHandler, err := rtpHandlerFactory(media.server.ctx, &RTPConfig{
+	rtpHandler, err := NewRTPHandler(media.server.ctx, &RTPConfig{
 		LocalIP:             media.server.listenConfig.GetBindAddress(),
 		LocalPort:           media.allocatedRTPPort,
 		PayloadType:         media.mediaOffer.negotiatedCodec.PayloadType,
 		ClockRate:           media.mediaOffer.negotiatedCodec.ClockRate,
+		Logger:              media.server.logger,
 		MediaTimeoutInitial: media.session.config.MediaTimeoutInitial,
 		MediaTimeout:        media.session.config.MediaTimeout,
 	})
@@ -69,6 +65,15 @@ func (media *inboundMedia) Prepare() error {
 		media.server.rtpAllocator.Release(media.allocatedRTPPort)
 		media.allocatedRTPPort = 0
 		return fmt.Errorf("failed to create RTP handler: %w", err)
+	}
+
+	_, media.localRTPPort = rtpHandler.LocalAddr()
+	if media.localRTPPort != media.allocatedRTPPort {
+		_ = rtpHandler.Stop()
+		media.server.rtpAllocator.Release(media.allocatedRTPPort)
+		allocatedPort := media.allocatedRTPPort
+		media.allocatedRTPPort = 0
+		return fmt.Errorf("RTP handler bound unexpected port %d, allocated %d", media.localRTPPort, allocatedPort)
 	}
 
 	rtpHandler.SetRemoteAddr(media.mediaOffer.sdpInfo.ConnectionIP, media.mediaOffer.sdpInfo.AudioPort)
@@ -79,7 +84,6 @@ func (media *inboundMedia) Prepare() error {
 		}
 	})
 
-	_, media.localRTPPort = rtpHandler.LocalAddr()
 	media.rtpHandler = rtpHandler
 	media.externalIP = media.server.listenConfig.GetExternalIP()
 

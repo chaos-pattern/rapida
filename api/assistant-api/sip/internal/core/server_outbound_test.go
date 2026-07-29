@@ -33,7 +33,6 @@ func TestMakeCall_RegistersSessionBeforeInviteAndUsesSessionCallID(t *testing.T)
 		logger:            bridgeTestLogger(),
 		listenConfig:      outboundTestListenConfig(),
 		rtpAllocator:      &testRTPAllocator{nextPort: rtpPort},
-		newRTPHandler:     testOutboundRTPHandler,
 		dialogClientCache: dialogClientCache,
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
@@ -71,17 +70,10 @@ func TestMakeCall_InviteFailureEndsRegisteredSessionAndReportsFailure(t *testing
 	}
 	dialogClientCache := sipgo.NewDialogClientCache(client, contact)
 	rtpPort := 19000
-	var preparedRTPHandler *RTPHandler
 	server := &Server{
-		logger:       bridgeTestLogger(),
-		listenConfig: outboundTestListenConfig(),
-		rtpAllocator: &testRTPAllocator{nextPort: rtpPort},
-		newRTPHandler: func(_ context.Context, cfg *RTPConfig) (*RTPHandler, error) {
-			preparedRTPHandler = newTestRTPHandler()
-			preparedRTPHandler.localIP = cfg.LocalIP
-			preparedRTPHandler.localPort = cfg.LocalPort
-			return preparedRTPHandler, nil
-		},
+		logger:            bridgeTestLogger(),
+		listenConfig:      outboundTestListenConfig(),
+		rtpAllocator:      &testRTPAllocator{nextPort: rtpPort},
 		dialogClientCache: dialogClientCache,
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
@@ -99,8 +91,6 @@ func TestMakeCall_InviteFailureEndsRegisteredSessionAndReportsFailure(t *testing
 	require.Error(t, err)
 	assert.Equal(t, rtpPort, server.rtpAllocator.(*testRTPAllocator).releasePort)
 	assert.Equal(t, 1, server.rtpAllocator.(*testRTPAllocator).releaseCount)
-	require.NotNil(t, preparedRTPHandler)
-	assert.True(t, preparedRTPHandler.closed.Load())
 	assert.Equal(t, requester.observedCallID(), statusUpdate.ChannelUUID)
 	assert.Equal(t, string(OutboundCallStatusFailed), statusUpdate.CallStatus)
 	assert.Equal(t, "failed to send INVITE: invite send failed", statusUpdate.ErrorMessage)
@@ -131,7 +121,6 @@ func TestMakeCall_SessionSurvivesRequestContextAfterInvite(t *testing.T) {
 		logger:            bridgeTestLogger(),
 		listenConfig:      outboundTestListenConfig(),
 		rtpAllocator:      &testRTPAllocator{nextPort: 19000},
-		newRTPHandler:     testOutboundRTPHandler,
 		dialogClientCache: dialogClientCache,
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
@@ -176,7 +165,6 @@ func TestPrepareOutboundCallLeg_AppliesTransferBridgeMetadata(t *testing.T) {
 		logger:            bridgeTestLogger(),
 		listenConfig:      outboundTestListenConfig(),
 		rtpAllocator:      &testRTPAllocator{nextPort: 19000},
-		newRTPHandler:     testOutboundRTPHandler,
 		dialogClientCache: dialogClientCache,
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
@@ -224,13 +212,6 @@ func assertSessionMetadata(t *testing.T, session *Session, key string, expected 
 	value, ok := session.GetMetadata(key)
 	require.True(t, ok, "metadata %s missing", key)
 	assert.Equal(t, expected, value)
-}
-
-func testOutboundRTPHandler(ctx context.Context, cfg *RTPConfig) (*RTPHandler, error) {
-	return &RTPHandler{
-		localIP:   cfg.LocalIP,
-		localPort: cfg.LocalPort,
-	}, nil
 }
 
 type sessionObservationRequester struct {
