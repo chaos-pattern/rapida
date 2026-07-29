@@ -95,10 +95,10 @@ func DisconnectMetadata(reason, text, rawReason string) []*protos.Metadata {
 	return metadata
 }
 
-// CallStatusMetric returns the current CONVERSATION_STATUS metric shape.
+// CallStatusMetric returns the canonical call status metric shape.
 func CallStatusMetric(status, reason string) []*protos.Metric {
 	return []*protos.Metric{{
-		Name:        MetricConversationStatus,
+		Name:        MetricCallStatus,
 		Value:       status,
 		Description: reason,
 	}}

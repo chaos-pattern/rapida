@@ -1062,6 +1062,12 @@ func (s *webrtcStreamer) enqueueOutputAudio(frame []byte) {
 				webrtc_internal.DataQueueDepthFrames:   fmt.Sprintf("%d", queueDepth),
 				webrtc_internal.DataTotalDroppedFrames: fmt.Sprintf("%d", totalDropped),
 			},
+		}, observability.RecordMetric{
+			Metrics: []*protos.Metric{{
+				Name:        observability.MetricWebRTCOutputQueueDrops,
+				Value:       fmt.Sprintf("%d", droppedFrames),
+				Description: "WebRTC output queue dropped frames",
+			}},
 		})
 	}
 }

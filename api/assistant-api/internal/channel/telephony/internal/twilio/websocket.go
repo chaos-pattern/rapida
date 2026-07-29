@@ -141,7 +141,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Twilio websocket reader closed",
 				}},
 			})
@@ -166,7 +166,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Failed to unmarshal Twilio media event",
 				}},
 			})
@@ -192,7 +192,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Twilio websocket connected",
 				}},
 			})
@@ -223,7 +223,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Twilio media stream started",
 				}},
 			})
@@ -243,7 +243,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Twilio media frame processing failed",
 					}},
 				})
@@ -268,7 +268,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Twilio media stream stopped by provider",
 				}},
 			})
@@ -338,7 +338,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to create Twilio client for server-side disconnect",
 					}},
 				})
@@ -359,7 +359,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "FAILED",
+							Value:       observability.MetricCallStatusFailed,
 							Description: "Failed to end Twilio call on server-side disconnect",
 						}},
 					})
@@ -382,7 +382,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "COMPLETE",
+							Value:       observability.MetricCallStatusComplete,
 							Description: "Twilio call ended by server-side disconnect",
 						}},
 					})
@@ -412,7 +412,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "FAILED",
+							Value:       observability.MetricCallStatusFailed,
 							Description: "Failed to end Twilio call",
 						}},
 					})
@@ -434,7 +434,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 						}, observability.RecordMetric{
 							Metrics: []*protos.Metric{{
 								Name:        observability.MetricCallStatus,
-								Value:       "FAILED",
+								Value:       observability.MetricCallStatusFailed,
 								Description: "Failed to create Twilio client for end conversation",
 							}},
 						})
@@ -458,7 +458,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 						}, observability.RecordMetric{
 							Metrics: []*protos.Metric{{
 								Name:        observability.MetricCallStatus,
-								Value:       "COMPLETE",
+								Value:       observability.MetricCallStatusComplete,
 								Description: "Twilio call ended by tool action",
 							}},
 						})
@@ -496,7 +496,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Twilio transfer failed before dispatch",
 					}},
 				})
@@ -538,7 +538,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to create Twilio client for transfer",
 					}},
 				})
@@ -571,7 +571,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Twilio transfer dispatch failed",
 					}},
 				})
@@ -601,7 +601,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "INPROGRESS",
+						Value:       observability.MetricCallStatusInProgress,
 						Description: "Twilio transfer dispatched",
 					}},
 				})
@@ -684,7 +684,7 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Twilio media event missing media payload",
 			}},
 		})
@@ -705,7 +705,7 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to decode Twilio media payload",
 			}},
 		})
@@ -751,7 +751,7 @@ func (tws *twilioWebsocketStreamer) sendTwilioMessage(
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to marshal Twilio message",
 			}},
 		})
@@ -778,7 +778,7 @@ func (tws *twilioWebsocketStreamer) sendTwilioMessage(
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to send message to Twilio",
 			}},
 		})

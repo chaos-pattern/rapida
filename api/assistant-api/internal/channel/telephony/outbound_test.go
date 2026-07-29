@@ -311,8 +311,8 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	if len(service.metrics) != 1 {
 		t.Fatalf("expected one status metric, got %+v", service.metrics)
 	}
-	if service.metrics[0].Name != observability.MetricConversationStatus ||
-		service.metrics[0].Value != "FAILED" ||
+	if service.metrics[0].Name != observability.MetricCallStatus ||
+		service.metrics[0].Value != observability.MetricCallStatusFailed ||
 		service.metrics[0].Description != "Busy Here" {
 		t.Fatalf("unexpected status metric: %+v", service.metrics[0])
 	}
@@ -393,8 +393,8 @@ func TestOutboundDispatcher_StatusReporterRecordsRingingProgressObservability(t 
 	if len(service.metrics) != 1 {
 		t.Fatalf("expected one ringing metric, got %+v", service.metrics)
 	}
-	if service.metrics[0].Name != observability.MetricConversationStatus ||
-		service.metrics[0].Value != "RINGING" ||
+	if service.metrics[0].Name != observability.MetricCallStatus ||
+		service.metrics[0].Value != observability.MetricCallStatusRinging ||
 		service.metrics[0].Description != "outbound_progress_ringing" {
 		t.Fatalf("unexpected ringing metric: %+v", service.metrics[0])
 	}

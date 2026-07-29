@@ -101,6 +101,17 @@ func (d *Dispatcher) runSession(ctx context.Context, v SessionConnectedPipeline)
 						"direction":  v.CallContext.Direction,
 						"error":      fmt.Sprintf("%v", r),
 					},
+				},
+				observability.RecordMetric{
+					Metrics: []*protos.Metric{{
+						Name:        observability.MetricCallStatus,
+						Value:       observability.MetricCallStatusFailed,
+						Description: fmt.Sprintf("%v", r),
+					}, {
+						Name:        observability.MetricCallDurationMs,
+						Value:       fmt.Sprintf("%d", time.Since(startTime).Milliseconds()),
+						Description: "Call duration in milliseconds",
+					}},
 				})
 			result = &PipelineResult{ContextID: contextID, Error: fmt.Errorf("%v", r)}
 		}
@@ -142,6 +153,22 @@ func (d *Dispatcher) runSession(ctx context.Context, v SessionConnectedPipeline)
 					"duration_ms": fmt.Sprintf("%d", time.Since(startTime).Milliseconds()),
 				},
 			})
+		v.Observer.Record(ctx,
+			observability.ConversationScope{
+				AssistantScope: observability.AssistantScope{AssistantID: v.CallContext.AssistantID},
+				ConversationID: v.CallContext.ConversationID,
+			},
+			observability.RecordMetric{
+				Metrics: []*protos.Metric{{
+					Name:        observability.MetricCallStatus,
+					Value:       observability.MetricCallStatusFailed,
+					Description: err.Error(),
+				}, {
+					Name:        observability.MetricCallDurationMs,
+					Value:       fmt.Sprintf("%d", time.Since(startTime).Milliseconds()),
+					Description: "Call duration in milliseconds",
+				}},
+			})
 		return &PipelineResult{ContextID: contextID, Error: err}
 	}
 	v.Observer.Record(ctx,
@@ -179,7 +206,7 @@ func (d *Dispatcher) runSession(ctx context.Context, v SessionConnectedPipeline)
 			Metrics: []*protos.Metric{
 				{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Call talk return with success",
 				},
 				{

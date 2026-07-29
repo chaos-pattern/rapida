@@ -182,7 +182,7 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk websocket reader closed",
 				}},
 			})
@@ -209,7 +209,7 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Asterisk media frame processing failed",
 					}},
 				})
@@ -231,7 +231,7 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to parse Asterisk event",
 					}},
 				})
@@ -270,7 +270,7 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "INPROGRESS",
+						Value:       observability.MetricCallStatusInProgress,
 						Description: "Asterisk media stream started",
 					}},
 				})
@@ -294,7 +294,7 @@ func (aws *asteriskWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "COMPLETE",
+						Value:       observability.MetricCallStatusComplete,
 						Description: "Asterisk media stream stopped by provider",
 					}},
 				})
@@ -420,7 +420,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to process Asterisk output audio",
 					}},
 				})
@@ -456,7 +456,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Failed to hang up Asterisk call for disconnection",
 				}},
 			})
@@ -480,7 +480,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk call ended by server-side disconnect",
 				}},
 			})
@@ -506,7 +506,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to hang up Asterisk call",
 					}},
 				})
@@ -531,7 +531,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "COMPLETE",
+						Value:       observability.MetricCallStatusComplete,
 						Description: "Asterisk call ended by tool action",
 					}},
 				})
@@ -568,7 +568,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Asterisk transfer failed before dispatch",
 					}},
 				})
@@ -617,7 +617,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Asterisk ARI redirect failed",
 					}},
 				})
@@ -648,7 +648,7 @@ func (aws *asteriskWebsocketStreamer) Send(response internal_type.Stream) error 
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "INPROGRESS",
+						Value:       observability.MetricCallStatusInProgress,
 						Description: "Asterisk transfer dispatched",
 					}},
 				})

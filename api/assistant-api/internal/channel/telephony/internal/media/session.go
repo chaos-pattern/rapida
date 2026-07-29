@@ -197,7 +197,7 @@ func (mediaSession *MediaSession) runOutputHealthReporter(mediaEngine MediaEngin
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Telephony output send error",
 					}},
 				})
@@ -279,7 +279,7 @@ func (mediaSession *MediaSession) ConsumeFrame(providerAudio []byte) error {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Telephony output send failed",
 				}},
 			})

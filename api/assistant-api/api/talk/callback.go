@@ -9,6 +9,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
@@ -127,7 +128,7 @@ func (cApi *ConversationApi) UnviersalCallback(c *gin.Context) {
 				ConversationID: cc.ConversationID,
 			},
 			observability.RecordMetric{
-				Metrics: observability.CallStatusMetric("FAILED", statusInfo.Error.Reason),
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, statusInfo.Error.Reason),
 			})
 		if validator.NotBlank(statusInfo.Error.Reason) {
 			observer.Record(c,
@@ -146,11 +147,48 @@ func (cApi *ConversationApi) UnviersalCallback(c *gin.Context) {
 		}); err != nil {
 			cApi.logger.Warnf("failed to update call context %s from completed callback: %v", cc.ContextID, err)
 		}
+		observer.Record(c,
+			observability.ConversationScope{
+				AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+				ConversationID: cc.ConversationID,
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusComplete, statusInfo.Event),
+			})
 	} else if validator.NotBlank(statusInfo.Event) {
 		if err := cApi.callContextStore.UpdateCallStatus(c, cc.ContextID, callcontext.CallStatusUpdate{
 			CallStatus: statusInfo.Event,
 		}); err != nil {
 			cApi.logger.Warnf("failed to update call context %s from callback event %s: %v", cc.ContextID, statusInfo.Event, err)
+		}
+		switch strings.ToUpper(statusInfo.Event) {
+		case "RINGING":
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusRinging, statusInfo.Event),
+				})
+		case "CANCELLED", "CANCELED":
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusCancelled, statusInfo.Event),
+				})
+		default:
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusInProgress, statusInfo.Event),
+				})
 		}
 	}
 	if validator.NonNil(statusInfo.Duration) {
@@ -160,7 +198,7 @@ func (cApi *ConversationApi) UnviersalCallback(c *gin.Context) {
 				ConversationID: cc.ConversationID,
 			},
 			observability.RecordMetric{Metrics: []*protos.Metric{
-				{Name: observability.MetricTelephonyDuration, Value: strconv.FormatInt(statusInfo.Duration.Nanoseconds(), 10)},
+				{Name: observability.MetricCallDurationMs, Value: strconv.FormatInt(statusInfo.Duration.Milliseconds(), 10), Description: "Call duration in milliseconds"},
 			}},
 		)
 	}
@@ -171,7 +209,7 @@ func (cApi *ConversationApi) UnviersalCallback(c *gin.Context) {
 				ConversationID: cc.ConversationID,
 			},
 			observability.RecordMetric{Metrics: []*protos.Metric{
-				{Name: observability.MetricTelephonyPrice, Value: statusInfo.Price},
+				{Name: observability.MetricCallPrice, Value: statusInfo.Price, Description: "Call price"},
 			}},
 		)
 	}
@@ -285,7 +323,7 @@ func (cApi *ConversationApi) CallbackByContext(c *gin.Context) {
 				ConversationID: cc.ConversationID,
 			},
 			observability.RecordMetric{
-				Metrics: observability.CallStatusMetric("FAILED", statusInfo.Error.Reason),
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, statusInfo.Error.Reason),
 			})
 		if validator.NotBlank(statusInfo.Error.Reason) {
 			observer.Record(c, observability.ConversationScope{
@@ -303,11 +341,48 @@ func (cApi *ConversationApi) CallbackByContext(c *gin.Context) {
 		}); err != nil {
 			cApi.logger.Warnf("failed to update call context %s from completed callback: %v", cc.ContextID, err)
 		}
+		observer.Record(c,
+			observability.ConversationScope{
+				AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+				ConversationID: cc.ConversationID,
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusComplete, statusInfo.Event),
+			})
 	} else if validator.NotBlank(statusInfo.Event) {
 		if err := cApi.callContextStore.UpdateCallStatus(c, cc.ContextID, callcontext.CallStatusUpdate{
 			CallStatus: statusInfo.Event,
 		}); err != nil {
 			cApi.logger.Warnf("failed to update call context %s from callback event %s: %v", cc.ContextID, statusInfo.Event, err)
+		}
+		switch strings.ToUpper(statusInfo.Event) {
+		case "RINGING":
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusRinging, statusInfo.Event),
+				})
+		case "CANCELLED", "CANCELED":
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusCancelled, statusInfo.Event),
+				})
+		default:
+			observer.Record(c,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
+					ConversationID: cc.ConversationID,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusInProgress, statusInfo.Event),
+				})
 		}
 	}
 
@@ -316,7 +391,7 @@ func (cApi *ConversationApi) CallbackByContext(c *gin.Context) {
 			AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
 			ConversationID: cc.ConversationID,
 		},
-			observability.RecordMetric{Metrics: []*protos.Metric{&protos.Metric{Name: observability.MetricTelephonyDuration, Value: strconv.FormatInt(statusInfo.Duration.Nanoseconds(), 10), Description: "Call duration in nanoseconds"}}})
+			observability.RecordMetric{Metrics: []*protos.Metric{&protos.Metric{Name: observability.MetricCallDurationMs, Value: strconv.FormatInt(statusInfo.Duration.Milliseconds(), 10), Description: "Call duration in milliseconds"}}})
 	}
 	if validator.NotBlank(statusInfo.Price) {
 		observer.Record(c,
@@ -324,7 +399,7 @@ func (cApi *ConversationApi) CallbackByContext(c *gin.Context) {
 				AssistantScope: observability.AssistantScope{AssistantID: cc.AssistantID},
 				ConversationID: cc.ConversationID,
 			},
-			observability.RecordMetric{Metrics: []*protos.Metric{&protos.Metric{Name: observability.MetricTelephonyPrice, Value: statusInfo.Price, Description: "Call price"}}})
+			observability.RecordMetric{Metrics: []*protos.Metric{&protos.Metric{Name: observability.MetricCallPrice, Value: statusInfo.Price, Description: "Call price"}}})
 	}
 
 	if err := observer.Close(context.Background()); err != nil {

@@ -18,6 +18,7 @@ import (
 	internal_telephony_base "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/base"
 	internal_sip "github.com/rapidaai/api/assistant-api/internal/channel/telephony/internal/sip/internal"
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
+	"github.com/rapidaai/api/assistant-api/internal/observability"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
@@ -292,7 +293,7 @@ func newOutboundInitiatedCallInfo(session *sip_infra.Session, toPhone string, fr
 			},
 		},
 		Extra: map[string]string{
-			"telephony.status": initiatedStatus,
+			observability.MetricCallStatus: initiatedStatus,
 		},
 	}
 }

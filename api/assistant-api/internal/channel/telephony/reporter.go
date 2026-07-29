@@ -162,7 +162,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("RINGING", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusRinging, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
 					Attributes: observability.Attributes{
 						"component":     observability.ComponentCall.String(),
 						"context_id":    currentCallContext.ContextID,
@@ -237,7 +237,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("CANCELLED", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusCancelled, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
 					Attributes: observability.Attributes{
 						"component":     observability.ComponentCall.String(),
 						"context_id":    currentCallContext.ContextID,
@@ -339,7 +339,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("FAILED", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
 					Attributes: observability.Attributes{
 						"to":            currentCallContext.CallerNumber,
 						"from":          currentCallContext.FromNumber,

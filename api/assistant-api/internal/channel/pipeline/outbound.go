@@ -60,6 +60,8 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 				"direction": "outbound",
 				"error":     err.Error(),
 			},
+		}, observability.RecordMetric{
+			Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 		})
 		return &PipelineResult{Error: fmt.Errorf("invalid assistant: %w", err)}
 	}
@@ -84,6 +86,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction": "outbound",
 					"error":     "Please check phone deployment not enabled",
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, "Please check phone deployment not enabled"),
 			})
 		return &PipelineResult{Error: fmt.Errorf("phone deployment not enabled")}
 	}
@@ -115,6 +120,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 						"stage":     "from_phone_resolve",
 						"error":     err.Error(),
 					},
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 				})
 			return &PipelineResult{Error: fmt.Errorf("no phone number configured: %w", err)}
 		}
@@ -145,6 +153,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction": "outbound",
 					"error":     err.Error(),
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: fmt.Errorf("failed to create conversation: %w", err)}
 	}
@@ -226,6 +237,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction":  "outbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: fmt.Errorf("failed to save call context: %w", err)}
 	}
@@ -313,7 +327,7 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 				},
 			},
 			observability.RecordMetric{
-				Metrics: observability.CallStatusMetric("FAILED", err.Error()),
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{ContextID: contextID, ConversationID: conversation.Id, Error: err}
 	}

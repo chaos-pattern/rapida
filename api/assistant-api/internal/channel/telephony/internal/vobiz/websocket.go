@@ -128,7 +128,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz websocket reader closed",
 				}},
 			})
@@ -153,7 +153,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Failed to unmarshal Vobiz media event",
 				}},
 			})
@@ -188,7 +188,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Vobiz media stream started",
 				}},
 			})
@@ -207,7 +207,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Vobiz media frame processing failed",
 					}},
 				})
@@ -234,7 +234,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz media stream stopped by provider",
 				}},
 			})
@@ -300,7 +300,7 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "COMPLETE",
+				Value:       observability.MetricCallStatusComplete,
 				Description: "Vobiz call ended by server-side disconnect",
 			}},
 		})
@@ -329,7 +329,7 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz call ended by tool action",
 				}},
 			})
@@ -361,7 +361,7 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Vobiz call transfer is not supported",
 				}},
 			})
@@ -427,7 +427,7 @@ func (vws *vobizWebsocketStreamer) handleMediaEvent(mediaEvent internal_vobiz.Vo
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to decode Vobiz media payload",
 			}},
 		})
@@ -485,7 +485,7 @@ func (vws *vobizWebsocketStreamer) sendVobizMessage(eventType internal_vobiz.Eve
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to marshal Vobiz message",
 			}},
 		})

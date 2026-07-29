@@ -88,7 +88,7 @@ type CallInfo struct {
 	Provider string
 
 	// Extra holds provider-specific fields that don't warrant a top-level field.
-	// Examples: vonage "conversation_uuid", sip "telephony.status".
+	// Examples: vonage "conversation_uuid", sip "call.status".
 	// If a field is used by multiple providers, promote it to a top-level field.
 	Extra map[string]string
 }

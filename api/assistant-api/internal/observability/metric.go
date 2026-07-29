@@ -24,24 +24,15 @@ const (
 	MetricConversationInProgress = "in_progress"
 )
 
-// Current call, telephony, SIP, transfer, RTP, and WebRTC metric names.
+// Current call, SIP, and WebRTC metric names.
 const (
 	MetricCallDurationMs         = "call.duration_ms"
-	MetricSetupDurationMs        = "call.setup_duration_ms"
-	MetricRingDurationMs         = "call.ring_duration_ms"
 	MetricCallStatus             = "call.status"
-	MetricSIPRegisterFailure     = "sip.register_failure"
+	MetricCallPrice              = "call.price"
+	MetricCallTransferDurationMs = "call.transfer.bridge_duration_ms"
 	MetricSIPRegistrationStatus  = "sip.registration.status"
-	MetricTransferDurationMs     = "transfer.bridge_duration_ms"
-	MetricRTPPacketsSent         = "rtp.packets_sent"
-	MetricRTPPacketsReceived     = "rtp.packets_received"
-	MetricRTPBytesSent           = "rtp.bytes_sent"
-	MetricRTPBytesReceived       = "rtp.bytes_received"
 	MetricICELatencyMs           = "webrtc.ice_latency_ms"
 	MetricWebRTCOutputQueueDrops = "webrtc.output_queue_dropped_frames"
-	MetricTelephonyStatus        = "telephony.status"
-	MetricTelephonyDuration      = "telephony_duration"
-	MetricTelephonyPrice         = "telephony.price"
 )
 
 // Current call.status metric values.
@@ -49,6 +40,8 @@ const (
 	MetricCallStatusComplete   = "COMPLETE"
 	MetricCallStatusFailed     = "FAILED"
 	MetricCallStatusInProgress = "INPROGRESS"
+	MetricCallStatusRinging    = "RINGING"
+	MetricCallStatusCancelled  = "CANCELLED"
 )
 
 // Current turn and provider metric names.

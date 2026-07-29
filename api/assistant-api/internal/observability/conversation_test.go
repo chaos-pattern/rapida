@@ -118,15 +118,15 @@ func TestDisconnectMetadata_MirrorCurrentImplementation(t *testing.T) {
 	}
 }
 
-func TestCallStatusMetric_UsesCurrentConversationStatusShape(t *testing.T) {
+func TestCallStatusMetric_UsesCanonicalCallStatusShape(t *testing.T) {
 	metrics := CallStatusMetric("failed", "no_answer_timeout")
 	if len(metrics) != 1 {
 		t.Fatalf("expected one status metric, got %d", len(metrics))
 	}
 
 	metric := metrics[0]
-	if metric.Name != MetricConversationStatus {
-		t.Fatalf("expected status metric name %q, got %q", MetricConversationStatus, metric.Name)
+	if metric.Name != MetricCallStatus {
+		t.Fatalf("expected status metric name %q, got %q", MetricCallStatus, metric.Name)
 	}
 	if metric.Value != "failed" || metric.Description != "no_answer_timeout" {
 		t.Fatalf("unexpected status metric: %+v", metric)

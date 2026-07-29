@@ -103,6 +103,12 @@ func (s *webrtcStreamer) handlePeerState(mediaSessionID uint64, state pionwebrtc
 					webrtc_internal.DataICELatencyMs:        iceLatencyMs,
 					webrtc_internal.DataPeerConnectionState: state.String(),
 				},
+			}, observability.RecordMetric{
+				Metrics: []*protos.Metric{{
+					Name:        observability.MetricICELatencyMs,
+					Value:       fmt.Sprintf("%d", iceLatencyMs),
+					Description: "WebRTC ICE connection latency in milliseconds",
+				}},
 			})
 		s.reportSelectedICECandidatePair(peerConnection, peerStateChangedAt)
 		s.signalReady()

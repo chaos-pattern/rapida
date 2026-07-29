@@ -551,6 +551,19 @@ func (s *Streamer) RecordTransferOperatorAudio(audio []byte) {
 	}
 }
 
+func (s *Streamer) RecordTransferDurationMetric(durationMs string) {
+	if durationMs == "" {
+		return
+	}
+	_ = s.Record(observability.RecordMetric{
+		Metrics: []*protos.Metric{{
+			Name:        observability.MetricCallTransferDurationMs,
+			Value:       durationMs,
+			Description: "SIP transfer bridge duration in milliseconds",
+		}},
+	})
+}
+
 func (s *Streamer) SendTransferToolResult(contextID, toolID, toolName string, action protos.ToolCallAction, result map[string]string) {
 	s.Input(&protos.ConversationToolCallResult{
 		Id:     contextID,

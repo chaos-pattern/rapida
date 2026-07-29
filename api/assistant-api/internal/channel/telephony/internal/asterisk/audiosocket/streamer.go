@@ -203,7 +203,7 @@ func (as *Streamer) runFrameReader() {
 	}, observability.RecordMetric{
 		Metrics: []*protos.Metric{{
 			Name:        observability.MetricCallStatus,
-			Value:       "INPROGRESS",
+			Value:       observability.MetricCallStatusInProgress,
 			Description: "Asterisk AudioSocket connected",
 		}},
 	})
@@ -248,7 +248,7 @@ func (as *Streamer) runFrameReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket reader closed",
 				}},
 			})
@@ -285,7 +285,7 @@ func (as *Streamer) runFrameReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Asterisk AudioSocket input audio processing failed",
 					}},
 				})
@@ -311,7 +311,7 @@ func (as *Streamer) runFrameReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket hangup received",
 				}},
 			})
@@ -332,7 +332,7 @@ func (as *Streamer) runFrameReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Asterisk AudioSocket error frame received",
 				}},
 			})
@@ -391,7 +391,7 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "COMPLETE",
+				Value:       observability.MetricCallStatusComplete,
 				Description: "Asterisk AudioSocket call ended by server-side disconnect",
 			}},
 		})
@@ -418,7 +418,7 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket call ended by tool action",
 				}},
 			})
@@ -455,7 +455,7 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Asterisk AudioSocket transfer is not supported",
 				}},
 			})

@@ -332,6 +332,7 @@ func (d *Dispatcher) configureSIPTransfer(ctx context.Context, session *sip_infr
 						}
 					}
 				}
+				transferStreamer.RecordTransferDurationMetric(durationMs)
 				emitTransferEvent("transfer_teardown", map[string]string{
 					"target":      primaryTarget,
 					"from_state":  "bridge_connected",

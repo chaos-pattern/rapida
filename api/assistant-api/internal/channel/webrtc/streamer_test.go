@@ -223,6 +223,30 @@ func requireObservabilityWebhook(t *testing.T, collector *testObservabilityColle
 	}
 }
 
+func requireObservabilityMetric(t *testing.T, collector *testObservabilityCollector, name string) *protos.Metric {
+	t.Helper()
+	deadline := time.After(time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			collector.mu.Lock()
+			for _, record := range collector.metrics {
+				for _, metric := range record.Metrics {
+					if metric.Name == name {
+						collector.mu.Unlock()
+						return metric
+					}
+				}
+			}
+			collector.mu.Unlock()
+		case <-deadline:
+			t.Fatalf("timed out waiting for WebRTC metric %q", name)
+		}
+	}
+}
+
 func TestBuildGRPCResponse_Disconnection(t *testing.T) {
 	t.Parallel()
 	s := newTestStreamer(t)
@@ -1015,6 +1039,8 @@ func TestHandlePeerState_ConnectedMarksAudioConnected(t *testing.T) {
 	assert.Equal(t, s.sessionID, webhook.Payload[webrtc_internal.DataSessionID])
 	assert.Equal(t, mediaSessionID, webhook.Payload[webrtc_internal.DataMediaSessionID])
 	assert.Equal(t, int64(25), webhook.Payload[webrtc_internal.DataICELatencyMs])
+	metric := requireObservabilityMetric(t, collector, observability.MetricICELatencyMs)
+	assert.Equal(t, "25", metric.Value)
 }
 
 func TestQueueMediaSessionRestart_QueuesLifecycleEvent(t *testing.T) {
@@ -2423,7 +2449,8 @@ func TestEnqueueOutputAudio_BoundedDropOldest_EmitsOverflowEvent(t *testing.T) {
 	assert.Equal(t, "1", log.Attributes[webrtc_internal.DataDroppedFrames])
 	assert.Equal(t, fmt.Sprintf("%d", limit), log.Attributes[webrtc_internal.DataLimitFrames])
 	assert.Equal(t, fmt.Sprintf("%d", limit), log.Attributes[webrtc_internal.DataQueueDepthFrames])
-	assert.Empty(t, collector.metrics)
+	metric := requireObservabilityMetric(t, collector, observability.MetricWebRTCOutputQueueDrops)
+	assert.Equal(t, "1", metric.Value)
 }
 
 func TestClearOutputAudio_ReturnsClearedFrameCount(t *testing.T) {

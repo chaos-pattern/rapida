@@ -91,6 +91,9 @@ type SIPTransferStreamer interface {
 	// This is used only after bridge media is connected.
 	RecordTransferOperatorAudio([]byte)
 
+	// RecordTransferDurationMetric records the completed SIP bridge duration as a conversation metric.
+	RecordTransferDurationMetric(durationMs string)
+
 	// SendTransferToolResult reports transfer tool completion back to the assistant pipeline.
 	// It preserves the original tool identifiers so the caller can correlate the result.
 	SendTransferToolResult(contextID, toolID, toolName string, action protos.ToolCallAction, result map[string]string)

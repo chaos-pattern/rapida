@@ -244,8 +244,8 @@ func TestNewOutboundInitiatedCallInfo_UsesInitiatedStatus(t *testing.T) {
 	if info.StatusInfo.Event != string(sip_infra.OutboundCallStatusInitiated) {
 		t.Fatalf("expected initiated event, got %q", info.StatusInfo.Event)
 	}
-	if info.Extra["telephony.status"] != string(sip_infra.OutboundCallStatusInitiated) {
-		t.Fatalf("expected telephony.status initiated, got %q", info.Extra["telephony.status"])
+	if info.Extra["call.status"] != string(sip_infra.OutboundCallStatusInitiated) {
+		t.Fatalf("expected call.status initiated, got %q", info.Extra["call.status"])
 	}
 }
 
