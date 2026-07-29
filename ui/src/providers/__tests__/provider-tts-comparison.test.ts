@@ -6,7 +6,11 @@
  * as the original hand-written constant.ts functions.
  */
 import { Metadata } from '@rapidaai/react';
-import { loadProviderConfig } from '../config-loader';
+import {
+  loadProviderConfig,
+  loadProviderData,
+  resolveCategoryParameters,
+} from '../config-loader';
 import { getDefaultsFromConfig, validateFromConfig } from '../config-defaults';
 
 function createMetadata(key: string, value: string): Metadata {
@@ -328,5 +332,62 @@ describe('Smallest TTS — config resolution', () => {
       createMetadata('speak.language', 'en'),
     ];
     expect(validateFromConfig(config, 'tts', 'smallest', opts)).toBeUndefined();
+  });
+
+  it('scopes the default voice to the selected model', () => {
+    const withStandard = getDefaultsFromConfig(
+      config,
+      'tts',
+      [createMetadata('speak.model', 'lightning_v3.1')],
+      'smallest',
+    );
+    expect(findMeta(withStandard, 'speak.voice.id')).toBe('magnus');
+
+    const withPro = getDefaultsFromConfig(
+      config,
+      'tts',
+      [createMetadata('speak.model', 'lightning_v3.1_pro')],
+      'smallest',
+    );
+    expect(findMeta(withPro, 'speak.voice.id')).toBe('meher');
+  });
+
+  it('resolves a distinct, non-overlapping voice catalog per model', () => {
+    const standardParams = resolveCategoryParameters(
+      'smallest',
+      'tts',
+      config.tts!,
+      [createMetadata('speak.model', 'lightning_v3.1')],
+    );
+    const proParams = resolveCategoryParameters('smallest', 'tts', config.tts!, [
+      createMetadata('speak.model', 'lightning_v3.1_pro'),
+    ]);
+
+    const standardVoiceParam = standardParams.find(p => p.key === 'speak.voice.id');
+    const proVoiceParam = proParams.find(p => p.key === 'speak.voice.id');
+    expect(standardVoiceParam?.data).toBe(
+      'text-to-speech-voices-lightning-v3-1.json',
+    );
+    expect(proVoiceParam?.data).toBe(
+      'text-to-speech-voices-lightning-v3-1-pro.json',
+    );
+
+    const standardVoices = loadProviderData(
+      'smallest',
+      standardVoiceParam!.data!,
+    ) as Array<{ voice_id: string }>;
+    const proVoices = loadProviderData(
+      'smallest',
+      proVoiceParam!.data!,
+    ) as Array<{ voice_id: string }>;
+    const standardIds = new Set(standardVoices.map(v => v.voice_id));
+    const proIds = new Set(proVoices.map(v => v.voice_id));
+
+    // No voice should be pickable under both models — that's exactly the
+    // pairing the live API rejects (see smallest_integration_test.go's
+    // TestSmallestTTSVoiceModelMismatch).
+    expect(standardIds.has('meher')).toBe(false);
+    expect(proIds.has('magnus')).toBe(false);
+    expect([...standardIds].some(id => proIds.has(id))).toBe(false);
   });
 });
