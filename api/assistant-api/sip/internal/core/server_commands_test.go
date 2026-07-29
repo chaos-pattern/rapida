@@ -133,6 +133,8 @@ func newServerForCommandTests(t *testing.T) *Server {
 	server := &Server{
 		logger:            bridgeTestLogger(),
 		listenConfig:      &ListenConfig{Address: "127.0.0.1", Port: 5060, ExternalIP: "127.0.0.1"},
+		rtpPortRangeStart: 19000,
+		rtpPortRangeEnd:   19999,
 		dialogClientCache: sipgo.NewDialogClientCache(client, contact),
 		dialogServerCache: sipgo.NewDialogServerCache(client, contact),
 		sessions:          make(map[string]*Session),
@@ -143,9 +145,6 @@ func newServerForCommandTests(t *testing.T) *Server {
 		ctx:               context.Background(),
 	}
 	t.Cleanup(func() {
-		if server.rtpAllocator == nil {
-			return
-		}
 		server.mu.RLock()
 		sessions := make([]*Session, 0, len(server.sessions))
 		for _, session := range server.sessions {
@@ -948,13 +947,11 @@ func TestInboundLifecycle_ServerStopDisconnectsAnsweredCall(t *testing.T) {
 	assert.True(t, disconnectCalled, "server stop must send BYE for answered inbound calls")
 }
 
-func TestServerStopReleasesSessionRTPPortThroughSessionCleanup(t *testing.T) {
+func TestServerStopEndsSessionsThroughSessionCleanup(t *testing.T) {
 	s := newServerForCommandTests(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	s.ctx = ctx
 	s.cancel = cancel
-	allocator := &testRTPAllocator{}
-	s.rtpAllocator = allocator
 	s.state.Store(int32(ServerStateRunning))
 
 	session := newTestSession(t, "call-server-stop-rtp", CallDirectionInbound)
@@ -965,8 +962,6 @@ func TestServerStopReleasesSessionRTPPortThroughSessionCleanup(t *testing.T) {
 	s.Stop()
 
 	assert.True(t, session.IsEnded())
-	assert.Equal(t, 19000, allocator.releasePort)
-	assert.True(t, allocator.releaseAll)
 	assert.Equal(t, 0, s.SessionCount())
 }
 

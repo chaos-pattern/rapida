@@ -478,12 +478,9 @@ func (inboundCall *Inbound) recordFailure(failure inboundFailure) {
 }
 
 // failBeforeAnswer owns terminal setup failure side effects before the final INVITE answer.
-// It sends one final SIP response, releases pending media ownership, and then fails the session.
+// It sends one final SIP response and then fails the session.
 func (inboundCall *Inbound) failBeforeAnswer(failure inboundFailure) {
 	inboundCall.recordFailure(failure)
-	if inboundCall.media != nil {
-		inboundCall.media.ReleasePortIfSessionDoesNotOwnIt()
-	}
 	if failure.statusCode > 0 {
 		if inboundCall.dialog != nil {
 			inboundCall.dialog.RejectBeforeAnswer(failure.statusCode)

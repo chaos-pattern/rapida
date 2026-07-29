@@ -12,11 +12,14 @@ import (
 )
 
 type ServerHealthSnapshot struct {
-	Ready         bool
-	Reason        string
-	State         ServerState
-	ActiveCalls   int
-	RTPPortsInUse int
+	Ready                   bool
+	Reason                  string
+	State                   ServerState
+	ActiveCalls             int
+	RTPPortsInUse           int
+	RTPPortBindAttempts     uint64
+	RTPPortBindFailures     uint64
+	RTPPortRangeExhaustions uint64
 }
 
 func (s *Server) HealthSnapshot() ServerHealthSnapshot {
@@ -28,6 +31,12 @@ func (s *Server) HealthSnapshot() ServerHealthSnapshot {
 	snapshot := ServerHealthSnapshot{
 		State:       state,
 		ActiveCalls: s.SessionCount(),
+	}
+	if s.rtpPortStats != nil {
+		snapshot.RTPPortsInUse = int(s.rtpPortStats.portsInUse.Load())
+		snapshot.RTPPortBindAttempts = s.rtpPortStats.bindAttempts.Load()
+		snapshot.RTPPortBindFailures = s.rtpPortStats.bindFailures.Load()
+		snapshot.RTPPortRangeExhaustions = s.rtpPortStats.rangeExhaustions.Load()
 	}
 
 	if state != ServerStateRunning {
@@ -50,17 +59,6 @@ func (s *Server) HealthSnapshot() ServerHealthSnapshot {
 		snapshot.Reason = "outbound_dialog_cache_unavailable"
 		return snapshot
 	}
-	if s.rtpAllocator == nil {
-		snapshot.Reason = "rtp_allocator_unavailable"
-		return snapshot
-	}
-
-	rtpPortsInUse, err := s.rtpAllocator.InUse()
-	if err != nil {
-		snapshot.Reason = "rtp_allocator_unhealthy"
-		return snapshot
-	}
-
 	if reason := outboundAdvertisedAddressHealthReason(s.listenConfig); reason != "" {
 		snapshot.Reason = reason
 		return snapshot
@@ -68,7 +66,6 @@ func (s *Server) HealthSnapshot() ServerHealthSnapshot {
 
 	snapshot.Ready = true
 	snapshot.Reason = "ready"
-	snapshot.RTPPortsInUse = rtpPortsInUse
 	return snapshot
 }
 

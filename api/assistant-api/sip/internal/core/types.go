@@ -26,6 +26,7 @@ var (
 	ErrRTPHandlerStopped          = errors.New("RTP handler is stopped")
 	ErrRTPMediaTimeout            = errors.New("RTP media timeout")
 	ErrRTPOutputQueueFull         = errors.New("RTP output queue is full")
+	ErrRTPPortRangeExhausted      = errors.New("no RTP ports available")
 	ErrSDPParseFailed             = errors.New("failed to parse SDP")
 	ErrCodecNotSupported          = errors.New("codec not supported")
 	ErrConnectionFailed           = errors.New("SIP connection failed")
@@ -243,8 +244,8 @@ func (c *Config) ValidateRTP() error {
 	if c.RTPPortRangeStart <= 0 || c.RTPPortRangeEnd <= 0 {
 		return fmt.Errorf("%w: rtp_port_range must be specified", ErrInvalidConfig)
 	}
-	if c.RTPPortRangeStart >= c.RTPPortRangeEnd {
-		return fmt.Errorf("%w: rtp_port_range_start must be less than rtp_port_range_end", ErrInvalidConfig)
+	if c.RTPPortRangeStart > c.RTPPortRangeEnd {
+		return fmt.Errorf("%w: rtp_port_range_start must be less than or equal to rtp_port_range_end", ErrInvalidConfig)
 	}
 	if c.RTPPortRangeStart < 1024 {
 		return fmt.Errorf("%w: rtp_port_range_start must be >= 1024 (non-privileged port)", ErrInvalidConfig)

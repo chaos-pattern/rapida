@@ -119,6 +119,8 @@ func (s *dispatchHandlerStub) HandleInitializationCompleted(context.Context, int
 }
 func (s *dispatchHandlerStub) HandleInitializeInboundDispatcher(context.Context, internal_type.InitializeInboundDispatcherPacket) {
 }
+func (s *dispatchHandlerStub) HandleFinalizeInboundDispatcher(context.Context, internal_type.FinalizeInboundDispatcherPacket) {
+}
 func (s *dispatchHandlerStub) HandleModeSwitchRequested(context.Context, internal_type.ModeSwitchRequestedPacket) {
 }
 func (s *dispatchHandlerStub) HandleModeSwitchCompleted(context.Context, internal_type.ModeSwitchCompletedPacket) {

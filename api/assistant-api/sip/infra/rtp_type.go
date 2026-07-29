@@ -7,7 +7,6 @@
 package sip_infra
 
 import (
-	"context"
 	"time"
 
 	internal_core "github.com/rapidaai/api/assistant-api/sip/internal/core"
@@ -46,6 +45,10 @@ type RTPConfig struct {
 	ClockRate   uint32
 	Logger      commons.Logger
 
+	RTPPortRangeStart int
+	RTPPortRangeEnd   int
+	SymmetricRTP      bool
+
 	MediaTimeoutInitial time.Duration
 	MediaTimeout        time.Duration
 }
@@ -64,18 +67,10 @@ func (c *RTPConfig) toCore() *internal_core.RTPConfig {
 		PayloadType:         c.PayloadType,
 		ClockRate:           c.ClockRate,
 		Logger:              c.Logger,
+		RTPPortRangeStart:   c.RTPPortRangeStart,
+		RTPPortRangeEnd:     c.RTPPortRangeEnd,
+		SymmetricRTP:        c.SymmetricRTP,
 		MediaTimeoutInitial: c.MediaTimeoutInitial,
 		MediaTimeout:        c.MediaTimeout,
 	}
-}
-
-type RTPAllocator interface {
-	Allocate() (int, error)
-	Release(port int)
-	InUse() (int, error)
-	ReleaseAll(ctx context.Context)
-}
-
-type RTPPortAllocator struct {
-	inner *internal_core.RTPPortAllocator
 }

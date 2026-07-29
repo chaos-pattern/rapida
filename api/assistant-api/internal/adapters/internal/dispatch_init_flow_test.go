@@ -71,6 +71,7 @@ func TestInitializationFailedPacket_DisconnectFinalization_CancelsSessionContext
 	}
 	requestor.assistantConversation.Id = 707
 
+	go requestor.runBootstrapDispatcher(sessionContext)
 	go requestor.runDataDispatcher(sessionContext)
 
 	requestor.dispatch(context.Background(), internal_type.InitializationFailedPacket{

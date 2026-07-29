@@ -75,6 +75,7 @@ const (
 	PacketNameInitializeBehavior                         PacketName = "InitializeBehaviorPacket"
 	PacketNameInitializationCompleted                    PacketName = "InitializationCompletedPacket"
 	PacketNameInitializeInboundDispatcher                PacketName = "InitializeInboundDispatcherPacket"
+	PacketNameFinalizeInboundDispatcher                  PacketName = "FinalizeInboundDispatcherPacket"
 	PacketNameInitializationFailed                       PacketName = "InitializationFailedPacket"
 	PacketNameModeSwitchRequested                        PacketName = "ModeSwitchRequestedPacket"
 	PacketNameModeSwitchCompleted                        PacketName = "ModeSwitchCompletedPacket"
@@ -691,6 +692,17 @@ func (p InitializeInboundDispatcherPacket) PacketName() PacketName {
 	return PacketNameInitializeInboundDispatcher
 }
 
+// FinalizeInboundDispatcherPacket stops accepting queued ingress packets before
+// component finalizers close VAD, STT, EOS, and denoise resources.
+type FinalizeInboundDispatcherPacket struct {
+	ContextID string
+}
+
+func (p FinalizeInboundDispatcherPacket) ContextId() string { return p.ContextID }
+func (p FinalizeInboundDispatcherPacket) PacketName() PacketName {
+	return PacketNameFinalizeInboundDispatcher
+}
+
 // InitializationStage identifies which initialization phase failed.
 type InitializationStage string
 
@@ -919,11 +931,12 @@ func (f ModeSwitchFinalizeDenoisePacket) IsAsync() bool { return true }
 
 // =============================================================================
 // Finalization chain:
-// FinalizeBehavior → FinalizeEndOfSpeech → FinalizeVoiceActivityDetection
-// → FinalizeTextToSpeech → FinalizeSpeechToText → FinalizeAuthentication
-// → FinalizeConversationRecordingExecutor → FinalizeSessionRuntime
-// → FinalizeArtifactPushExecutor → ExecuteAnalysis → FinalizeConversation
-// → FinalizeAnalysisExecutor → FinalizeAssistant → FinalizationCompleted
+// FinalizeInboundDispatcher → FinalizeBehavior → FinalizeEndOfSpeech
+// → FinalizeVoiceActivityDetection → FinalizeTextToSpeech → FinalizeSpeechToText
+// → FinalizeAuthentication → FinalizeConversationRecordingExecutor
+// → FinalizeSessionRuntime → FinalizeArtifactPushExecutor → ExecuteAnalysis
+// → FinalizeConversation → FinalizeAnalysisExecutor → FinalizeAssistant
+// → FinalizationCompleted
 // Each handler enqueues the next phase to backgroundCh, forming an ordered chain.
 // =============================================================================
 

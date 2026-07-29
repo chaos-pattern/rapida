@@ -39,6 +39,24 @@ func TestNewOutboundCall_OwnsLifecycleDependencies(t *testing.T) {
 	assert.Equal(t, request, outboundCall.request)
 }
 
+func TestOutboundMediaApplyAnswerEnablesSymmetricRTPForPrivateSDPWhenConfigured(t *testing.T) {
+	rtpHandler := newTestRTPHandler()
+	media := &outboundMedia{
+		server:     &Server{ignoreLocalAddrInSDP: true},
+		session:    &Session{},
+		rtpHandler: rtpHandler,
+	}
+
+	err := media.ApplyAnswer(OutboundMediaAnswer{
+		negotiatedCodec: &CodecPCMU,
+		remoteIP:        "10.0.0.10",
+		remotePort:      40000,
+	})
+
+	require.NoError(t, err)
+	assert.True(t, rtpHandler.symmetricRTP)
+}
+
 func TestOutboundCallStatus_Values(t *testing.T) {
 	assert.Equal(t, "initiated", string(OutboundCallStatusInitiated))
 	assert.Equal(t, "ringing", string(OutboundCallStatusRinging))

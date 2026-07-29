@@ -22,6 +22,7 @@ var (
 	ErrRTPNotInitialized          = internal_core.ErrRTPNotInitialized
 	ErrRTPHandlerStopped          = internal_core.ErrRTPHandlerStopped
 	ErrRTPOutputQueueFull         = internal_core.ErrRTPOutputQueueFull
+	ErrRTPPortRangeExhausted      = internal_core.ErrRTPPortRangeExhausted
 	ErrSDPParseFailed             = internal_core.ErrSDPParseFailed
 	ErrCodecNotSupported          = internal_core.ErrCodecNotSupported
 	ErrConnectionFailed           = internal_core.ErrConnectionFailed

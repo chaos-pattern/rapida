@@ -263,6 +263,58 @@ func TestRequestorChannels_OnIngress_ConcurrentWritersNoDeadlock(t *testing.T) {
 	}
 }
 
+func TestRequestorChannels_PauseIngress_CallbackRunsAfterIngressHandlerReturns(t *testing.T) {
+	chs := NewRequestorChannels()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	handlerEntered := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	paused := make(chan struct{})
+
+	go chs.RunIngress(ctx, func(e Envelope) {
+		close(handlerEntered)
+		<-releaseHandler
+	})
+
+	chs.OnIngress(Envelope{
+		Ctx: context.Background(),
+		Pkt: internal_type.UserTextReceivedPacket{ContextID: "active"},
+	})
+
+	select {
+	case <-handlerEntered:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for ingress handler")
+	}
+
+	go chs.PauseIngress(ctx, func() {
+		close(paused)
+	})
+
+	select {
+	case <-paused:
+		t.Fatalf("pause callback ran before active ingress handler returned")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(releaseHandler)
+
+	select {
+	case <-paused:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for pause callback")
+	}
+
+	chs.OnIngress(Envelope{
+		Ctx: context.Background(),
+		Pkt: internal_type.UserTextReceivedPacket{ContextID: "dropped"},
+	})
+	if got := len(chs.IngressChannel()); got != 0 {
+		t.Fatalf("expected ingress to drop packets after pause, got len=%d", got)
+	}
+}
+
 func TestRequestorChannels_RunControl_ProcessesAndStopsOnCancel(t *testing.T) {
 	chs := NewRequestorChannels()
 	ctx, cancel := context.WithCancel(context.Background())

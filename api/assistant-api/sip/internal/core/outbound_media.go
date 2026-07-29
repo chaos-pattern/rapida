@@ -7,7 +7,6 @@
 package core
 
 import (
-	"context"
 	"errors"
 	"fmt"
 )
@@ -17,18 +16,17 @@ var (
 	ErrOutboundMediaNoSession   = errors.New("outbound media requires a session")
 )
 
-// outboundMedia owns RTP allocation and handler lifecycle for an outbound call.
-// The call sends its SDP offer from prepared media, then starts RTP only after the answer is accepted.
+// outboundMedia prepares RTP for an outbound call and configures it before
+// the session adopts the handler. Session.End owns final RTP teardown.
 type outboundMedia struct {
 	server  *Server
 	session *Session
 	request OutboundInviteRequest
 
-	rtpHandler       *RTPHandler
-	allocatedRTPPort int
-	localRTPPort     int
-	externalIP       string
-	started          bool
+	rtpHandler   *RTPHandler
+	localRTPPort int
+	externalIP   string
+	started      bool
 }
 
 // OutboundMediaAnswer is the validated remote SDP answer from outbound 200 OK.
@@ -39,7 +37,7 @@ type OutboundMediaAnswer struct {
 	remotePort      int
 }
 
-// NewOutboundMedia creates the RTP lifecycle owner for an outbound call.
+// NewOutboundMedia creates the outbound RTP preparer for a SIP call.
 func NewOutboundMedia(server *Server, session *Session, request OutboundInviteRequest) *outboundMedia {
 	return &outboundMedia{
 		server:  server,
@@ -56,35 +54,23 @@ func (media *outboundMedia) Prepare() error {
 		return err
 	}
 
-	var err error
-	media.allocatedRTPPort, err = media.server.rtpAllocator.Allocate()
-	if err != nil {
-		return fmt.Errorf("no RTP ports available: %w", err)
-	}
-
-	rtpHandler, err := NewRTPHandler(context.Background(), &RTPConfig{
+	rtpHandler, err := NewRTPHandler(media.server.ctx, &RTPConfig{
 		LocalIP:             media.server.listenConfig.GetBindAddress(),
-		LocalPort:           media.allocatedRTPPort,
+		RTPPortRangeStart:   media.server.rtpPortRangeStart,
+		RTPPortRangeEnd:     media.server.rtpPortRangeEnd,
 		PayloadType:         CodecPCMU.PayloadType,
 		ClockRate:           CodecPCMU.ClockRate,
 		Logger:              media.server.logger,
 		MediaTimeoutInitial: media.request.Config.MediaTimeoutInitial,
 		MediaTimeout:        media.request.Config.MediaTimeout,
+		SymmetricRTP:        media.server.symmetricRTP,
+		portStats:           media.server.rtpPortStats,
 	})
 	if err != nil {
-		media.server.rtpAllocator.Release(media.allocatedRTPPort)
-		media.allocatedRTPPort = 0
-		return fmt.Errorf("failed to create RTP handler: %w", err)
+		return err
 	}
 
 	_, media.localRTPPort = rtpHandler.LocalAddr()
-	if media.localRTPPort != media.allocatedRTPPort {
-		_ = rtpHandler.Stop()
-		media.server.rtpAllocator.Release(media.allocatedRTPPort)
-		allocatedPort := media.allocatedRTPPort
-		media.allocatedRTPPort = 0
-		return fmt.Errorf("RTP handler bound unexpected port %d, allocated %d", media.localRTPPort, allocatedPort)
-	}
 	media.rtpHandler = rtpHandler
 	media.externalIP = media.server.listenConfig.GetExternalIP()
 	media.session.SetLocalRTP(media.externalIP, media.localRTPPort)
@@ -137,6 +123,9 @@ func (media *outboundMedia) ApplyAnswer(answer OutboundMediaAnswer) error {
 	if media.rtpHandler == nil {
 		return ErrOutboundMediaNotPrepared
 	}
+	if media.server != nil {
+		media.rtpHandler.SetSymmetricRTP(media.server.useSymmetricRTPForRemoteIP(answer.remoteIP))
+	}
 	media.rtpHandler.SetRemoteAddr(answer.remoteIP, answer.remotePort)
 	media.rtpHandler.SetCodec(answer.negotiatedCodec)
 	media.session.SetRemoteRTP(answer.remoteIP, answer.remotePort)
@@ -180,6 +169,9 @@ func (media *outboundMedia) Stop() {
 	rtpHandler := media.rtpHandler
 	media.rtpHandler = nil
 	media.started = false
+	if media.session != nil && media.session.GetRTPHandler() == rtpHandler {
+		return
+	}
 	_ = rtpHandler.Stop()
 }
 

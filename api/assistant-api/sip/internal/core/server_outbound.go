@@ -90,10 +90,6 @@ func (s *Server) failOutboundCallLegSetup(
 	failure OutboundFailure,
 	statusObserver internal_type.ProviderCallStatusReporter,
 ) {
-	if media != nil {
-		// Stop the prepared socket now; session teardown releases adopted RTP ports.
-		media.Stop()
-	}
 	failure.Record(session)
 	if statusObserver != nil {
 		statusObserver(failure.StatusUpdate(session.GetCallID()))

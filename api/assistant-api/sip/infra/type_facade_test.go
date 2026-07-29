@@ -241,11 +241,10 @@ func TestListenConfigAndServerConfigConversions(t *testing.T) {
 
 	serverConfig := (&ServerConfig{
 		ListenConfig:      listenConfig,
-		InstanceID:        "sip-instance-a",
 		RTPPortRangeStart: 30000,
 		RTPPortRangeEnd:   30100,
 	}).toCore()
-	if serverConfig.ListenConfig.Address != listenConfig.Address || serverConfig.InstanceID != "sip-instance-a" || serverConfig.RTPPortRangeStart != 30000 {
+	if serverConfig.ListenConfig.Address != listenConfig.Address || serverConfig.RTPPortRangeStart != 30000 {
 		t.Fatalf("server config conversion mismatch: %#v", serverConfig)
 	}
 }
@@ -349,13 +348,17 @@ func TestLifecycleAndHealthTypeConversions(t *testing.T) {
 	}
 
 	snapshot := serverHealthSnapshotFromCore(internal_core.ServerHealthSnapshot{
-		Ready:         true,
-		Reason:        "ready",
-		State:         internal_core.ServerStateRunning,
-		ActiveCalls:   2,
-		RTPPortsInUse: 3,
+		Ready:                   true,
+		Reason:                  "ready",
+		State:                   internal_core.ServerStateRunning,
+		ActiveCalls:             2,
+		RTPPortsInUse:           3,
+		RTPPortBindAttempts:     7,
+		RTPPortBindFailures:     1,
+		RTPPortRangeExhaustions: 1,
 	})
-	if !snapshot.Ready || snapshot.State != ServerStateRunning || snapshot.ActiveCalls != 2 || snapshot.RTPPortsInUse != 3 {
+	if !snapshot.Ready || snapshot.State != ServerStateRunning || snapshot.ActiveCalls != 2 || snapshot.RTPPortsInUse != 3 ||
+		snapshot.RTPPortBindAttempts != 7 || snapshot.RTPPortBindFailures != 1 || snapshot.RTPPortRangeExhaustions != 1 {
 		t.Fatalf("health snapshot conversion mismatch: %#v", snapshot)
 	}
 }

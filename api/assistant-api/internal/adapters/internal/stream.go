@@ -303,6 +303,6 @@ func (r *genericRequestor) OnDisconnect(ctx context.Context) {
 		r.logger.Warnf("disconnect deadline %v exceeded, force-cancelling session", disconnectDeadline)
 		r.cancelSession()
 	}, func(disconnectCtx context.Context) {
-		r.OnPacket(disconnectCtx, internal_type.FinalizeBehaviorPacket{ContextID: r.GetID()})
+		r.OnPacket(disconnectCtx, internal_type.FinalizeInboundDispatcherPacket{ContextID: r.GetID()})
 	})
 }

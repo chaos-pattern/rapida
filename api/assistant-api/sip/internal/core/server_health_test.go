@@ -7,7 +7,6 @@
 package core
 
 import (
-	"context"
 	"testing"
 
 	"github.com/emiago/sipgo"
@@ -77,39 +76,38 @@ func TestServerHealthSnapshot_AllowsLoopbackExternalIPWhenExplicitlyEnabled(t *t
 	assert.Equal(t, "ready", snapshot.Reason)
 }
 
+func TestServerHealthSnapshot_ReportsRTPPortStats(t *testing.T) {
+	server := runningHealthTestServer(&ListenConfig{
+		Address:                 "127.0.0.1",
+		ExternalIP:              "127.0.0.1",
+		AllowLoopbackExternalIP: true,
+		Port:                    5060,
+		Transport:               TransportUDP,
+	})
+	server.rtpPortStats.portsInUse.Store(2)
+	server.rtpPortStats.bindAttempts.Store(5)
+	server.rtpPortStats.bindFailures.Store(3)
+	server.rtpPortStats.rangeExhaustions.Store(1)
+
+	snapshot := server.HealthSnapshot()
+
+	assert.True(t, snapshot.Ready)
+	assert.Equal(t, 2, snapshot.RTPPortsInUse)
+	assert.Equal(t, uint64(5), snapshot.RTPPortBindAttempts)
+	assert.Equal(t, uint64(3), snapshot.RTPPortBindFailures)
+	assert.Equal(t, uint64(1), snapshot.RTPPortRangeExhaustions)
+}
+
 func runningHealthTestServer(listenConfig *ListenConfig) *Server {
 	server := &Server{
 		client:            &sipgo.Client{},
 		server:            &sipgo.Server{},
 		dialogClientCache: &sipgo.DialogClientCache{},
 		listenConfig:      listenConfig,
-		rtpAllocator:      &testRTPAllocator{},
+		rtpPortRangeStart: 19000,
+		rtpPortRangeEnd:   19999,
+		rtpPortStats:      &RTPPortStats{},
 	}
 	server.state.Store(int32(ServerStateRunning))
 	return server
-}
-
-type testRTPAllocator struct {
-	nextPort     int
-	releasePort  int
-	releaseCount int
-	releaseAll   bool
-	inUse        int
-}
-
-func (a *testRTPAllocator) Allocate() (int, error) {
-	return a.nextPort, nil
-}
-
-func (a *testRTPAllocator) Release(port int) {
-	a.releasePort = port
-	a.releaseCount++
-}
-
-func (a *testRTPAllocator) InUse() (int, error) {
-	return a.inUse, nil
-}
-
-func (a *testRTPAllocator) ReleaseAll(ctx context.Context) {
-	a.releaseAll = true
 }

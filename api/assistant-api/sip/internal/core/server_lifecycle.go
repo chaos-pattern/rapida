@@ -225,22 +225,16 @@ func (s *Server) sendOutboundBye(ctx context.Context, dialogSession *sipgo.Dialo
 	return (&outboundDialog{dialogSession: dialogSession}).SendBye(ctx)
 }
 
-// removeSession removes a session from memory and releases its RTP port.
+// removeSession removes a session from memory.
 func (s *Server) removeSession(callID string) {
 	s.mu.Lock()
-	session, exists := s.sessions[callID]
+	_, exists := s.sessions[callID]
 	if exists {
 		delete(s.sessions, callID)
 		s.sessionCount.Add(-1)
 	}
 	delete(s.lifecycles, callID)
 	s.mu.Unlock()
-
-	if exists && session != nil {
-		if port := session.GetRTPLocalPort(); port > 0 {
-			s.rtpAllocator.Release(port)
-		}
-	}
 }
 
 func (s *Server) getOrCreateLifecycle(session *Session) *CallLifecycle {

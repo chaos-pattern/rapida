@@ -9,6 +9,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,7 +21,6 @@ import (
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/protos"
-	"github.com/redis/go-redis/v9"
 )
 
 // ServerState represents the state of the SIP server
@@ -78,7 +78,12 @@ type Server struct {
 	server       *sipgo.Server
 	client       *sipgo.Client
 	listenConfig *ListenConfig // Shared server listen config (address, port, transport)
-	rtpAllocator RTPAllocator  // Allocates RTP ports from configured range
+
+	rtpPortRangeStart    int
+	rtpPortRangeEnd      int
+	symmetricRTP         bool
+	ignoreLocalAddrInSDP bool
+	rtpPortStats         *RTPPortStats
 
 	// Outbound dialog cache — routes incoming BYE/re-INVITE to the correct
 	// DialogClientSession. Without this, BYE from the remote side is handled
@@ -185,13 +190,13 @@ func (c *ListenConfig) SIPContactHeader() sip.ContactHeader {
 // ServerConfig holds configuration for creating a SIP server
 // Multi-tenant: Only holds shared listen config, tenant config resolved per-call
 type ServerConfig struct {
-	ListenConfig      *ListenConfig // Shared server listen configuration
-	Middlewares       []Middleware  // Resolves tenant-specific config per-call
-	Logger            commons.Logger
-	RedisClient       *redis.Client // Redis client for distributed RTP port allocation
-	InstanceID        string        // SIP instance ID used to scope RTP Redis pools
-	RTPPortRangeStart int           // Start of RTP port range (even, >= 1024)
-	RTPPortRangeEnd   int           // End of RTP port range (exclusive)
+	ListenConfig         *ListenConfig // Shared server listen configuration
+	Middlewares          []Middleware  // Resolves tenant-specific config per-call
+	Logger               commons.Logger
+	RTPPortRangeStart    int  // Start of RTP port range.
+	RTPPortRangeEnd      int  // End of RTP port range, inclusive.
+	SymmetricRTP         bool // Updates the remote RTP target from received packet sources.
+	IgnoreLocalAddrInSDP bool // Enables symmetric RTP when SDP advertises a private remote address.
 }
 
 // Validate validates the server configuration
@@ -208,17 +213,11 @@ func (c *ServerConfig) Validate() error {
 	if c.Logger == nil {
 		return fmt.Errorf("logger is required")
 	}
-	if c.RedisClient == nil {
-		return fmt.Errorf("redis client is required for distributed RTP port allocation")
-	}
-	if c.InstanceID == "" {
-		return fmt.Errorf("%w: instance_id is required", ErrInvalidConfig)
-	}
 	if c.RTPPortRangeStart <= 0 || c.RTPPortRangeEnd <= 0 {
 		return fmt.Errorf("rtp_port_range must be specified")
 	}
-	if c.RTPPortRangeStart >= c.RTPPortRangeEnd {
-		return fmt.Errorf("rtp_port_range_start must be less than rtp_port_range_end")
+	if c.RTPPortRangeStart > c.RTPPortRangeEnd {
+		return fmt.Errorf("rtp_port_range_start must be less than or equal to rtp_port_range_end")
 	}
 	return nil
 }
@@ -281,13 +280,6 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		return nil, NewSIPError("NewServer", "", "failed to create SIP client", err)
 	}
 
-	// Create Redis-backed distributed RTP port allocator
-	rtpAllocator := NewRTPPortAllocatorWithInstanceID(cfg.RedisClient, cfg.Logger, cfg.RTPPortRangeStart, cfg.RTPPortRangeEnd, cfg.InstanceID)
-	if err := rtpAllocator.Init(serverCtx); err != nil {
-		cancel()
-		return nil, NewSIPError("NewServer", "", "failed to initialize RTP port allocator", err)
-	}
-
 	// Build the Contact header used for outbound dialog sessions.
 	// Uses the external IP so the remote side can route subsequent requests back to us.
 	contactHDR := cfg.ListenConfig.SIPContactHeader()
@@ -309,7 +301,11 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 		server:                           server,
 		client:                           client,
 		listenConfig:                     cfg.ListenConfig,
-		rtpAllocator:                     rtpAllocator,
+		rtpPortRangeStart:                cfg.RTPPortRangeStart,
+		rtpPortRangeEnd:                  cfg.RTPPortRangeEnd,
+		symmetricRTP:                     cfg.SymmetricRTP,
+		ignoreLocalAddrInSDP:             cfg.IgnoreLocalAddrInSDP,
+		rtpPortStats:                     &RTPPortStats{},
 		dialogClientCache:                dialogClientCache,
 		dialogServerCache:                dialogServerCache,
 		middlewares:                      append([]Middleware(nil), cfg.Middlewares...),
@@ -330,6 +326,20 @@ func NewServer(ctx context.Context, cfg *ServerConfig) (*Server, error) {
 	s.registerHandlers()
 
 	return s, nil
+}
+
+func (s *Server) useSymmetricRTPForRemoteIP(remoteIP string) bool {
+	if s == nil {
+		return false
+	}
+	if s.symmetricRTP {
+		return true
+	}
+	if !s.ignoreLocalAddrInSDP {
+		return false
+	}
+	remoteAddr, err := netip.ParseAddr(remoteIP)
+	return err == nil && remoteAddr.IsPrivate()
 }
 
 func (s *Server) registerHandlers() {
@@ -422,9 +432,6 @@ func (s *Server) Stop() {
 		_ = s.EndCallWithReason(session, LifecycleReasonServerStop)
 	}
 
-	// Release all RTP ports allocated by this instance back to Redis
-	s.rtpAllocator.ReleaseAll(context.Background())
-
 	s.logger.Infow("SIP server stopped", "sessions_ended", len(sessions))
 }
 
@@ -444,17 +451,6 @@ func (s *Server) SetMiddlewares(middlewares []Middleware) {
 // IsRunning returns true if the server is running
 func (s *Server) IsRunning() bool {
 	return s.state.Load() == int32(ServerStateRunning)
-}
-
-// AllocateRTPPort allocates an available RTP port from the shared pool.
-// Callers must call ReleaseRTPPort when the port is no longer needed.
-func (s *Server) AllocateRTPPort() (int, error) {
-	return s.rtpAllocator.Allocate()
-}
-
-// ReleaseRTPPort returns an RTP port to the shared pool.
-func (s *Server) ReleaseRTPPort(port int) {
-	s.rtpAllocator.Release(port)
 }
 
 // Client returns the underlying sipgo client for outbound requests (e.g., REGISTER).

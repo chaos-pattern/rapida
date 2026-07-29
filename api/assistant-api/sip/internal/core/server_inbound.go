@@ -83,6 +83,7 @@ func (s *Server) handleReInvite(req *sip.Request, tx sip.ServerTransaction, sess
 	if !sdpInfo.IsHold() {
 		rtpHandler := session.GetRTPHandler()
 		if rtpHandler != nil && sdpInfo.ConnectionIP != "" && sdpInfo.AudioPort > 0 {
+			rtpHandler.SetSymmetricRTP(s.useSymmetricRTPForRemoteIP(sdpInfo.ConnectionIP))
 			rtpHandler.SetRemoteAddr(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 			session.SetRemoteRTP(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 			s.logger.Debugw("Updated remote RTP from re-INVITE",
@@ -313,6 +314,7 @@ func (s *Server) handleUpdate(req *sip.Request, tx sip.ServerTransaction) {
 		if !sdpInfo.IsHold() {
 			rtpHandler := session.GetRTPHandler()
 			if rtpHandler != nil && sdpInfo.ConnectionIP != "" && sdpInfo.AudioPort > 0 {
+				rtpHandler.SetSymmetricRTP(s.useSymmetricRTPForRemoteIP(sdpInfo.ConnectionIP))
 				rtpHandler.SetRemoteAddr(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 				session.SetRemoteRTP(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 				s.logger.Debugw("Updated remote RTP from UPDATE",

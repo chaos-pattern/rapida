@@ -38,6 +38,8 @@ type SIPConfig struct {
 	Transport               string           `mapstructure:"transport"`
 	RTPPortRangeStart       int              `mapstructure:"rtp_port_range_start"`
 	RTPPortRangeEnd         int              `mapstructure:"rtp_port_range_end"`
+	SymmetricRTP            bool             `mapstructure:"symmetric_rtp"`
+	IgnoreLocalAddrInSDP    bool             `mapstructure:"ignore_local_addr_in_sdp"`
 	RegisterTimeout         time.Duration    `mapstructure:"register_timeout"`
 	InviteTimeout           time.Duration    `mapstructure:"invite_timeout"`
 	SessionTimeout          time.Duration    `mapstructure:"session_timeout"`

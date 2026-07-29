@@ -9,25 +9,21 @@ package core
 import (
 	"testing"
 
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestServerConfigValidate_RequiresInstanceID(t *testing.T) {
-	cfg := validServerConfigForValidation()
-	cfg.InstanceID = ""
-
-	err := cfg.Validate()
-
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "instance_id is required")
-}
-
-func TestServerConfigValidate_AcceptsValidInstanceID(t *testing.T) {
+func TestServerConfigValidate_AcceptsSocketOwnedRTPConfig(t *testing.T) {
 	cfg := validServerConfigForValidation()
 
 	require.NoError(t, cfg.Validate())
+}
+
+func TestServerUseSymmetricRTPForRemoteIP(t *testing.T) {
+	require.True(t, (&Server{symmetricRTP: true}).useSymmetricRTPForRemoteIP("203.0.113.10"))
+	require.True(t, (&Server{ignoreLocalAddrInSDP: true}).useSymmetricRTPForRemoteIP("10.0.0.10"))
+	require.False(t, (&Server{ignoreLocalAddrInSDP: true}).useSymmetricRTPForRemoteIP("203.0.113.10"))
+	require.False(t, (&Server{ignoreLocalAddrInSDP: true}).useSymmetricRTPForRemoteIP("not-an-ip"))
+	require.False(t, (&Server{}).useSymmetricRTPForRemoteIP("10.0.0.10"))
 }
 
 func validServerConfigForValidation() *ServerConfig {
@@ -38,8 +34,6 @@ func validServerConfigForValidation() *ServerConfig {
 			Transport: TransportUDP,
 		},
 		Logger:            bridgeTestLogger(),
-		RedisClient:       redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"}),
-		InstanceID:        "assistant-test-01",
 		RTPPortRangeStart: 10000,
 		RTPPortRangeEnd:   10010,
 	}

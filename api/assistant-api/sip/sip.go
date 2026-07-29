@@ -108,12 +108,12 @@ func (m *SIPEngine) listenConfig() *sip_infra.ListenConfig {
 func (m *SIPEngine) Connect(ctx context.Context) error {
 	m.ctx, m.cancel = context.WithCancel(ctx)
 	server, err := sip_infra.NewServer(m.ctx, &sip_infra.ServerConfig{
-		ListenConfig:      m.listenConfig(),
-		Logger:            m.logger,
-		RedisClient:       m.redis.GetConnection(),
-		InstanceID:        m.cfg.SIPConfig.InstanceID,
-		RTPPortRangeStart: m.cfg.SIPConfig.RTPPortRangeStart,
-		RTPPortRangeEnd:   m.cfg.SIPConfig.RTPPortRangeEnd,
+		ListenConfig:         m.listenConfig(),
+		Logger:               m.logger,
+		RTPPortRangeStart:    m.cfg.SIPConfig.RTPPortRangeStart,
+		RTPPortRangeEnd:      m.cfg.SIPConfig.RTPPortRangeEnd,
+		SymmetricRTP:         m.cfg.SIPConfig.SymmetricRTP,
+		IgnoreLocalAddrInSDP: m.cfg.SIPConfig.IgnoreLocalAddrInSDP,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create SIP server: %w", err)

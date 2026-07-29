@@ -14,7 +14,6 @@ import (
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
 	"github.com/rapidaai/protos"
-	"github.com/redis/go-redis/v9"
 )
 
 type ServerState int32
@@ -104,13 +103,13 @@ func listenConfigFromCore(config *internal_core.ListenConfig) *ListenConfig {
 }
 
 type ServerConfig struct {
-	ListenConfig      *ListenConfig
-	Middlewares       []Middleware
-	Logger            commons.Logger
-	RedisClient       *redis.Client
-	InstanceID        string
-	RTPPortRangeStart int
-	RTPPortRangeEnd   int
+	ListenConfig         *ListenConfig
+	Middlewares          []Middleware
+	Logger               commons.Logger
+	RTPPortRangeStart    int
+	RTPPortRangeEnd      int
+	SymmetricRTP         bool
+	IgnoreLocalAddrInSDP bool
 }
 
 func (c *ServerConfig) Validate() error {
@@ -158,12 +157,12 @@ func (c *ServerConfig) toCore() *internal_core.ServerConfig {
 		})
 	}
 	return &internal_core.ServerConfig{
-		ListenConfig:      c.ListenConfig.toCore(),
-		Middlewares:       coreMiddlewares,
-		Logger:            c.Logger,
-		RedisClient:       c.RedisClient,
-		InstanceID:        c.InstanceID,
-		RTPPortRangeStart: c.RTPPortRangeStart,
-		RTPPortRangeEnd:   c.RTPPortRangeEnd,
+		ListenConfig:         c.ListenConfig.toCore(),
+		Middlewares:          coreMiddlewares,
+		Logger:               c.Logger,
+		RTPPortRangeStart:    c.RTPPortRangeStart,
+		RTPPortRangeEnd:      c.RTPPortRangeEnd,
+		SymmetricRTP:         c.SymmetricRTP,
+		IgnoreLocalAddrInSDP: c.IgnoreLocalAddrInSDP,
 	}
 }

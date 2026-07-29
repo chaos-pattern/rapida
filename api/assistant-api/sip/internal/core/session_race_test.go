@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,6 +34,24 @@ func newInboundTestSession(t *testing.T) *Session {
 	})
 	require.NoError(t, err)
 	return s
+}
+
+func TestSessionSetRTPHandlerStopsReplacedHandler(t *testing.T) {
+	t.Parallel()
+	s := newInboundTestSession(t)
+	first := newTestRTPHandler()
+	second := newTestRTPHandler()
+
+	s.SetRTPHandler(first)
+	s.SetRTPHandler(first)
+	assert.True(t, first.running.Load())
+
+	s.SetRTPHandler(second)
+	assert.False(t, first.running.Load())
+	assert.True(t, second.running.Load())
+
+	s.End()
+	assert.False(t, second.running.Load())
 }
 
 func TestSessionConcurrentEndAndSetState(t *testing.T) {

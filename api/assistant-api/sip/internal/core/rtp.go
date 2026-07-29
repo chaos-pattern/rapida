@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/rapidaai/pkg/commons"
-	"golang.org/x/sys/unix"
 )
 
 // RTP constants
@@ -62,12 +61,13 @@ type RTPHandler struct {
 	running atomic.Bool
 	closed  atomic.Bool
 
-	conn      *net.UDPConn // Receiving socket (ListenUDP, bound to 0.0.0.0:port)
-	sendConn  *net.UDPConn // Connected sending socket (DialUDP) — ensures correct UDP checksums
+	conn      *net.UDPConn
 	localIP   string
 	localPort int
 
-	remoteAddr *net.UDPAddr
+	remoteAddr   *net.UDPAddr
+	symmetricRTP bool
+	portStats    *RTPPortStats
 
 	// RTP state
 	ssrc           uint32
@@ -114,6 +114,13 @@ type RTPHandler struct {
 
 type RTPFallbackAudioSource func(frameSize int) []byte
 
+type RTPPortStats struct {
+	portsInUse       atomic.Int64
+	bindAttempts     atomic.Uint64
+	bindFailures     atomic.Uint64
+	rangeExhaustions atomic.Uint64
+}
+
 // RTPConfig holds configuration for RTP handler
 type RTPConfig struct {
 	LocalIP     string
@@ -122,8 +129,14 @@ type RTPConfig struct {
 	ClockRate   uint32 // 8000 for G.711
 	Logger      commons.Logger
 
+	RTPPortRangeStart int
+	RTPPortRangeEnd   int
+	SymmetricRTP      bool
+
 	MediaTimeoutInitial time.Duration
 	MediaTimeout        time.Duration
+
+	portStats *RTPPortStats
 }
 
 // Validate validates the RTP configuration
@@ -133,6 +146,17 @@ func (c *RTPConfig) Validate() error {
 	}
 	if c.LocalPort < 0 || c.LocalPort > 65535 {
 		return fmt.Errorf("invalid local_port: %d", c.LocalPort)
+	}
+	if c.LocalPort == 0 {
+		if c.RTPPortRangeStart <= 0 || c.RTPPortRangeEnd <= 0 {
+			return fmt.Errorf("rtp port range is required when local_port is not specified")
+		}
+		if c.RTPPortRangeStart > c.RTPPortRangeEnd {
+			return fmt.Errorf("rtp_port_range_start must be less than or equal to rtp_port_range_end")
+		}
+		if c.RTPPortRangeStart > 65535 || c.RTPPortRangeEnd > 65535 {
+			return fmt.Errorf("rtp port range must be between 1 and 65535")
+		}
 	}
 	if c.ClockRate == 0 {
 		c.ClockRate = 8000 // Default to 8kHz
@@ -148,8 +172,14 @@ func (c *RTPConfig) Validate() error {
 
 // NewRTPHandler creates a new RTP handler for direct audio transport
 func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) {
+	if config == nil {
+		return nil, NewSIPError("NewRTPHandler", "", "invalid configuration", fmt.Errorf("rtp config is required"))
+	}
 	if err := config.Validate(); err != nil {
 		return nil, NewSIPError("NewRTPHandler", "", "invalid configuration", err)
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 
 	handlerCtx, cancel := context.WithCancel(ctx)
@@ -169,32 +199,57 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 		network = "udp6"
 	}
 
-	// Use net.ListenConfig with SO_REUSEADDR + SO_REUSEPORT so that a connected
-	// send socket (created later in SetRemoteAddr) can bind to the same local port.
-	// The connected send socket ensures correct UDP checksums for outbound RTP,
-	// which prevents "bad udp cksum" errors that cause call disconnects.
-	lc := net.ListenConfig{
-		Control: func(network, address string, c syscall.RawConn) error {
-			var opErr error
-			if err := c.Control(func(fd uintptr) {
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-				if opErr != nil {
-					return
-				}
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-			}); err != nil {
-				return err
-			}
-			return opErr
-		},
+	var conn *net.UDPConn
+	var err error
+	if config.portStats != nil {
+		config.portStats.bindAttempts.Add(1)
 	}
-
-	packetConn, err := lc.ListenPacket(handlerCtx, network, addr.String())
+	if config.LocalPort > 0 {
+		conn, err = net.ListenUDP(network, addr)
+	} else {
+		portCount := config.RTPPortRangeEnd - config.RTPPortRangeStart + 1
+		firstPort := rand.Intn(portCount) + config.RTPPortRangeStart
+		port := firstPort
+		portsInUse := 0
+		for i := 0; i < portCount; i++ {
+			addr.Port = port
+			conn, err = net.ListenUDP(network, addr)
+			if err == nil {
+				break
+			}
+			if !errors.Is(err, syscall.EADDRINUSE) {
+				break
+			}
+			portsInUse++
+			port++
+			if port > config.RTPPortRangeEnd {
+				port = config.RTPPortRangeStart
+			}
+		}
+		if conn == nil && portsInUse == portCount {
+			err = fmt.Errorf("%w in range %d-%d (%d ports tried)",
+				ErrRTPPortRangeExhausted,
+				config.RTPPortRangeStart,
+				config.RTPPortRangeEnd,
+				portCount)
+			if config.Logger != nil {
+				config.Logger.Warnw("RTP port range exhausted",
+					"range_start", config.RTPPortRangeStart,
+					"range_end", config.RTPPortRangeEnd,
+					"ports_tried", portCount)
+			}
+		}
+	}
 	if err != nil {
+		if config.portStats != nil {
+			config.portStats.bindFailures.Add(1)
+			if errors.Is(err, ErrRTPPortRangeExhausted) {
+				config.portStats.rangeExhaustions.Add(1)
+			}
+		}
 		cancel()
 		return nil, NewSIPError("NewRTPHandler", "", "failed to create RTP socket", err)
 	}
-	conn := packetConn.(*net.UDPConn)
 
 	// Set buffer sizes
 	if err := conn.SetReadBuffer(rtpReadBufferSize); err != nil && config.Logger != nil {
@@ -217,6 +272,8 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 		conn:             conn,
 		localIP:          localAddr.IP.String(),
 		localPort:        localAddr.Port,
+		symmetricRTP:     config.SymmetricRTP,
+		portStats:        config.portStats,
 		ssrc:             rand.Uint32(),
 		codec:            codec,
 		audioInChan:      make(chan []byte, rtpAudioInBufferSize),
@@ -230,11 +287,22 @@ func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) 
 	}
 	handler.mediaTimeoutInitial.Store(int64(config.MediaTimeoutInitial))
 	handler.mediaTimeoutGeneral.Store(int64(config.MediaTimeout))
+	if handler.portStats != nil {
+		handler.portStats.portsInUse.Add(1)
+	}
 	handler.loops.Add(1)
 	go func() {
 		defer handler.loops.Done()
 		handler.mediaTimeoutLoop()
 	}()
+
+	if config.Logger != nil {
+		config.Logger.Debugw("RTP socket bound",
+			"local_addr", localAddr.String(),
+			"range_start", config.RTPPortRangeStart,
+			"range_end", config.RTPPortRangeEnd,
+			"symmetric_rtp", config.SymmetricRTP)
+	}
 
 	return handler, nil
 }
@@ -315,8 +383,7 @@ func (h *RTPHandler) sendInitialSilence() {
 			"packet_bytes", len(data),
 			"payload_bytes", len(chunk),
 			"seq", packet.SequenceNumber,
-			"ssrc", packet.SSRC,
-			"has_send_conn", h.sendConn != nil)
+			"ssrc", packet.SSRC)
 	}
 
 	n, err := h.sendPacket(data, remoteAddr)
@@ -354,17 +421,12 @@ func (h *RTPHandler) Stop() error {
 		h.cancel()
 	}
 
-	// Close sockets before waiting so blocked reads wake up and observe the cancelled context.
-	h.mu.Lock()
-	if h.sendConn != nil {
-		h.sendConn.Close()
-		h.sendConn = nil
-	}
-	h.mu.Unlock()
-
 	var err error
 	if h.conn != nil {
 		err = h.conn.Close()
+	}
+	if h.portStats != nil {
+		h.portStats.portsInUse.Add(-1)
 	}
 
 	h.loops.Wait()
@@ -511,13 +573,7 @@ func (h *RTPHandler) IsRunning() bool {
 	return h.running.Load()
 }
 
-// SetRemoteAddr sets the remote RTP endpoint and creates a connected UDP
-// socket for sending. A connected socket (via net.DialUDP) ensures the kernel
-// fills the correct source IP in the UDP pseudo-header, which fixes "bad udp
-// cksum" errors seen when the receiving socket is bound to 0.0.0.0.
-// This is critical for outbound calls — without a connected send socket,
-// some firewalls/NAT/SBCs drop packets with bad checksums, causing the call
-// to disconnect immediately when the user picks up.
+// SetRemoteAddr sets the remote RTP endpoint used by the handler's UDP socket.
 func (h *RTPHandler) SetRemoteAddr(ip string, port int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -528,86 +584,26 @@ func (h *RTPHandler) SetRemoteAddr(ip string, port int) {
 		Port: port,
 	}
 
-	// Create a connected UDP socket for sending.
-	// net.DialUDP "connects" the UDP socket to the remote address, which:
-	// 1. Locks in the source IP (kernel picks the correct interface route)
-	// 2. Guarantees correct UDP checksum computation in the pseudo-header
-	// 3. Allows using Write() instead of WriteToUDP() — slightly faster
-	//
-	// We bind the local side to the same port as the receiving socket so
-	// that the remote side sees RTP coming from the port we advertised in SDP.
-	// This requires SO_REUSEADDR + SO_REUSEPORT since the port is already
-	// bound by the receive socket (h.conn).
-
-	// Close any previous send socket (e.g., re-INVITE changed the remote address)
-	if h.sendConn != nil {
-		h.sendConn.Close()
-		h.sendConn = nil
-	}
-
-	network := "udp4"
-	if parsedIP != nil && parsedIP.To4() == nil {
-		network = "udp6"
-	}
-
-	// Use net.Dialer with Control to set SO_REUSEADDR + SO_REUSEPORT before bind.
-	// This allows the send socket to share the same local port as the receive socket.
-	dialer := net.Dialer{
-		LocalAddr: &net.UDPAddr{
-			IP:   net.ParseIP(h.localIP),
-			Port: h.localPort,
-		},
-		Control: func(network, address string, c syscall.RawConn) error {
-			var opErr error
-			if err := c.Control(func(fd uintptr) {
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_REUSEADDR, 1)
-				if opErr != nil {
-					return
-				}
-				opErr = syscall.SetsockoptInt(int(fd), syscall.SOL_SOCKET, unix.SO_REUSEPORT, 1)
-			}); err != nil {
-				return err
-			}
-			return opErr
-		},
-	}
-
-	rawConn, err := dialer.DialContext(h.ctx, network, h.remoteAddr.String())
-	if err != nil {
-		if h.logger != nil {
-			h.logger.Warnw("RTP: failed to create connected send socket, falling back to unconnected writes",
-				"error", err,
-				"local_port", h.localPort,
-				"remote", h.remoteAddr.String())
-		}
-		// sendConn stays nil — sendPacket() will fall back to WriteToUDP on h.conn
-	} else {
-		sendConn, ok := rawConn.(*net.UDPConn)
-		if !ok {
-			rawConn.Close()
-			if h.logger != nil {
-				h.logger.Warnw("RTP: DialContext returned non-UDP connection, falling back to unconnected writes")
-			}
-		} else {
-			// Apply same buffer sizes as the receive socket
-			_ = sendConn.SetWriteBuffer(rtpWriteBufferSize)
-			h.sendConn = sendConn
-			if h.logger != nil {
-				h.logger.Infow("RTP: connected send socket created (fixes UDP checksum)",
-					"local", sendConn.LocalAddr().String(),
-					"remote", sendConn.RemoteAddr().String())
-			}
-		}
-	}
-
 	if h.logger != nil {
 		h.logger.Infow("RTP remote address set",
 			"input_ip", ip,
 			"parsed_ip", fmt.Sprintf("%v", parsedIP),
 			"port", port,
 			"resolved_addr", h.remoteAddr.String(),
-			"has_send_conn", h.sendConn != nil,
 			"is_ipv4", parsedIP != nil && parsedIP.To4() != nil)
+	}
+}
+
+func (h *RTPHandler) SetSymmetricRTP(enabled bool) {
+	if h == nil {
+		return
+	}
+	h.mu.Lock()
+	changed := h.symmetricRTP != enabled
+	h.symmetricRTP = enabled
+	h.mu.Unlock()
+	if changed && h.logger != nil {
+		h.logger.Infow("RTP symmetric mode updated", "enabled", enabled)
 	}
 }
 
@@ -751,50 +747,14 @@ func (h *RTPHandler) receiveLoop() {
 			return
 		}
 
-		// Determine which socket to read from.
-		//
-		// When a connected send socket (sendConn) exists, the kernel routes
-		// inbound UDP packets from the remote peer to it instead of the
-		// unconnected receive socket (h.conn), because SO_REUSEPORT with a
-		// connected socket creates a more-specific 4-tuple match. If we only
-		// read from h.conn, we will never see any packets.
-		//
-		// Strategy:
-		//   - If sendConn is available, read from it (connected → Read).
-		//   - Otherwise, fall back to h.conn (unconnected → ReadFromUDP).
-		//
-		// We re-check sendConn each iteration so that a mid-call re-INVITE
-		// (which calls SetRemoteAddr → creates a new sendConn) is picked up.
-		h.mu.RLock()
-		sendConn := h.sendConn
-		h.mu.RUnlock()
-
 		var n int
 		var remoteAddr *net.UDPAddr
 		var err error
 
-		if sendConn != nil {
-			// Connected socket: the kernel delivers packets from the connected
-			// remote peer here. Use Read() — the source address is the
-			// connected remote, which we already know.
-			if deadlineErr := sendConn.SetReadDeadline(time.Now().Add(rtpInputPlayoutTimeout)); deadlineErr != nil {
-				continue
-			}
-			n, err = sendConn.Read(buf)
-			if err == nil {
-				// Source is the connected remote address
-				h.mu.RLock()
-				remoteAddr = h.remoteAddr
-				h.mu.RUnlock()
-			}
-		} else {
-			// Unconnected socket: no sendConn yet (remote address not set,
-			// or DialUDP failed). Read from the listener socket.
-			if deadlineErr := h.conn.SetReadDeadline(time.Now().Add(rtpInputPlayoutTimeout)); deadlineErr != nil {
-				continue
-			}
-			n, remoteAddr, err = h.conn.ReadFromUDP(buf)
+		if deadlineErr := h.conn.SetReadDeadline(time.Now().Add(rtpInputPlayoutTimeout)); deadlineErr != nil {
+			continue
 		}
+		n, remoteAddr, err = h.conn.ReadFromUDP(buf)
 
 		if err != nil {
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -803,16 +763,12 @@ func (h *RTPHandler) receiveLoop() {
 				}
 				continue
 			}
-			// When SetRemoteAddr replaces sendConn during a re-INVITE, the
-			// old socket is closed and Read() returns "use of closed network
-			// connection". This is expected — the next iteration will pick up
-			// the new sendConn. Don't log it as a warning.
-			if sendConn != nil && errors.Is(err, net.ErrClosed) {
+			if errors.Is(err, net.ErrClosed) {
 				continue
 			}
 			// Connection closed or other error
 			if h.running.Load() && h.logger != nil {
-				// h.logger.Warnw("RTP receive error", "error", err, "from_send_conn", sendConn != nil)
+				// h.logger.Warnw("RTP receive error", "error", err)
 			}
 			continue
 		}
@@ -832,13 +788,21 @@ func (h *RTPHandler) receiveLoop() {
 			continue
 		}
 
-		// Auto-detect remote address if not set
 		if remoteAddr != nil {
 			h.mu.Lock()
 			if h.remoteAddr == nil {
 				h.remoteAddr = remoteAddr
 				if h.logger != nil {
 					h.logger.Info("RTP: Auto-detected remote address", "addr", remoteAddr.String())
+				}
+			} else if h.symmetricRTP &&
+				(!h.remoteAddr.IP.Equal(remoteAddr.IP) || h.remoteAddr.Port != remoteAddr.Port) {
+				previousAddr := h.remoteAddr
+				h.remoteAddr = remoteAddr
+				if h.logger != nil {
+					h.logger.Infow("RTP symmetric remote address updated",
+						"previous_addr", previousAddr.String(),
+						"packet_addr", remoteAddr.String())
 				}
 			}
 			h.mu.Unlock()
@@ -1151,23 +1115,7 @@ func (h *RTPHandler) parseRTPPacket(data []byte) (*RTPPacket, error) {
 	return packet, nil
 }
 
-// sendPacket sends serialized RTP data to the remote address.
-// Prefers the connected send socket (h.sendConn) which produces correct UDP
-// checksums. Falls back to WriteToUDP on the receive socket if no connected
-// socket is available (e.g., DialUDP failed or remote not yet set).
 func (h *RTPHandler) sendPacket(data []byte, remoteAddr *net.UDPAddr) (int, error) {
-	h.mu.RLock()
-	sendConn := h.sendConn
-	h.mu.RUnlock()
-
-	if sendConn != nil {
-		// Connected socket — Write() uses the pre-connected remote address.
-		// The kernel computes the correct UDP checksum because the source IP
-		// is locked to the interface selected during DialUDP.
-		return sendConn.Write(data)
-	}
-
-	// Fallback: unconnected socket — may produce bad checksums when bound to 0.0.0.0
 	return h.conn.WriteToUDP(data, remoteAddr)
 }
 

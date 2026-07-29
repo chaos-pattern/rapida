@@ -76,14 +76,6 @@ func (s *Server) IsRunning() bool {
 	return s.inner.IsRunning()
 }
 
-func (s *Server) AllocateRTPPort() (int, error) {
-	return s.inner.AllocateRTPPort()
-}
-
-func (s *Server) ReleaseRTPPort(port int) {
-	s.inner.ReleaseRTPPort(port)
-}
-
 func (s *Server) NegotiatedSDPConfig(localIP string, rtpPort int, codec *Codec) *SDPConfig {
 	return sdpConfigFromCore(s.inner.NegotiatedSDPConfig(localIP, rtpPort, codec.toCore()))
 }

@@ -722,6 +722,23 @@ func TestOutboundMediaStop_StopsRTPHandler(t *testing.T) {
 	assert.False(t, rtp.running.Load(), "RTP handler should be stopped")
 }
 
+func TestOutboundMediaStop_DoesNotStopSessionAdoptedRTPHandler(t *testing.T) {
+	t.Parallel()
+	session := newInboundTestSession(t)
+	rtp := newTestRTPHandler()
+	session.SetRTPHandler(rtp)
+
+	media := &outboundMedia{
+		session:    session,
+		rtpHandler: rtp,
+	}
+	media.Stop()
+
+	assert.True(t, rtp.running.Load(), "adopted RTP handler should be stopped by Session.End")
+	session.End()
+	assert.False(t, rtp.running.Load())
+}
+
 func TestOutboundMediaStop_NilRTPHandler(t *testing.T) {
 	t.Parallel()
 	media := &outboundMedia{

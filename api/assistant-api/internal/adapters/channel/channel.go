@@ -55,6 +55,7 @@ type ChannelRunner interface {
 	RunControl(context.Context, func(Envelope))
 	RunBootstrap(context.Context, func(Envelope))
 	RunIngress(context.Context, func(Envelope))
+	PauseIngress(context.Context, func())
 	RunEgress(context.Context, func(Envelope))
 	RunData(context.Context, func(Envelope))
 	RunBackground(context.Context, func(Envelope))
@@ -80,7 +81,9 @@ type RequestorChannels struct {
 
 	// ingressCh carries inbound user-side packets:
 	// user audio/text and upstream processing packets (VAD/STT/EOS/tool result).
-	ingressCh chan Envelope
+	ingressCh       chan Envelope
+	ingressPauseCh  chan struct{}
+	ingressPausedCh chan struct{}
 
 	// egressCh carries outbound assistant-side packets:
 	// LLM deltas/done, TTS text/audio/end, and output error/control events.
@@ -98,13 +101,16 @@ type RequestorChannels struct {
 
 func NewRequestorChannels() *RequestorChannels {
 	channels := &RequestorChannels{
-		controlChannel: make(chan Envelope, 256),
-		bootstrapCh:    make(chan Envelope, 512),
-		ingressCh:      make(chan Envelope, 4096),
-		egressCh:       make(chan Envelope, 2048),
-		dataCh:         make(chan Envelope, 2048),
-		backgroundCh:   make(chan Envelope, 2048),
+		controlChannel:  make(chan Envelope, 256),
+		bootstrapCh:     make(chan Envelope, 512),
+		ingressCh:       make(chan Envelope, 4096),
+		ingressPauseCh:  make(chan struct{}),
+		ingressPausedCh: make(chan struct{}),
+		egressCh:        make(chan Envelope, 2048),
+		dataCh:          make(chan Envelope, 2048),
+		backgroundCh:    make(chan Envelope, 2048),
 	}
+	close(channels.ingressPausedCh)
 	return channels
 }
 
@@ -130,10 +136,21 @@ func (c *RequestorChannels) OnBootstrap(e Envelope) {
 // OnIngress routes an envelope to the ingress channel.
 func (c *RequestorChannels) OnIngress(e Envelope) {
 	select {
+	case <-c.ingressPauseCh:
+		return
+	default:
+	}
+
+	select {
+	case <-c.ingressPauseCh:
+		return
 	case c.ingressCh <- e:
 	default:
 		c.FlushIngress()
-		c.ingressCh <- e
+		select {
+		case <-c.ingressPauseCh:
+		case c.ingressCh <- e:
+		}
 	}
 }
 
@@ -172,7 +189,39 @@ func (c *RequestorChannels) RunBootstrap(ctx context.Context, onEnvelope func(En
 }
 
 func (c *RequestorChannels) RunIngress(ctx context.Context, onEnvelope func(Envelope)) {
-	run(ctx, c.ingressCh, onEnvelope)
+	if c.ingressPausedCh != nil {
+		c.ingressPausedCh = make(chan struct{})
+		defer close(c.ingressPausedCh)
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.ingressPauseCh:
+			return
+		case e := <-c.ingressCh:
+			onEnvelope(e)
+		}
+	}
+}
+
+func (c *RequestorChannels) PauseIngress(ctx context.Context, onPaused func()) {
+	if c.ingressPauseCh != nil {
+		close(c.ingressPauseCh)
+	}
+	c.FlushIngress()
+	if c.ingressPausedCh != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.ingressPausedCh:
+		}
+	}
+	c.FlushIngress()
+	if onPaused != nil {
+		onPaused()
+	}
 }
 
 func (c *RequestorChannels) RunEgress(ctx context.Context, onEnvelope func(Envelope)) {

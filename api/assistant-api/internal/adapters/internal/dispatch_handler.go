@@ -2870,6 +2870,12 @@ func (h requestorDispatchHandler) HandleInitializeInboundDispatcher(ctx context.
 	go h.r.runInputDispatcher(h.r.sessionCtx)
 }
 
+func (h requestorDispatchHandler) HandleFinalizeInboundDispatcher(ctx context.Context, p internal_type.FinalizeInboundDispatcherPacket) {
+	h.r.pauseInputDispatcher(h.r.sessionCtx, func() {
+		h.r.OnPacket(ctx, internal_type.FinalizeBehaviorPacket{ContextID: p.ContextID})
+	})
+}
+
 func (h requestorDispatchHandler) HandleFinalizeBehavior(ctx context.Context, p internal_type.FinalizeBehaviorPacket) {
 	if h.r.idleTimeoutWatchdog != nil {
 		h.r.idleTimeoutWatchdog.Cancel()
