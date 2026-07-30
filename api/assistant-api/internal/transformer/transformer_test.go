@@ -15,6 +15,7 @@ import (
 	"github.com/rapidaai/pkg/utils"
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // TestAudioTransformerString tests the String method
@@ -339,6 +340,28 @@ func TestAllSpeechToTextTransformersCallFactory(t *testing.T) {
 			_, _ = GetSpeechToTextTransformer(ctx, mockLogger, tt.String(), credential, func(pkt ...internal_type.Packet) error { return nil }, utils.Option{})
 		})
 	}
+}
+
+// TestSmallestFactorySelection asserts that, given valid credentials, the
+// SMALLEST branch of both factories actually constructs a transformer
+// instead of merely not panicking (the shared *CallFactory loops above use
+// an empty credential, so they pass whether SMALLEST succeeds or falls
+// through to an error).
+func TestSmallestFactorySelection(t *testing.T) {
+	mockLogger, _ := commons.NewApplicationLogger()
+	ctx := context.Background()
+	value, err := structpb.NewStruct(map[string]interface{}{"key": "test-api-key"})
+	assert.NoError(t, err)
+	credential := &protos.VaultCredential{Value: value}
+	noopCallback := func(pkt ...internal_type.Packet) error { return nil }
+
+	tts, err := GetTextToSpeechTransformer(ctx, mockLogger, SMALLEST.String(), credential, noopCallback, utils.Option{})
+	assert.NoError(t, err)
+	assert.NotNil(t, tts)
+
+	stt, err := GetSpeechToTextTransformer(ctx, mockLogger, SMALLEST.String(), credential, noopCallback, utils.Option{})
+	assert.NoError(t, err)
+	assert.NotNil(t, stt)
 }
 
 // BenchmarkGetTextToSpeechTransformer benchmarks TTS factory performance

@@ -72,6 +72,7 @@ func (cst *smallestSpeechToText) Initialize() error {
 
 	conn, _, err := websocket.DefaultDialer.Dial(connectionString, header)
 	if err != nil {
+		err = fmt.Errorf("smallest-stt: dial %s: %w", connectionString, err)
 		cst.logger.Errorf("smallest-stt: failed to connect to Smallest WebSocket: %v", err)
 		cst.onPacket(internal_type.ObservabilityLogRecordPacket{
 			Scope: internal_type.ObservabilityRecordScopeConversation,
@@ -118,6 +119,20 @@ func (cst *smallestSpeechToText) Initialize() error {
 		},
 	)
 	return nil
+}
+
+// meanWordConfidence averages per-word confidence scores. Pulse only reports
+// confidence at the word level (populated when word_timestamps=true), so
+// there is no top-level value to report as-is.
+func meanWordConfidence(words []smallest_internal.SpeechToTextWord) (float64, bool) {
+	if len(words) == 0 {
+		return 0, false
+	}
+	var sum float64
+	for _, w := range words {
+		sum += w.Confidence
+	}
+	return sum / float64(len(words)), true
 }
 
 // readLoop owns the WebSocket connection for the lifetime of the STT session.
@@ -187,6 +202,13 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 		cst.mu.Unlock()
 
 		if !resp.IsFinal {
+			interimAttrs := observability.Attributes{
+				"type":   "interim",
+				"script": resp.Transcript,
+			}
+			if conf, ok := meanWordConfidence(resp.Words); ok {
+				interimAttrs["confidence"] = fmt.Sprintf("%.4f", conf)
+			}
 			cst.onPacket(
 				internal_type.InterruptionDetectedPacket{ContextID: ctxID, Source: internal_type.InterruptionSourceWord},
 				internal_type.SpeechToTextPacket{
@@ -199,13 +221,9 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 					ContextID: ctxID,
 					Scope:     internal_type.ObservabilityRecordScopeUserMessage,
 					Record: observability.RecordEvent{
-						Component: observability.ComponentSTT,
-						Event:     observability.STTInterim,
-						Attributes: observability.Attributes{
-							"type":       "interim",
-							"script":     resp.Transcript,
-							"confidence": "0.9000",
-						},
+						Component:  observability.ComponentSTT,
+						Event:      observability.STTInterim,
+						Attributes: interimAttrs,
 						OccurredAt: time.Now(),
 					},
 				},
@@ -224,7 +242,6 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 		attrs := observability.Attributes{
 			"type":       "completed",
 			"script":     resp.Transcript,
-			"confidence": "0.9000",
 			"language":   resp.Language,
 			"word_count": fmt.Sprintf("%d", len(strings.Fields(resp.Transcript))),
 			"char_count": fmt.Sprintf("%d", len(resp.Transcript)),
@@ -234,6 +251,12 @@ func (cst *smallestSpeechToText) readLoop(conn *websocket.Conn) {
 		// via listen.* options — see GetSpeechToTextConnectionString.
 		if len(resp.Words) > 0 {
 			attrs["word_timestamp_count"] = fmt.Sprintf("%d", len(resp.Words))
+		}
+		// Pulse has no top-level confidence; derive one from per-word
+		// confidence when word_timestamps was requested, rather than
+		// fabricating a constant.
+		if conf, ok := meanWordConfidence(resp.Words); ok {
+			attrs["confidence"] = fmt.Sprintf("%.4f", conf)
 		}
 		if len(resp.Utterances) > 0 {
 			attrs["utterance_count"] = fmt.Sprintf("%d", len(resp.Utterances))

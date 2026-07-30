@@ -75,6 +75,7 @@ func (ct *smallestTTS) Initialize() error {
 
 	conn, _, err := websocket.DefaultDialer.Dial(connectionString, header)
 	if err != nil {
+		err = fmt.Errorf("smallest-tts: dial %s: %w", connectionString, err)
 		ct.logger.Errorf("smallest-tts: unable to dial %v", err)
 		ct.onPacket(internal_type.ObservabilityLogRecordPacket{
 			Scope: internal_type.ObservabilityRecordScopeConversation,

@@ -383,6 +383,11 @@ describe('Smallest TTS — config resolution', () => {
     const standardIds = new Set(standardVoices.map(v => v.voice_id));
     const proIds = new Set(proVoices.map(v => v.voice_id));
 
+    // Guard against a missing/invalid catalog silently resolving to `[]`,
+    // which would make every assertion below vacuously true.
+    expect(standardVoices.length).toBeGreaterThan(0);
+    expect(proVoices.length).toBeGreaterThan(0);
+
     // No voice should be pickable under both models — that's exactly the
     // pairing the live API rejects (see smallest_integration_test.go's
     // TestSmallestTTSVoiceModelMismatch).
