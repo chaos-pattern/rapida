@@ -438,11 +438,24 @@ func (s *Session) SetInboundSetupTimings(timings InboundSetupTimings) {
 }
 
 // SetRTPHandler sets the RTP handler for this session.
-// Telephony media owners read/write directly from/to the RTP handler's audio channels.
+// Once adopted by the session, RTP teardown is owned by Session.End.
+// Replacing a different handler stops the previous one so sockets cannot leak.
 func (s *Session) SetRTPHandler(handler *RTPHandler) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	previous := s.rtpHandler
+	if previous == handler {
+		s.mu.Unlock()
+		return
+	}
 	s.rtpHandler = handler
+	callID := s.info.CallID
+	s.mu.Unlock()
+
+	if previous != nil {
+		if err := previous.Stop(); err != nil && s.logger != nil {
+			s.logger.Warnw("Error stopping replaced RTP handler", "error", err, "call_id", callID)
+		}
+	}
 }
 
 // GetRTPHandler returns the RTP handler for this session
@@ -821,9 +834,6 @@ func (s *Session) SetDisconnectMetadata(metadata DisconnectMetadata) {
 		s.metadata = make(map[string]interface{})
 	}
 	s.metadata[MetadataDisconnectReason] = metadata.Reason
-	if metadata.Text != "" {
-		s.metadata[MetadataDisconnectText] = metadata.Text
-	}
 	if metadata.Raw != "" {
 		s.metadata[MetadataDisconnectRawReason] = metadata.Raw
 	}

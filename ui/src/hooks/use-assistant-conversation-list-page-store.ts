@@ -145,7 +145,6 @@ export const useAssistantConversationListPageStore =
       { name: 'Date', key: 'created_date', visible: true },
       { name: 'User Identifier', key: 'identifier', visible: true },
       { name: 'Status', key: 'status', visible: true },
-      { name: 'Disconnect Reason', key: 'disconnect_reason', visible: true },
       { name: 'Action', key: 'action', visible: true },
       { name: 'Total Duration', key: 'duration', visible: true },
       { name: 'Direction', key: 'direction', visible: true },

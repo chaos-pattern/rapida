@@ -169,6 +169,7 @@ func TestClassifyName_DispatchablePacketNamesAreExplicitlyRouted(t *testing.T) {
 		internal_type.PacketNameInitializationCompleted:                    RouteBootstrap,
 		internal_type.PacketNameInitializationFailed:                       RouteBootstrap,
 		internal_type.PacketNameInitializeInboundDispatcher:                RouteBootstrap,
+		internal_type.PacketNameFinalizeInboundDispatcher:                  RouteBootstrap,
 		internal_type.PacketNameModeSwitchRequested:                        RouteBootstrap,
 		internal_type.PacketNameModeSwitchCompleted:                        RouteBootstrap,
 		internal_type.PacketNameModeSwitchInitializeSpeechToText:           RouteBootstrap,

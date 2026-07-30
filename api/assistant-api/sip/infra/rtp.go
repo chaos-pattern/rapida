@@ -11,8 +11,6 @@ import (
 	"net"
 
 	internal_core "github.com/rapidaai/api/assistant-api/sip/internal/core"
-	"github.com/rapidaai/pkg/commons"
-	"github.com/redis/go-redis/v9"
 )
 
 func NewRTPHandler(ctx context.Context, config *RTPConfig) (*RTPHandler, error) {
@@ -200,28 +198,4 @@ func (h *RTPHandler) GetDetailedStats() RTPStats {
 		return rtpStatsFromCore(h.inner.GetDetailedStats())
 	}
 	return RTPStats{}
-}
-
-func NewRTPPortAllocator(client *redis.Client, logger commons.Logger, portStart, portEnd int) *RTPPortAllocator {
-	return &RTPPortAllocator{inner: internal_core.NewRTPPortAllocator(client, logger, portStart, portEnd)}
-}
-
-func (a *RTPPortAllocator) Init(ctx context.Context) error {
-	return a.inner.Init(ctx)
-}
-
-func (a *RTPPortAllocator) Allocate() (int, error) {
-	return a.inner.Allocate()
-}
-
-func (a *RTPPortAllocator) Release(port int) {
-	a.inner.Release(port)
-}
-
-func (a *RTPPortAllocator) InUse() (int, error) {
-	return a.inner.InUse()
-}
-
-func (a *RTPPortAllocator) ReleaseAll(ctx context.Context) {
-	a.inner.ReleaseAll(ctx)
 }

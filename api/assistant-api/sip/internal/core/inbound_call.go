@@ -7,657 +7,497 @@
 package core
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"net"
-	"strings"
+	"sync"
 	"time"
 
-	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
-	internal_inbound "github.com/rapidaai/api/assistant-api/sip/internal/inbound"
 )
 
-type inboundCall struct {
+type inboundInviteIdentity struct {
+	callID  string
+	fromTag string
+	fromURI string
+	toURI   string
+}
+
+// Inbound owns the lifecycle for a single inbound SIP INVITE.
+type Inbound struct {
 	server      *Server
 	request     *sip.Request
 	transaction sip.ServerTransaction
 
 	identity       inboundInviteIdentity
+	inviteKey      inboundInviteKey
 	mediaOffer     inboundMediaOffer
-	resolvedConfig inboundResolvedConfig
+	resolvedConfig inboundConfig
 
-	session          *Session
-	dialogSession    *sipgo.DialogServerSession
-	rtpHandler       *RTPHandler
-	allocatedRTPPort int
-	localRTPPort     int
-	externalIP       string
-	setupPhase       InboundSetupPhase
-	setupTimings     InboundSetupTimings
-	answerPolicy     InboundAnswerPolicy
-	answerController *inboundAnswerController
-	rtpStarted       bool
+	session           *Session
+	dialog            *inboundDialog
+	media             *inboundMedia
+	finalResponseOnce sync.Once
 }
 
-func newInboundCall(server *Server, request *sip.Request, transaction sip.ServerTransaction) *inboundCall {
-	return &inboundCall{
+// NewInbound creates an inbound SIP call handler.
+func NewInbound(server *Server, request *sip.Request, transaction sip.ServerTransaction) *Inbound {
+	return &Inbound{
 		server:      server,
 		request:     request,
 		transaction: transaction,
 	}
 }
 
-func (inboundCall *inboundCall) run() {
-	if err := inboundCall.loadIdentity(); err != nil {
-		inboundCall.server.logger.Errorw("Invalid inbound INVITE", "error", err)
-		inboundCall.sendFinalResponse(400)
-		return
+func inboundInviteIdentityFromRequest(request *sip.Request) (inboundInviteIdentity, bool) {
+	if request == nil ||
+		request.CallID() == nil ||
+		request.CallID().Value() == "" ||
+		request.From() == nil ||
+		request.From().Params == nil ||
+		request.To() == nil {
+		return inboundInviteIdentity{}, false
 	}
-	inboundCall.recordPhase(InboundSetupPhaseInviteReceived, LifecycleReasonInboundInviteReceived)
-
-	server := inboundCall.server
-	callID := inboundCall.identity.callID
-
-	server.logger.Infow("Received INVITE",
-		"call_id", callID,
-		"from", inboundCall.identity.fromURI,
-		"to", inboundCall.identity.toURI)
-	server.setPendingInvite(callID, inboundCall.request, inboundCall.transaction)
-	defer inboundCall.finish()
-
-	if inboundCall.routeReInvite() {
-		return
+	fromTag, ok := request.From().Params.Get("tag")
+	if !ok || fromTag == "" {
+		return inboundInviteIdentity{}, false
 	}
 
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled) {
-		return
-	}
-	if err := inboundCall.parseMediaOffer(); err != nil {
-		inboundCall.failSetupError(400, internal_inbound.FailureMedia, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled) {
-		return
-	}
-	if err := inboundCall.resolveConfig(); err != nil {
-		if errors.Is(err, ErrInboundInviteCancelled) {
-			inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled)
-			return
-		}
-		inboundCall.failSetupError(500, internal_inbound.FailureConfig, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled) {
-		return
-	}
-	if err := inboundCall.createSession(); err != nil {
-		inboundCall.failSetup(500, internal_inbound.FailureSetup, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-
-	server.registerSession(inboundCall.session, callID)
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelled) {
-		return
-	}
-	if err := inboundCall.createDialog(); err != nil {
-		inboundCall.failSetup(500, internal_inbound.FailureDialog, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	inboundCall.createAnswerController()
-	if err := inboundCall.answerController.SendTrying(); err != nil {
-		inboundCall.failSetup(500, internal_inbound.FailureDialog, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	server.TransitionCall(inboundCall.session, CallStateRinging, LifecycleReasonInboundInviteRinging)
-	if err := inboundCall.answerController.StartRinging(server.ctx); err != nil {
-		inboundCall.failSetup(500, internal_inbound.FailureDialog, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-
-	if err := inboundCall.setupRTP(); err != nil {
-		inboundCall.failSetup(503, internal_inbound.FailureRTP, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelledBeforeAnswer) {
-		return
-	}
-	if err := inboundCall.prepareApplication(); err != nil {
-		inboundCall.failSetup(503, internal_inbound.FailureSetup, LifecycleReasonPipelineSetupFailed, err)
-		return
-	}
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelledBeforeAnswer) {
-		return
-	}
-	if err := inboundCall.answerController.WaitUntilAnswerReady(server.ctx); err != nil {
-		inboundCall.failSetup(408, internal_inbound.FailureSetup, LifecycleReasonInboundAnswerPolicyTimeout, err)
-		return
-	}
-	if inboundCall.cancelIfRequested(LifecycleReasonInviteCancelledBeforeAnswer) {
-		return
-	}
-	if err := inboundCall.answer(); err != nil {
-		if errors.Is(err, ErrInboundInviteCancelled) {
-			return
-		}
-		if errors.Is(err, ErrInboundACKTimeout) {
-			inboundCall.failSetup(408, internal_inbound.FailureDialog, LifecycleReasonInboundACKTimeout, err)
-			return
-		}
-		inboundCall.failSetup(500, internal_inbound.FailureDialog, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-	if err := inboundCall.startRTP(); err != nil {
-		inboundCall.failSetup(503, internal_inbound.FailureRTP, LifecycleReasonInboundInviteFailed, err)
-		return
-	}
-
-	inboundCall.dispatchInvite()
+	return inboundInviteIdentity{
+		callID:  request.CallID().Value(),
+		fromTag: fromTag,
+		fromURI: request.From().Address.String(),
+		toURI:   request.To().Address.String(),
+	}, true
 }
 
-func (inboundCall *inboundCall) loadIdentity() error {
-	request := inboundCall.request
-	if request == nil {
-		return fmt.Errorf("request is nil")
+// newInboundSession creates the call session but does not register it.
+// HandleInvite owns registration, cancellation checks, and terminal cleanup.
+func newInboundSession(
+	ctx context.Context,
+	resolvedConfig inboundConfig,
+	identity inboundInviteIdentity,
+	mediaOffer inboundMediaOffer,
+	setupPhase InboundSetupPhase,
+	setupTimings InboundSetupTimings,
+) (*Session, *inboundFailure) {
+	session, err := NewSession(ctx, &SessionConfig{
+		Config:          resolvedConfig.config,
+		Direction:       CallDirectionInbound,
+		CallID:          identity.callID,
+		Codec:           mediaOffer.negotiatedCodec,
+		Auth:            resolvedConfig.auth,
+		Assistant:       resolvedConfig.assistant,
+		VaultCredential: resolvedConfig.vaultCredential,
+	})
+	if err != nil {
+		sessionErr := fmt.Errorf("failed to create inbound session: %w", err)
+		failure := newInboundSessionFailure(sessionErr)
+		return nil, &failure
 	}
-	callIDHeader := request.CallID()
-	if callIDHeader == nil || callIDHeader.Value() == "" {
-		return fmt.Errorf("Call-ID header is required")
+
+	if setupPhase != "" {
+		session.SetInboundSetupPhase(setupPhase)
 	}
-	fromHeader := request.From()
-	if fromHeader == nil {
-		return fmt.Errorf("From header is required")
-	}
-	toHeader := request.To()
-	if toHeader == nil {
-		return fmt.Errorf("To header is required")
-	}
-	inboundCall.identity = inboundInviteIdentity{
-		callID:  callIDHeader.Value(),
-		fromURI: fromHeader.Address.String(),
-		toURI:   toHeader.Address.String(),
-	}
-	return nil
+	session.SetInboundSetupTimings(setupTimings)
+	return session, nil
 }
 
-func (inboundCall *inboundCall) routeReInvite() bool {
-	server := inboundCall.server
-	callID := inboundCall.identity.callID
+// HandleInvite processes the inbound INVITE lifecycle.
+func (inboundCall *Inbound) HandleInvite() {
+	identity, ok := inboundInviteIdentityFromRequest(inboundCall.request)
+	if !ok {
+		inboundCall.server.sendResponse(inboundCall.transaction, inboundCall.request, 400)
+		return
+	}
+	inboundCall.identity = identity
+	inboundCall.inviteKey = inboundInviteKey{callID: identity.callID, fromTag: identity.fromTag}
+	setupPhase := InboundSetupPhaseInviteReceived
+	setupTimings := InboundSetupTimings{InviteReceivedAt: time.Now()}
 
-	server.mu.RLock()
-	existingSession, isReInvite := server.sessions[callID]
-	server.mu.RUnlock()
-
-	if !isReInvite || existingSession == nil {
-		return false
+	if inboundCall.server.replayRejectedInboundInvite(inboundCall.request, inboundCall.transaction) {
+		return
 	}
 
-	info := existingSession.GetInfo()
-	server.logger.Infow("Routing as re-INVITE for existing session",
-		"call_id", callID,
-		"direction", info.Direction,
-		"state", info.State)
-	server.handleReInvite(inboundCall.request, inboundCall.transaction, existingSession)
-	return true
-}
+	setupTimings.TryingSentAt = time.Now()
+	inboundCall.server.sendResponse(inboundCall.transaction, inboundCall.request, 100)
 
-func (inboundCall *inboundCall) parseMediaOffer() error {
-	server := inboundCall.server
-	callID := inboundCall.identity.callID
+	inboundCall.server.setPendingInvite(inboundCall.inviteKey, inboundCall.request, inboundCall.transaction)
+	defer func() {
+		inboundCall.server.clearPendingInvite(inboundCall.inviteKey)
+		inboundCall.server.clearInviteCancelled(inboundCall.inviteKey)
+	}()
 
-	mediaOffer, err := parseInboundSDPMediaOffer(
-		server,
+	inboundCall.server.mu.RLock()
+	existingSession, isReInvite := inboundCall.server.sessions[inboundCall.identity.callID]
+	inboundCall.server.mu.RUnlock()
+	if isReInvite && existingSession != nil {
+		inboundCall.server.handleReInvite(inboundCall.request, inboundCall.transaction, existingSession)
+		return
+	}
+
+	if inboundCall.server.isInviteCancelled(inboundCall.inviteKey) {
+		inboundCall.server.terminatePendingInvite(inboundCall.inviteKey, 487)
+		return
+	}
+
+	mediaOffer, mediaFailure := NewInboundMediaOffer(
+		inboundCall.server,
 		inboundCall.request,
-		callID,
 		"inbound INVITE",
 		LifecycleReasonInboundInviteFailed,
 		false,
 	)
-	if err != nil {
-		return err
+	if mediaFailure != nil {
+		inboundCall.server.RejectInboundInvite(
+			inboundCall.request,
+			inboundCall.transaction,
+			inboundCall.identity.callID,
+			mediaFailure.statusCode,
+			mediaFailure.responseClass,
+			mediaFailure.lifecycleReason,
+			mediaFailure.err,
+		)
+		return
 	}
-
 	inboundCall.mediaOffer = mediaOffer
-	server.logger.Debugw("Parsed inbound SDP",
-		"call_id", callID,
-		"remote_rtp_ip", mediaOffer.sdpInfo.ConnectionIP,
-		"remote_rtp_port", mediaOffer.sdpInfo.AudioPort,
-		"codec", mediaOffer.negotiatedCodec.Name)
-	return nil
-}
-
-func parseInboundSDPMediaOffer(
-	server *Server,
-	request *sip.Request,
-	callID string,
-	requestName string,
-	reason LifecycleReason,
-	allowDisabledRTPAddress bool,
-) (inboundMediaOffer, error) {
-	if err := validateSDPContentType(request, requestName, reason); err != nil {
-		return inboundMediaOffer{}, err
+	if inboundCall.server.isInviteCancelled(inboundCall.inviteKey) {
+		inboundCall.server.terminatePendingInvite(inboundCall.inviteKey, 487)
+		return
 	}
 
-	sdpInfo, err := server.ParseSDP(request.Body())
-	if err != nil {
-		return inboundMediaOffer{}, fmt.Errorf("%w: %v", ErrSDPParseFailed, err)
+	resolvedConfig, configFailure := NewInboundConfig(inboundCall.server, inboundCall.identity, inboundCall.mediaOffer)
+	if configFailure != nil {
+		inboundCall.server.RejectInboundInvite(
+			inboundCall.request,
+			inboundCall.transaction,
+			inboundCall.identity.callID,
+			configFailure.statusCode,
+			configFailure.responseClass,
+			configFailure.lifecycleReason,
+			configFailure.err,
+		)
+		return
 	}
-	if err := validateInboundRemoteMedia(sdpInfo, allowDisabledRTPAddress, reason); err != nil {
-		return inboundMediaOffer{}, err
-	}
-	negotiatedCodec := firstSupportedAudioCodec(sdpInfo.PayloadTypes)
-	if negotiatedCodec == nil {
-		err := fmt.Errorf("%w: %s payload types %v", ErrCodecNotSupported, requestName, sdpInfo.PayloadTypes)
-		return inboundMediaOffer{}, newInboundSetupError(488, internal_inbound.FailureMedia, reason, err)
-	}
-
-	server.logger.Debugw("Parsed SIP SDP media offer",
-		"call_id", callID,
-		"request", requestName,
-		"remote_rtp_ip", sdpInfo.ConnectionIP,
-		"remote_rtp_port", sdpInfo.AudioPort,
-		"codec", negotiatedCodec.Name,
-		"is_hold", sdpInfo.IsHold())
-
-	return inboundMediaOffer{
-		sdpInfo:         sdpInfo,
-		negotiatedCodec: negotiatedCodec,
-	}, nil
-}
-
-func validateSDPContentType(request *sip.Request, requestName string, reason LifecycleReason) error {
-	if len(request.Body()) == 0 {
-		return nil
-	}
-	contentTypeHeader := request.GetHeader("Content-Type")
-	if contentTypeHeader == nil {
-		err := fmt.Errorf("%w: %s missing Content-Type", ErrSDPParseFailed, requestName)
-		return newInboundSetupError(415, internal_inbound.FailureMedia, reason, err)
-	}
-	contentType := strings.ToLower(strings.TrimSpace(contentTypeHeader.Value()))
-	if semicolon := strings.Index(contentType, ";"); semicolon >= 0 {
-		contentType = strings.TrimSpace(contentType[:semicolon])
-	}
-	if contentType != internal_inbound.SDPContentType {
-		err := fmt.Errorf("%w: unsupported %s media type %q", ErrSDPParseFailed, requestName, contentTypeHeader.Value())
-		return newInboundSetupError(415, internal_inbound.FailureMedia, reason, err)
-	}
-	return nil
-}
-
-func validateInboundRemoteMedia(sdpInfo *SDPMediaInfo, allowDisabledRTPAddress bool, reason LifecycleReason) error {
-	if sdpInfo == nil {
-		return fmt.Errorf("%w: inbound offer missing SDP media", ErrSDPParseFailed)
-	}
-	if strings.TrimSpace(sdpInfo.ConnectionIP) == "" {
-		return fmt.Errorf("%w: inbound offer missing RTP address", ErrSDPParseFailed)
-	}
-	remoteIP := net.ParseIP(sdpInfo.ConnectionIP)
-	if remoteIP == nil {
-		return fmt.Errorf("%w: inbound offer invalid RTP address %q", ErrSDPParseFailed, sdpInfo.ConnectionIP)
-	}
-	if remoteIP.IsUnspecified() && !allowDisabledRTPAddress {
-		err := fmt.Errorf("%w: inbound offer disabled RTP address %q", ErrSDPParseFailed, sdpInfo.ConnectionIP)
-		return newInboundSetupError(488, internal_inbound.FailureMedia, reason, err)
-	}
-	if sdpInfo.AudioPort <= 0 || sdpInfo.AudioPort > 65535 {
-		return fmt.Errorf("%w: inbound offer invalid RTP port %d", ErrSDPParseFailed, sdpInfo.AudioPort)
-	}
-	if len(sdpInfo.PayloadTypes) == 0 {
-		err := fmt.Errorf("%w: inbound offer has no RTP payload types", ErrCodecNotSupported)
-		return newInboundSetupError(488, internal_inbound.FailureMedia, reason, err)
-	}
-	return nil
-}
-
-func (inboundCall *inboundCall) resolveConfig() error {
-	server := inboundCall.server
-
-	server.mu.RLock()
-	middlewares := append([]Middleware(nil), server.middlewares...)
-	server.mu.RUnlock()
-	if len(middlewares) == 0 {
-		return fmt.Errorf("no SIP middleware configured")
-	}
-
-	requestContext := &SIPRequestContext{
-		Method:  "INVITE",
-		CallID:  inboundCall.identity.callID,
-		FromURI: inboundCall.identity.fromURI,
-		ToURI:   inboundCall.identity.toURI,
-		SDPInfo: inboundCall.mediaOffer.sdpInfo,
-	}
-	for _, middleware := range middlewares {
-		if err := middleware(requestContext); err != nil {
-			var sipErr *SIPError
-			if errors.As(err, &sipErr) && sipErr.Code > 0 {
-				server.logger.Warnw("Call rejected by SIP middleware chain",
-					"call_id", inboundCall.identity.callID,
-					"status_code", sipErr.Code,
-					"reason", sipErr.Message)
-				rejectErr := fmt.Errorf("%w: %s", ErrAuthRequired, sipErr.Message)
-				return newInboundSetupError(sipErr.Code, internal_inbound.FailureAuth, LifecycleReasonInboundInviteFailed, rejectErr)
-			}
-			return fmt.Errorf("SIP middleware failed: %w", err)
-		}
-	}
-	if server.isInviteCancelled(inboundCall.identity.callID) {
-		return ErrInboundInviteCancelled
-	}
-	if requestContext.Config == nil {
-		return fmt.Errorf("no SIP config resolved for inbound call")
-	}
-	inboundCall.recordPhase(InboundSetupPhaseAuthenticated, LifecycleReasonInboundAuthenticated)
-
-	resolvedConfig := inboundResolvedConfig{
-		config: requestContext.Config,
-	}
-	if requestContext.Auth != nil {
-		resolvedConfig.auth = requestContext.Auth
-	}
-	if requestContext.VaultCredential != nil {
-		resolvedConfig.vaultCredential = requestContext.VaultCredential
-	}
-	if requestContext.Assistant != nil {
-		resolvedConfig.assistant = requestContext.Assistant
-	}
-	if resolvedConfig.assistant != nil {
-		inboundCall.recordPhase(InboundSetupPhaseRouted, LifecycleReasonInboundRouted)
-	}
-	if resolvedConfig.config.Server == "" || resolvedConfig.config.Server == "0.0.0.0" {
-		resolvedConfig.config.Server = server.listenConfig.GetExternalIP()
-	}
-
 	inboundCall.resolvedConfig = resolvedConfig
-	inboundCall.answerPolicy = resolvedConfig.config.EffectiveInboundAnswerPolicy(server.effectiveInboundACKTimeout())
-	server.logger.Debugw("SIP INVITE authenticated",
-		"call_id", inboundCall.identity.callID,
-		"assistant_id", requestContext.AssistantID,
-		"has_api_key", requestContext.APIKey != "")
-	return nil
-}
-
-func (inboundCall *inboundCall) createSession() error {
-	session, err := NewSession(inboundCall.server.ctx, &SessionConfig{
-		Config:          inboundCall.resolvedConfig.config,
-		Direction:       CallDirectionInbound,
-		CallID:          inboundCall.identity.callID,
-		Codec:           inboundCall.mediaOffer.negotiatedCodec,
-		Logger:          inboundCall.server.logger,
-		Auth:            inboundCall.resolvedConfig.auth,
-		Assistant:       inboundCall.resolvedConfig.assistant,
-		VaultCredential: inboundCall.resolvedConfig.vaultCredential,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create inbound session: %w", err)
+	setupPhase = inboundCall.resolvedConfig.setupPhase
+	if inboundCall.server.isInviteCancelled(inboundCall.inviteKey) {
+		inboundCall.server.terminatePendingInvite(inboundCall.inviteKey, 487)
+		return
 	}
 
-	if inboundCall.setupPhase != "" {
-		session.SetInboundSetupPhase(inboundCall.setupPhase)
+	session, sessionFailure := newInboundSession(
+		inboundCall.server.ctx,
+		inboundCall.resolvedConfig,
+		inboundCall.identity,
+		inboundCall.mediaOffer,
+		setupPhase,
+		setupTimings,
+	)
+	if sessionFailure != nil {
+		inboundCall.server.RejectInboundInvite(
+			inboundCall.request,
+			inboundCall.transaction,
+			inboundCall.identity.callID,
+			sessionFailure.statusCode,
+			sessionFailure.responseClass,
+			sessionFailure.lifecycleReason,
+			sessionFailure.err,
+		)
+		return
 	}
-	session.SetInboundSetupTimings(inboundCall.setupTimings)
-
 	inboundCall.session = session
-	return nil
-}
 
-func (inboundCall *inboundCall) createDialog() error {
-	dialogSession, err := inboundCall.server.dialogServerCache.ReadInvite(inboundCall.request, inboundCall.transaction)
-	if err != nil {
-		return fmt.Errorf("failed to create inbound dialog session: %w", err)
+	inboundCall.server.registerSession(inboundCall.session, inboundCall.identity.callID)
+	if inboundCall.cancelBeforeAnswer(LifecycleReasonInviteCancelled) {
+		return
 	}
-	inboundCall.dialogSession = dialogSession
-	inboundCall.session.SetDialogServerSession(dialogSession)
-	return nil
-}
 
-func (inboundCall *inboundCall) createAnswerController() {
-	inboundCall.answerController = newInboundAnswerController(
+	dialog, dialogFailure := NewInboundDialog(
 		inboundCall.server,
 		inboundCall.session,
 		inboundCall.request,
 		inboundCall.transaction,
-		inboundCall.dialogSession,
-		inboundCall.answerPolicy,
-		inboundCall.identity.callID,
+		inboundCall.inviteKey,
 	)
-}
-
-func (inboundCall *inboundCall) setupRTP() error {
-	server := inboundCall.server
-	negotiatedCodec := inboundCall.mediaOffer.negotiatedCodec
-
-	rtpPort, err := server.rtpAllocator.Allocate()
-	if err != nil {
-		return fmt.Errorf("no RTP ports available: %w", err)
-	}
-	inboundCall.allocatedRTPPort = rtpPort
-
-	rtpHandlerFactory := server.newRTPHandler
-	if rtpHandlerFactory == nil {
-		rtpHandlerFactory = NewRTPHandler
-	}
-
-	rtpHandler, err := rtpHandlerFactory(server.ctx, &RTPConfig{
-		LocalIP:     server.listenConfig.GetBindAddress(),
-		LocalPort:   rtpPort,
-		PayloadType: negotiatedCodec.PayloadType,
-		ClockRate:   negotiatedCodec.ClockRate,
-		Logger:      server.logger,
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create RTP handler: %w", err)
-	}
-
-	rtpHandler.SetRemoteAddr(inboundCall.mediaOffer.sdpInfo.ConnectionIP, inboundCall.mediaOffer.sdpInfo.AudioPort)
-	rtpHandler.SetCodec(negotiatedCodec)
-	rtpHandler.SetOnFirstPacket(func() {
-		if inboundCall.session != nil && inboundCall.session.MarkInboundFirstRTPReceived() {
-			inboundCall.server.logger.Infow("Inbound SIP first RTP received",
-				"call_id", inboundCall.identity.callID,
-				"reason", LifecycleReasonInboundFirstRTPReceived)
-		}
-	})
-
-	_, localPort := rtpHandler.LocalAddr()
-	externalIP := server.listenConfig.GetExternalIP()
-	inboundCall.rtpHandler = rtpHandler
-	inboundCall.localRTPPort = localPort
-	inboundCall.externalIP = externalIP
-
-	inboundCall.session.SetRemoteRTP(inboundCall.mediaOffer.sdpInfo.ConnectionIP, inboundCall.mediaOffer.sdpInfo.AudioPort)
-	inboundCall.session.SetLocalRTP(externalIP, localPort)
-	inboundCall.session.SetNegotiatedCodec(negotiatedCodec.Name, int(negotiatedCodec.ClockRate))
-	inboundCall.session.SetRTPHandler(rtpHandler)
-	inboundCall.recordPhase(InboundSetupPhaseMediaAllocated, LifecycleReasonInboundMediaAllocated)
-	return nil
-}
-
-func (inboundCall *inboundCall) prepareApplication() error {
-	inboundCall.server.mu.RLock()
-	onApplicationReady := inboundCall.server.onApplicationReady
-	inboundCall.server.mu.RUnlock()
-	if onApplicationReady == nil {
-		inboundCall.recordPhase(InboundSetupPhaseApplicationReady, LifecycleReasonInboundApplicationReady)
-		return nil
-	}
-	if err := onApplicationReady(inboundCall.session, inboundCall.identity.fromURI, inboundCall.identity.toURI); err != nil {
-		return fmt.Errorf("application readiness failed: %w", err)
-	}
-	inboundCall.recordPhase(InboundSetupPhaseApplicationReady, LifecycleReasonInboundApplicationReady)
-	return nil
-}
-
-func (inboundCall *inboundCall) startRTP() error {
-	if inboundCall.rtpHandler == nil {
-		return ErrRTPNotInitialized
-	}
-	if inboundCall.rtpStarted {
-		return nil
-	}
-	inboundCall.rtpHandler.Start()
-	inboundCall.rtpStarted = true
-	inboundCall.recordPhase(InboundSetupPhaseMediaFlowing, LifecycleReasonInboundMediaFlowing)
-	return nil
-}
-
-func (inboundCall *inboundCall) answer() error {
-	sdpConfig := inboundCall.server.NegotiatedSDPConfig(
-		inboundCall.externalIP,
-		inboundCall.localRTPPort,
-		inboundCall.mediaOffer.negotiatedCodec,
-	)
-	sdpBody := inboundCall.server.GenerateSDP(sdpConfig)
-
-	if err := inboundCall.answerController.AnswerAndWaitACK(inboundCall.server.ctx, sdpBody); err != nil {
-		return err
-	}
-
-	inboundCall.server.logger.Infow("SIP call answered",
-		"call_id", inboundCall.identity.callID,
-		"local_rtp", fmt.Sprintf("%s:%d", inboundCall.externalIP, inboundCall.localRTPPort),
-		"remote_rtp", fmt.Sprintf("%s:%d", inboundCall.mediaOffer.sdpInfo.ConnectionIP, inboundCall.mediaOffer.sdpInfo.AudioPort),
-		"codec", inboundCall.mediaOffer.negotiatedCodec.Name)
-	return nil
-}
-
-func (inboundCall *inboundCall) dispatchInvite() {
-	inboundCall.server.mu.RLock()
-	onInvite := inboundCall.server.onInvite
-	inboundCall.server.mu.RUnlock()
-	if onInvite == nil {
+	if dialogFailure != nil {
+		inboundCall.failBeforeAnswer(*dialogFailure)
 		return
 	}
-	if err := onInvite(inboundCall.session, inboundCall.identity.fromURI, inboundCall.identity.toURI); err != nil {
-		inboundCall.server.logger.Errorw("INVITE handler failed",
-			"error", err,
-			"call_id", inboundCall.identity.callID)
-		inboundCall.server.notifyError(inboundCall.session, err)
-		_ = inboundCall.server.FailInboundCall(inboundCall.session, LifecycleReasonPipelineSetupFailed, err)
-	}
-}
+	inboundCall.dialog = dialog
+	inboundCall.session.SetDialogServerSession(inboundCall.dialog.DialogSession())
 
-func (inboundCall *inboundCall) recordPhase(phase InboundSetupPhase, reason LifecycleReason) {
-	inboundCall.setupPhase = phase
-	timestamp := time.Now()
-	inboundCall.markSetupTimestamp(phase, timestamp)
-	if inboundCall.session != nil {
-		inboundCall.session.SetInboundSetupPhase(phase)
-		inboundCall.session.MarkInboundSetupTimestamp(phase, timestamp)
+	if err := inboundCall.dialog.StartRinging(inboundCall.server.ctx); err != nil {
+		inboundCall.failBeforeAnswer(newInboundDialogFailure(500, err))
+		return
 	}
+	inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseRingingSent)
+	inboundCall.session.MarkInboundSetupTimestamp(InboundSetupPhaseRingingSent, time.Now())
 	inboundCall.server.logger.Infow("Inbound SIP setup phase",
 		"call_id", inboundCall.identity.callID,
-		"phase", phase,
-		"reason", reason)
-}
+		"phase", InboundSetupPhaseRingingSent,
+		"reason", LifecycleReasonInboundInviteRinging)
+	inboundCall.server.TransitionCall(inboundCall.session, CallStateRinging, LifecycleReasonInboundInviteRinging)
 
-func (inboundCall *inboundCall) markSetupTimestamp(phase InboundSetupPhase, at time.Time) {
-	switch phase {
-	case InboundSetupPhaseInviteReceived:
-		inboundCall.setupTimings.InviteReceivedAt = at
-	case InboundSetupPhaseTryingSent:
-		inboundCall.setupTimings.TryingSentAt = at
-	case InboundSetupPhaseRingingSent:
-		inboundCall.setupTimings.RingingSentAt = at
-	case InboundSetupPhaseAnswered:
-		inboundCall.setupTimings.AnsweredAt = at
-	case InboundSetupPhaseACKConfirmed:
-		inboundCall.setupTimings.ACKConfirmedAt = at
+	inboundCall.media = NewInboundMedia(inboundCall.server, inboundCall.session, inboundCall.mediaOffer)
+	if err := inboundCall.media.Prepare(); err != nil {
+		inboundCall.failBeforeAnswer(newInboundRTPUnavailableFailure(err, LifecycleReasonInboundInviteFailed))
+		return
+	}
+	inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseMediaAllocated)
+	if inboundCall.cancelBeforeAnswer(LifecycleReasonInviteCancelledBeforeAnswer) {
+		return
+	}
+
+	if err := inboundCall.callInboundApplicationReadyHandler(); err != nil {
+		applicationErr := fmt.Errorf("application readiness failed: %w", err)
+		failure := newInboundApplicationFailure(applicationErr)
+		failure.statusCode = 503
+		inboundCall.failBeforeAnswer(failure)
+		return
+	}
+	inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseApplicationReady)
+	if inboundCall.cancelBeforeAnswer(LifecycleReasonInviteCancelledBeforeAnswer) {
+		return
+	}
+	if err := inboundCall.waitUntilAnswerReady(); err != nil {
+		inboundCall.failBeforeAnswer(newInboundNoAnswerFailure(err))
+		return
+	}
+	inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseAnswerReady)
+	inboundCall.server.logger.Infow("Inbound SIP setup phase",
+		"call_id", inboundCall.identity.callID,
+		"phase", InboundSetupPhaseAnswerReady,
+		"reason", LifecycleReasonInboundAnswerPolicyReady)
+	if inboundCall.cancelBeforeAnswer(LifecycleReasonInviteCancelledBeforeAnswer) {
+		return
+	}
+
+	cancelled, answerFailure := inboundCall.answerInboundInvite()
+	if cancelled {
+		return
+	}
+	if answerFailure != nil {
+		if answerFailure.class == inboundFailureNoACK || answerFailure.statusCode == 0 {
+			inboundCall.finalResponseOnce.Do(func() {
+				inboundCall.recordFailure(*answerFailure)
+				inboundCall.cleanupApplication()
+				_ = inboundCall.server.FailInboundCall(inboundCall.session, answerFailure.lifecycleReason, answerFailure.err)
+			})
+			return
+		}
+		inboundCall.failBeforeAnswer(*answerFailure)
+		return
+	}
+	if mediaStartFailure := inboundCall.startInboundMedia(); mediaStartFailure != nil {
+		inboundCall.finalResponseOnce.Do(func() {
+			inboundCall.recordFailure(*mediaStartFailure)
+			inboundCall.cleanupApplication()
+			_ = inboundCall.server.FailInboundCall(inboundCall.session, mediaStartFailure.lifecycleReason, mediaStartFailure.err)
+		})
+		return
+	}
+	inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseMediaFlowing)
+
+	if err := inboundCall.callInboundInviteHandler(); err != nil {
+		inboundCall.server.notifyError(inboundCall.session, err)
+		failure := newInboundApplicationFailure(err)
+		inboundCall.finalResponseOnce.Do(func() {
+			inboundCall.recordFailure(failure)
+			inboundCall.cleanupApplication()
+			_ = inboundCall.server.FailInboundCall(inboundCall.session, failure.lifecycleReason, failure.err)
+		})
 	}
 }
 
-func (inboundCall *inboundCall) cancelIfRequested(reason LifecycleReason) bool {
-	if !inboundCall.server.isInviteCancelled(inboundCall.identity.callID) {
+// callInboundApplicationReadyHandler invokes the optional application readiness hook.
+// The hook result is returned raw so HandleInvite can own failure classification.
+func (inboundCall *Inbound) callInboundApplicationReadyHandler() error {
+	// Snapshot callbacks under lock, then invoke outside it so handlers can call Server APIs.
+	inboundCall.server.mu.RLock()
+	applicationReadyHandler := inboundCall.server.onApplicationReady
+	inboundCall.server.mu.RUnlock()
+	if applicationReadyHandler == nil {
+		return nil
+	}
+	return applicationReadyHandler(inboundCall.session, inboundCall.identity.fromURI, inboundCall.identity.toURI)
+}
+
+// waitUntilAnswerReady applies the configured answer policy without changing call state.
+// HandleInvite records the answer-ready phase only after this wait succeeds.
+func (inboundCall *Inbound) waitUntilAnswerReady() error {
+	answerPolicy := inboundCall.resolvedConfig.answerPolicy
+	if answerPolicy.Mode == "" {
+		answerPolicy = DefaultInboundAnswerPolicy()
+	}
+	if !answerPolicy.Mode.IsValid() {
+		return fmt.Errorf("%w: invalid inbound answer mode %q", ErrInvalidConfig, answerPolicy.Mode)
+	}
+
+	switch answerPolicy.Mode {
+	case InboundAnswerModeImmediate:
+	case InboundAnswerModeAfterMinRingDuration:
+		if answerPolicy.MinRingDuration <= 0 {
+			return fmt.Errorf("%w: min_ring_duration is required for answer_after_min_ring_ms", ErrInvalidConfig)
+		}
+		if err := inboundCall.waitForMinimumRingDuration(inboundCall.server.ctx, answerPolicy.MinRingDuration); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (inboundCall *Inbound) waitForMinimumRingDuration(ctx context.Context, minRingDuration time.Duration) error {
+	setupTimings := inboundCall.session.GetInboundSetupTimings()
+	if minRingDuration <= 0 || setupTimings.RingingSentAt.IsZero() {
+		return nil
+	}
+	if remainingDuration := minRingDuration - time.Since(setupTimings.RingingSentAt); remainingDuration > 0 {
+		ringTimer := time.NewTimer(remainingDuration)
+		defer ringTimer.Stop()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-inboundCall.server.ctx.Done():
+			return inboundCall.server.ctx.Err()
+		case <-inboundCall.session.Context().Done():
+			return inboundCall.session.Context().Err()
+		case <-ringTimer.C:
+		}
+	}
+	return nil
+}
+
+// answerInboundInvite sends the final SIP answer and waits for the initial ACK.
+// It classifies ACK/cancel/dialog failures without closing the session itself.
+func (inboundCall *Inbound) answerInboundInvite() (bool, *inboundFailure) {
+	finalResponseSent := false
+
+	err := inboundCall.dialog.AnswerAndWaitACK(
+		inboundCall.server.ctx,
+		inboundCall.server.GenerateSDP(inboundCall.media.SDPConfig()),
+		inboundCall.resolvedConfig.answerPolicy.ACKTimeout,
+		func(answeredAt time.Time) {
+			finalResponseSent = true
+			inboundCall.session.SetInboundSetupPhase(InboundSetupPhaseAnswered)
+			inboundCall.session.MarkInboundSetupTimestamp(InboundSetupPhaseAnswered, answeredAt)
+			inboundCall.server.logger.Infow("Inbound SIP setup phase",
+				"call_id", inboundCall.identity.callID,
+				"phase", InboundSetupPhaseAnswered,
+				"reason", LifecycleReasonInboundInviteAnswered)
+		},
+	)
+	if err == nil {
+		return false, nil
+	}
+	if errors.Is(err, ErrInboundInviteCancelled) {
+		return true, nil
+	}
+	if errors.Is(err, ErrInboundACKTimeout) {
+		failure := newInboundNoACKFailure(err)
+		return false, &failure
+	}
+	statusCode := 500
+	if finalResponseSent {
+		statusCode = 0
+	}
+	failure := newInboundDialogFailure(statusCode, err)
+	return false, &failure
+}
+
+// startInboundMedia starts RTP after the final response is established.
+// Media timeout handling is attached here, but terminal failure remains in HandleInvite.
+func (inboundCall *Inbound) startInboundMedia() *inboundFailure {
+	if err := inboundCall.media.Start(inboundCall.mediaTimeout); err != nil {
+		failure := newInboundRTPUnavailableFailure(err, LifecycleReasonInboundMediaFailed)
+		return &failure
+	}
+	return nil
+}
+
+// callInboundInviteHandler invokes the post-answer application hook.
+// Errors are returned raw so HandleInvite owns notification and call failure.
+func (inboundCall *Inbound) callInboundInviteHandler() error {
+	// Snapshot callbacks under lock, then invoke outside it so handlers can call Server APIs.
+	inboundCall.server.mu.RLock()
+	inviteHandler := inboundCall.server.onInvite
+	inboundCall.server.mu.RUnlock()
+	if inviteHandler == nil {
+		return nil
+	}
+	return inviteHandler(inboundCall.session, inboundCall.identity.fromURI, inboundCall.identity.toURI)
+}
+
+func (inboundCall *Inbound) cancelBeforeAnswer(reason LifecycleReason) bool {
+	if inboundCall.session == nil || !inboundCall.server.isInviteCancelled(inboundCall.inviteKey) {
 		return false
 	}
-	if inboundCall.answerController != nil {
-		inboundCall.answerController.CancelBeforeAnswer(reason)
+	if inboundCall.dialog != nil {
+		inboundCall.dialog.CancelBeforeAnswer()
 	} else {
-		inboundCall.server.terminatePendingInvite(inboundCall.identity.callID, 487)
+		inboundCall.server.terminatePendingInvite(inboundCall.inviteKey, 487)
 	}
-	if inboundCall.session != nil {
-		inboundCall.cleanupApplication()
-		_ = inboundCall.server.CancelInboundCall(inboundCall.session, reason)
-	}
+	inboundCall.cleanupApplication()
+	_ = inboundCall.server.CancelInboundCall(inboundCall.session, reason)
 	return true
 }
 
-func (inboundCall *inboundCall) failSetup(statusCode int, failureClass internal_inbound.FailureClass, reason LifecycleReason, err error) {
-	callID := inboundCall.identity.callID
-	inboundCall.server.logger.Errorw("Inbound INVITE setup failed",
-		"call_id", callID,
-		"from_uri", inboundCall.identity.fromURI,
-		"to_uri", inboundCall.identity.toURI,
-		"status_code", statusCode,
-		"failure_class", string(failureClass),
-		"reason", reason,
-		"error", err)
-
-	if inboundCall.rtpHandler != nil {
-		inboundCall.rtpHandler.Stop()
-	}
-	if inboundCall.session == nil {
-		inboundCall.releaseUnownedRTPPort()
-		inboundCall.server.RejectInboundInvite(
-			inboundCall.request,
-			inboundCall.transaction,
-			callID,
-			statusCode,
-			failureClass,
-			reason,
-			err,
-		)
+func (inboundCall *Inbound) mediaTimeout() {
+	if inboundCall.session == nil || inboundCall.session.IsEnded() {
 		return
 	}
 
-	inboundCall.releaseUnownedRTPPort()
-	if inboundCall.answerController == nil {
-		inboundCall.createAnswerController()
-	}
-	if !inboundCall.answerController.FinalResponseStarted() {
-		inboundCall.answerController.FailBeforeAnswer(statusCode, failureClass, reason, err)
-	}
-	inboundCall.cleanupApplication()
-	_ = inboundCall.server.FailInboundCall(inboundCall.session, reason, err)
+	failure := newInboundMediaTimeoutFailure()
+
+	// Once ACK is confirmed, media timeout usually means the peer stopped
+	// sending RTP or the final BYE was lost. Preserve the server-error
+	// termination signal, but close the call as an ended session.
+	inboundCall.finalResponseOnce.Do(func() {
+		if inboundCall.session == nil {
+			return
+		}
+		inboundCall.recordFailure(failure)
+		inboundCall.cleanupApplication()
+		_ = inboundCall.server.EndInboundCall(inboundCall.session, failure.lifecycleReason)
+	})
 }
 
-func (inboundCall *inboundCall) cleanupApplication() {
+func (inboundCall *Inbound) recordFailure(failure inboundFailure) {
+	if inboundCall.session == nil {
+		return
+	}
+	inboundCall.session.SetMetadata("sip.failure_class", string(failure.class))
+	inboundCall.session.SetMetadata("sip.failure_response_class", string(failure.responseClass))
+	inboundCall.session.SetMetadata("sip.failure_reason", failure.reason)
+	inboundCall.session.SetMetadata("sip.sli_result", string(failure.termination.Result))
+	inboundCall.session.SetMetadata("sip.sli_reason", failure.termination.Reason)
+	inboundCall.session.SetMetadata("sip.failure_retryable", failure.retryable)
+	if failure.statusCode > 0 {
+		inboundCall.session.SetMetadata("sip.failure_status_code", failure.statusCode)
+	}
+}
+
+// failBeforeAnswer owns terminal setup failure side effects before the final INVITE answer.
+// It sends one final SIP response and then fails the session.
+func (inboundCall *Inbound) failBeforeAnswer(failure inboundFailure) {
+	inboundCall.recordFailure(failure)
+	if failure.statusCode > 0 {
+		if inboundCall.dialog != nil {
+			inboundCall.dialog.RejectBeforeAnswer(failure.statusCode)
+		} else {
+			response := inboundCall.server.sendResponse(inboundCall.transaction, inboundCall.request, failure.statusCode)
+			inboundCall.server.recordRejectedInboundInvite(inboundCall.request, response)
+		}
+	}
+	inboundCall.cleanupApplication()
+	_ = inboundCall.server.FailInboundCall(inboundCall.session, failure.lifecycleReason, failure.err)
+}
+
+func (inboundCall *Inbound) cleanupApplication() {
 	inboundCall.server.mu.RLock()
 	onApplicationCleanup := inboundCall.server.onApplicationCleanup
 	inboundCall.server.mu.RUnlock()
 	if onApplicationCleanup != nil && inboundCall.session != nil {
 		onApplicationCleanup(inboundCall.session)
 	}
-}
-
-func (inboundCall *inboundCall) failSetupError(statusCode int, failureClass internal_inbound.FailureClass, reason LifecycleReason, err error) {
-	statusCode, failureClass, reason, err = inboundSetupFailureDetails(err, statusCode, failureClass, reason)
-	inboundCall.failSetup(statusCode, failureClass, reason, err)
-}
-
-func (inboundCall *inboundCall) sendFinalResponse(statusCode int) {
-	inboundCall.server.sendResponse(inboundCall.transaction, inboundCall.request, statusCode)
-}
-
-func (inboundCall *inboundCall) releaseUnownedRTPPort() {
-	if inboundCall.allocatedRTPPort <= 0 {
-		return
-	}
-	if inboundCall.session != nil {
-		_, localPort := inboundCall.session.GetLocalRTP()
-		if localPort == inboundCall.allocatedRTPPort {
-			inboundCall.allocatedRTPPort = 0
-			return
-		}
-	}
-	inboundCall.server.rtpAllocator.Release(inboundCall.allocatedRTPPort)
-	inboundCall.allocatedRTPPort = 0
-}
-
-func (inboundCall *inboundCall) finish() {
-	if inboundCall.identity.callID == "" {
-		return
-	}
-	inboundCall.server.clearPendingInvite(inboundCall.identity.callID)
-	inboundCall.server.clearInviteCancelled(inboundCall.identity.callID)
 }

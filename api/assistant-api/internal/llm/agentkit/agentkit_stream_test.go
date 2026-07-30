@@ -37,7 +37,7 @@ func TestRead_ContextCancelled(t *testing.T) {
 	}
 }
 
-func TestRead_RecvEOF(t *testing.T) {
+func TestRead_RecvEOFExitsGracefully(t *testing.T) {
 	talker := newMockTalker()
 	e := newTestExecutor(talker)
 	comm, collector := newTestComm()
@@ -57,9 +57,30 @@ func TestRead_RecvEOF(t *testing.T) {
 	}
 
 	errPkts := findPackets[internal_type.LLMErrorPacket](collector.all())
-	require.Len(t, errPkts, 1)
-	assert.Equal(t, internal_type.LLMSystemPanic, errPkts[0].Type)
-	assert.Contains(t, errPkts[0].Error.Error(), "server closed connection")
+	assert.Empty(t, errPkts)
+}
+
+func TestRead_RecvCanceledExitsGracefully(t *testing.T) {
+	talker := newMockTalker()
+	e := newTestExecutor(talker)
+	comm, collector := newTestComm()
+
+	talker.recvCh <- recvResult{err: status.Error(codes.Canceled, "client closed")}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.Read(context.Background(), comm, e.connection)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Read did not exit on Canceled")
+	}
+
+	errPkts := findPackets[internal_type.LLMErrorPacket](collector.all())
+	assert.Empty(t, errPkts)
 }
 
 func TestRead_RecvUnavailable(t *testing.T) {
@@ -126,10 +147,10 @@ func TestRead_ProcessesMultipleMessages(t *testing.T) {
 	deltas := findPackets[internal_type.LLMResponseDeltaPacket](pkts)
 	assert.Len(t, deltas, 2)
 	errPkts := findPackets[internal_type.LLMErrorPacket](pkts)
-	assert.Len(t, errPkts, 1)
+	assert.Empty(t, errPkts)
 }
 
-func TestE2E_ReadProcessesAndExitsOnEOF(t *testing.T) {
+func TestE2E_ReadProcessesAndExitsGracefullyOnEOF(t *testing.T) {
 	talker := newMockTalker()
 	e := newTestExecutor(talker)
 	comm, collector := newTestComm()
@@ -165,7 +186,7 @@ func TestE2E_ReadProcessesAndExitsOnEOF(t *testing.T) {
 	errPkts := findPackets[internal_type.LLMErrorPacket](pkts)
 	assert.Len(t, deltas, 1)
 	assert.Len(t, dones, 1)
-	assert.Len(t, errPkts, 1)
+	assert.Empty(t, errPkts)
 }
 
 func TestWrite_AllTypes(t *testing.T) {
@@ -428,6 +449,7 @@ func TestWrite_AllTypes(t *testing.T) {
 				require.Len(t, pkts, 1)
 				log, ok := pkts[0].(internal_type.ObservabilityLogRecordPacket)
 				require.True(t, ok)
+				assert.Equal(t, internal_type.ObservabilityRecordScopeAssistantMessage, log.Scope)
 				assert.Equal(t, "log-1", log.Record.ID)
 				assert.Equal(t, observability.LevelInfo, log.Record.Level)
 				assert.Equal(t, "remote.log", log.Record.Message)
@@ -455,6 +477,7 @@ func TestWrite_AllTypes(t *testing.T) {
 				require.Len(t, pkts, 1)
 				event, ok := pkts[0].(internal_type.ObservabilityEventRecordPacket)
 				require.True(t, ok)
+				assert.Equal(t, internal_type.ObservabilityRecordScopeAssistantMessage, event.Scope)
 				assert.Equal(t, "event-1", event.Record.ID)
 				assert.Equal(t, observability.ComponentName("agentkit.llm"), event.Record.Component)
 				assert.Equal(t, observability.EventName("agentkit.response.created"), event.Record.Event)
@@ -483,6 +506,7 @@ func TestWrite_AllTypes(t *testing.T) {
 				require.Len(t, pkts, 1)
 				metric, ok := pkts[0].(internal_type.ObservabilityMetricRecordPacket)
 				require.True(t, ok)
+				assert.Equal(t, internal_type.ObservabilityRecordScopeAssistantMessage, metric.Scope)
 				assert.Equal(t, "metric-1", metric.Record.ID)
 				require.Len(t, metric.Record.Metrics, 1)
 				assert.Equal(t, "agentkit.latency_ms", metric.Record.Metrics[0].Name)

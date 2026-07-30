@@ -16,22 +16,24 @@ import (
 
 func TestConfigTypeConversionsPreserveFields(t *testing.T) {
 	config := &Config{
-		Server:            "sip.example.com",
-		Username:          "auth-user",
-		Password:          "auth-pass",
-		Realm:             "sip.example.com",
-		Domain:            "voice.example.com",
-		CallerID:          "+15550001111",
-		CustomHeaders:     map[string]string{"X-Rapida-Test": "ok"},
-		Port:              5061,
-		Transport:         TransportTLS,
-		RTPPortRangeStart: 30000,
-		RTPPortRangeEnd:   30100,
-		SRTPEnabled:       true,
-		RegisterTimeout:   11 * time.Second,
-		InviteTimeout:     12 * time.Second,
-		SessionTimeout:    13 * time.Second,
-		KeepAliveEnabled:  true,
+		Server:              "sip.example.com",
+		Username:            "auth-user",
+		Password:            "auth-pass",
+		Realm:               "sip.example.com",
+		Domain:              "voice.example.com",
+		CallerID:            "+15550001111",
+		CustomHeaders:       map[string]string{"X-Rapida-Test": "ok"},
+		Port:                5061,
+		Transport:           TransportTLS,
+		RTPPortRangeStart:   30000,
+		RTPPortRangeEnd:     30100,
+		SRTPEnabled:         true,
+		RegisterTimeout:     11 * time.Second,
+		InviteTimeout:       12 * time.Second,
+		SessionTimeout:      13 * time.Second,
+		MediaTimeoutInitial: 14 * time.Second,
+		MediaTimeout:        15 * time.Second,
+		KeepAliveEnabled:    true,
 	}
 
 	coreConfig := config.toCore()
@@ -51,7 +53,9 @@ func TestConfigTypeConversionsPreserveFields(t *testing.T) {
 	}
 	if roundTripConfig.RegisterTimeout != config.RegisterTimeout ||
 		roundTripConfig.InviteTimeout != config.InviteTimeout ||
-		roundTripConfig.SessionTimeout != config.SessionTimeout {
+		roundTripConfig.SessionTimeout != config.SessionTimeout ||
+		roundTripConfig.MediaTimeoutInitial != config.MediaTimeoutInitial ||
+		roundTripConfig.MediaTimeout != config.MediaTimeout {
 		t.Fatalf("round-trip timeout mismatch: %#v", roundTripConfig)
 	}
 }
@@ -60,11 +64,13 @@ func TestConfigDefaultsAndValidation(t *testing.T) {
 	var nilConfig *Config
 	nilConfig.ApplyOperationalDefaults(5060, TransportUDP, 30000, 30100)
 	nilConfig.ApplyTimeoutDefaults(time.Second, 2*time.Second, 3*time.Second)
+	nilConfig.ApplyMediaTimeoutDefaults(7*time.Second, 8*time.Second)
 	nilConfig.ApplyInboundAnswerDefaults(InboundAnswerModeAfterMinRingDuration, time.Second, 2*time.Second, 3*time.Second)
 
 	config := &Config{Server: "sip.example.com"}
 	config.ApplyOperationalDefaults(5060, TransportUDP, 30000, 30100)
 	config.ApplyTimeoutDefaults(time.Second, 2*time.Second, 3*time.Second)
+	config.ApplyMediaTimeoutDefaults(7*time.Second, 8*time.Second)
 	config.ApplyInboundAnswerDefaults(InboundAnswerModeAfterMinRingDuration, 4*time.Second, 5*time.Second, 6*time.Second)
 
 	if config.Port != 5060 || config.Transport != TransportUDP {
@@ -75,6 +81,9 @@ func TestConfigDefaultsAndValidation(t *testing.T) {
 	}
 	if config.RegisterTimeout != time.Second || config.InviteTimeout != 2*time.Second || config.SessionTimeout != 3*time.Second {
 		t.Fatalf("timeout defaults were not applied: %#v", config)
+	}
+	if config.MediaTimeoutInitial != 7*time.Second || config.MediaTimeout != 8*time.Second {
+		t.Fatalf("media timeout defaults were not applied: %#v", config)
 	}
 	if config.InboundAnswerMode != InboundAnswerModeAfterMinRingDuration ||
 		config.InboundMinRingDuration != 4*time.Second ||
@@ -339,13 +348,17 @@ func TestLifecycleAndHealthTypeConversions(t *testing.T) {
 	}
 
 	snapshot := serverHealthSnapshotFromCore(internal_core.ServerHealthSnapshot{
-		Ready:         true,
-		Reason:        "ready",
-		State:         internal_core.ServerStateRunning,
-		ActiveCalls:   2,
-		RTPPortsInUse: 3,
+		Ready:                   true,
+		Reason:                  "ready",
+		State:                   internal_core.ServerStateRunning,
+		ActiveCalls:             2,
+		RTPPortsInUse:           3,
+		RTPPortBindAttempts:     7,
+		RTPPortBindFailures:     1,
+		RTPPortRangeExhaustions: 1,
 	})
-	if !snapshot.Ready || snapshot.State != ServerStateRunning || snapshot.ActiveCalls != 2 || snapshot.RTPPortsInUse != 3 {
+	if !snapshot.Ready || snapshot.State != ServerStateRunning || snapshot.ActiveCalls != 2 || snapshot.RTPPortsInUse != 3 ||
+		snapshot.RTPPortBindAttempts != 7 || snapshot.RTPPortBindFailures != 1 || snapshot.RTPPortRangeExhaustions != 1 {
 		t.Fatalf("health snapshot conversion mismatch: %#v", snapshot)
 	}
 }
@@ -353,15 +366,17 @@ func TestLifecycleAndHealthTypeConversions(t *testing.T) {
 func TestOutboundTypeConversions(t *testing.T) {
 	headers := map[string]string{"X-Test": "ok"}
 	outboundConfig := OutboundConfig{
-		Mode:            OutboundModeTrunkTermination,
-		Address:         "sip.example.com",
-		Port:            5060,
-		Transport:       TransportUDP,
-		Domain:          "voice.example.com",
-		Auth:            SIPAuthConfig{Username: "auth-user", Password: "auth-pass", Realm: "sip.example.com"},
-		Headers:         headers,
-		RingingTimeout:  5 * time.Second,
-		MaxCallDuration: time.Minute,
+		Mode:                OutboundModeTrunkTermination,
+		Address:             "sip.example.com",
+		Port:                5060,
+		Transport:           TransportUDP,
+		Domain:              "voice.example.com",
+		Auth:                SIPAuthConfig{Username: "auth-user", Password: "auth-pass", Realm: "sip.example.com"},
+		Headers:             headers,
+		RingingTimeout:      5 * time.Second,
+		MaxCallDuration:     time.Minute,
+		MediaTimeoutInitial: 20 * time.Second,
+		MediaTimeout:        10 * time.Second,
 	}
 	coreOutboundConfig := outboundConfig.toCore()
 	headers["X-Test"] = "mutated"
@@ -370,7 +385,9 @@ func TestOutboundTypeConversions(t *testing.T) {
 		t.Fatalf("expected outbound headers to be copied, got %#v", coreOutboundConfig.Headers)
 	}
 	if coreOutboundConfig.Mode != internal_core.OutboundModeTrunkTermination ||
-		coreOutboundConfig.Auth.Username != outboundConfig.Auth.Username {
+		coreOutboundConfig.Auth.Username != outboundConfig.Auth.Username ||
+		coreOutboundConfig.MediaTimeoutInitial != outboundConfig.MediaTimeoutInitial ||
+		coreOutboundConfig.MediaTimeout != outboundConfig.MediaTimeout {
 		t.Fatalf("outbound config conversion mismatch: %#v", coreOutboundConfig)
 	}
 

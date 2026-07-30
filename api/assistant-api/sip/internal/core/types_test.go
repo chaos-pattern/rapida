@@ -273,6 +273,25 @@ func TestApplyTimeoutDefaults_DoesNotOverwrite(t *testing.T) {
 	assert.Equal(t, 20*time.Minute, cfg.SessionTimeout)
 }
 
+func TestApplyMediaTimeoutDefaults(t *testing.T) {
+	cfg := &Config{}
+	cfg.ApplyMediaTimeoutDefaults(30*time.Second, 15*time.Second)
+
+	assert.Equal(t, 30*time.Second, cfg.MediaTimeoutInitial)
+	assert.Equal(t, 15*time.Second, cfg.MediaTimeout)
+}
+
+func TestApplyMediaTimeoutDefaults_DoesNotOverwrite(t *testing.T) {
+	cfg := &Config{
+		MediaTimeoutInitial: 10 * time.Second,
+		MediaTimeout:        5 * time.Second,
+	}
+	cfg.ApplyMediaTimeoutDefaults(30*time.Second, 15*time.Second)
+
+	assert.Equal(t, 10*time.Second, cfg.MediaTimeoutInitial)
+	assert.Equal(t, 5*time.Second, cfg.MediaTimeout)
+}
+
 func TestApplyInboundAnswerDefaults(t *testing.T) {
 	cfg := &Config{}
 

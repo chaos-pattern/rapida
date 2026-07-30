@@ -30,7 +30,9 @@ func (c *Config) ToOutboundConfig() OutboundConfig {
 			Password: c.Password,
 			Realm:    c.Realm,
 		},
-		Headers: headers,
+		Headers:             headers,
+		MediaTimeoutInitial: c.MediaTimeoutInitial,
+		MediaTimeout:        c.MediaTimeout,
 	}
 }
 

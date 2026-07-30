@@ -15,6 +15,7 @@ import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/protos"
 )
 
@@ -69,7 +70,7 @@ func (s *outboundDispatcherConversationServiceStub) CreateOrUpdateConversationMe
 	s.metadataAuth = auth
 	s.metadataAssistantID = assistantID
 	s.metadataConversationID = conversationID
-	s.metadata = metadata
+	s.metadata = append(s.metadata, metadata...)
 	if s.metadataRecorded != nil {
 		s.metadataOnce.Do(func() { close(s.metadataRecorded) })
 	}
@@ -234,6 +235,8 @@ func TestOutboundDispatcher_StatusReporterPersistsFailureDetails(t *testing.T) {
 		ErrorMessage:       "486 Busy Here",
 		FailureClass:       "busy",
 		FailureReason:      "Busy Here",
+		SLIResult:          "client_error",
+		SLIReason:          "outbound_busy",
 		DisconnectReason:   "outbound_rejected",
 		ProviderStatusCode: 486,
 	})
@@ -283,6 +286,8 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 		ErrorMessage:       "486 Busy Here",
 		FailureClass:       "busy",
 		FailureReason:      "Busy Here",
+		SLIResult:          "client_error",
+		SLIReason:          "outbound_busy",
 		DisconnectReason:   "outbound_rejected",
 		ProviderStatusCode: 486,
 	})
@@ -304,13 +309,22 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	if service.metricAssistantID != 33 || service.metricConversationID != 44 {
 		t.Fatalf("unexpected metric scope: assistant=%d conversation=%d", service.metricAssistantID, service.metricConversationID)
 	}
-	if len(service.metrics) != 1 {
-		t.Fatalf("expected one status metric, got %+v", service.metrics)
+	if len(service.metrics) != 2 {
+		t.Fatalf("expected call and conversation status metrics, got %+v", service.metrics)
 	}
-	if service.metrics[0].Name != observability.MetricConversationStatus ||
-		service.metrics[0].Value != "FAILED" ||
-		service.metrics[0].Description != "Busy Here" {
-		t.Fatalf("unexpected status metric: %+v", service.metrics[0])
+	metricByName := make(map[string]*protos.Metric, len(service.metrics))
+	for _, metric := range service.metrics {
+		metricByName[metric.Name] = metric
+	}
+	if metricByName[observability.MetricCallStatus] == nil ||
+		metricByName[observability.MetricCallStatus].Value != observability.MetricCallStatusFailed ||
+		metricByName[observability.MetricCallStatus].Description != "Busy Here" {
+		t.Fatalf("unexpected call status metric: %+v", metricByName[observability.MetricCallStatus])
+	}
+	if metricByName[type_enums.CONVERSATION_STATUS.String()] == nil ||
+		metricByName[type_enums.CONVERSATION_STATUS.String()].Value != observability.MetricCallStatusFailed ||
+		metricByName[type_enums.CONVERSATION_STATUS.String()].Description != "Busy Here" {
+		t.Fatalf("unexpected conversation status metric: %+v", metricByName[type_enums.CONVERSATION_STATUS.String()])
 	}
 	if service.metadataAuth == nil {
 		t.Fatal("expected terminal status metadata to be recorded")
@@ -319,17 +333,23 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	for _, metadata := range service.metadata {
 		metadataByKey[metadata.Key] = metadata.Value
 	}
-	if metadataByKey[observability.MetadataDisconnectReason] != "outbound_rejected" {
+	if metadataByKey[observability.MetadataDisconnectReason] != protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String() {
 		t.Fatalf("expected disconnect reason metadata, got %q", metadataByKey[observability.MetadataDisconnectReason])
 	}
-	if metadataByKey[observability.MetadataCallStatus] != callcontext.CallStatusFailed {
-		t.Fatalf("expected call status metadata, got %q", metadataByKey[observability.MetadataCallStatus])
+	if metadataByKey[observability.MetadataDisconnectRawReason] != "486 Busy Here" {
+		t.Fatalf("expected disconnect raw reason metadata, got %q", metadataByKey[observability.MetadataDisconnectRawReason])
 	}
 	if metadataByKey[observability.MetadataFailureClass] != "busy" {
 		t.Fatalf("expected failure class metadata, got %q", metadataByKey[observability.MetadataFailureClass])
 	}
 	if metadataByKey[observability.MetadataFailureReason] != "Busy Here" {
 		t.Fatalf("expected failure reason metadata, got %q", metadataByKey[observability.MetadataFailureReason])
+	}
+	if metadataByKey[observability.MetadataSLIResult] != "client_error" {
+		t.Fatalf("expected SLI result metadata, got %q", metadataByKey[observability.MetadataSLIResult])
+	}
+	if metadataByKey[observability.MetadataSLIReason] != "outbound_busy" {
+		t.Fatalf("expected SLI reason metadata, got %q", metadataByKey[observability.MetadataSLIReason])
 	}
 	if metadataByKey[observability.MetadataProviderStatusCode] != "486" {
 		t.Fatalf("expected provider status metadata, got %q", metadataByKey[observability.MetadataProviderStatusCode])
@@ -383,8 +403,8 @@ func TestOutboundDispatcher_StatusReporterRecordsRingingProgressObservability(t 
 	if len(service.metrics) != 1 {
 		t.Fatalf("expected one ringing metric, got %+v", service.metrics)
 	}
-	if service.metrics[0].Name != observability.MetricConversationStatus ||
-		service.metrics[0].Value != "RINGING" ||
+	if service.metrics[0].Name != observability.MetricCallStatus ||
+		service.metrics[0].Value != observability.MetricCallStatusRinging ||
 		service.metrics[0].Description != "outbound_progress_ringing" {
 		t.Fatalf("unexpected ringing metric: %+v", service.metrics[0])
 	}

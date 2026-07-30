@@ -31,18 +31,12 @@ func (e *agentkitExecutor) Read(ctx context.Context, comm internal_type.Communic
 		resp, err := connection.Recv()
 		if err != nil {
 			switch {
+			case ctx.Err() != nil:
+				return
 			case errors.Is(err, io.EOF):
-				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
-					ContextID: e.getActiveContextID(),
-					Error:     fmt.Errorf("%w: server closed connection", ErrAgentkitConnectionRecv),
-					Type:      internal_type.LLMSystemPanic,
-				})
+				return
 			case status.Code(err) == codes.Canceled:
-				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
-					ContextID: e.getActiveContextID(),
-					Error:     fmt.Errorf("%w: connection canceled", ErrAgentkitConnectionRecv),
-					Type:      internal_type.LLMSystemPanic,
-				})
+				return
 			case status.Code(err) == codes.Unavailable:
 				comm.OnPacket(ctx, internal_type.LLMErrorPacket{
 					ContextID: e.getActiveContextID(),
@@ -119,7 +113,8 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 			return
 		}
 		comm.OnPacket(ctx, internal_type.UserInputPacket{
-			Text: data.User.GetText(),
+			ContextID: data.User.Id,
+			Text:      data.User.GetText(),
 		})
 
 	case *protos.TalkOutput_Assistant:
@@ -273,6 +268,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				occurredAt = record.Log.GetOccurredAt().AsTime()
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityLogRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordLog{
 					ID:         record.Log.GetId(),
 					Message:    record.Log.GetMessage(),
@@ -295,6 +291,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				component = AgentkitObservabilityPrefix + component
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityEventRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordEvent{
 					ID:         record.Event.GetId(),
 					Component:  observability.ComponentName(component),
@@ -313,6 +310,7 @@ func (e *agentkitExecutor) Write(ctx context.Context, comm internal_type.Communi
 				name = AgentkitObservabilityPrefix + name
 			}
 			comm.OnPacket(ctx, internal_type.ObservabilityMetricRecordPacket{
+				Scope: internal_type.ObservabilityRecordScopeAssistantMessage,
 				Record: observability.RecordMetric{
 					ID: record.Metric.GetId(),
 					Metrics: []*protos.Metric{{

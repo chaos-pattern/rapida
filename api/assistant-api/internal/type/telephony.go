@@ -88,7 +88,7 @@ type CallInfo struct {
 	Provider string
 
 	// Extra holds provider-specific fields that don't warrant a top-level field.
-	// Examples: vonage "conversation_uuid", sip "telephony.status".
+	// Examples: vonage "conversation_uuid", sip "call.status".
 	// If a field is used by multiple providers, promote it to a top-level field.
 	Extra map[string]string
 }
@@ -107,6 +107,10 @@ type ProviderCallStatusUpdate struct {
 	FailureClass string
 	// FailureReason is the provider or lifecycle reason that explains the failure class.
 	FailureReason string
+	// SLIResult is the reliability bucket for the terminal outcome, such as client_error or server_error.
+	SLIResult string
+	// SLIReason is the prefixed reason used for reliability dashboards and SLO grouping.
+	SLIReason string
 	// DisconnectReason is the normalized terminal reason persisted with call metadata.
 	DisconnectReason string
 	// Retryable indicates whether the provider failure may succeed on a later attempt.

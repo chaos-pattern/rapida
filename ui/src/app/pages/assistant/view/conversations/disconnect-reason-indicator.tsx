@@ -1,14 +1,52 @@
-import { Tag, Tooltip } from '@carbon/react';
-import { normalizeDisconnectReason } from './disconnect-reason';
+import { Fragment } from 'react';
+import { Information } from '@carbon/icons-react';
+import { Metadata } from '@rapidaai/react';
+import {
+  Tag,
+  Toggletip,
+  ToggletipButton,
+  ToggletipContent,
+} from '@carbon/react';
+import { getDisconnectReasonDisplay } from './disconnect-reason';
 
-export const DisconnectReasonIndicator = ({ reason }: { reason: string }) => {
-  const display = normalizeDisconnectReason(reason);
+export const DisconnectReasonIndicator = ({
+  reason,
+  status,
+  metadata,
+  showLabel = true,
+}: {
+  reason: string;
+  status?: string;
+  metadata?: Metadata[];
+  showLabel?: boolean;
+}) => {
+  const display = getDisconnectReasonDisplay(reason, status, metadata);
 
   return (
-    <Tooltip align="bottom" label={display.tooltip}>
-      <Tag size="md" type="gray" className="inline-flex whitespace-nowrap">
-        {display.label}
-      </Tag>
-    </Tooltip>
+    <div className="inline-flex items-center gap-1 whitespace-nowrap">
+      {showLabel && (
+        <Tag size="md" type="gray">
+          {display.label}
+        </Tag>
+      )}
+      <Toggletip align="bottom-left">
+        <ToggletipButton
+          label="View disconnect details"
+          title="View disconnect details"
+        >
+          <Information size={14} className="text-gray-500 dark:text-gray-400" />
+        </ToggletipButton>
+        <ToggletipContent>
+          <div className="grid max-w-[360px] grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 whitespace-normal text-xs">
+            {display.details.map(row => (
+              <Fragment key={row.label}>
+                <div className="whitespace-nowrap">{row.label}</div>
+                <div className="break-words font-mono">{row.value}</div>
+              </Fragment>
+            ))}
+          </div>
+        </ToggletipContent>
+      </Toggletip>
+    </div>
   );
 };

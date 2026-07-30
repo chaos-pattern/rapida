@@ -31,16 +31,20 @@ type SIPInboundConfig struct {
 // SIPConfig holds the SIP server configuration.
 type SIPConfig struct {
 	Server                  string           `mapstructure:"server"`
-	InstanceID              string           `mapstructure:"instance_id"` // Unique identifier for this SIP server instance (defaults to external_ip)
-	ExternalIP              string           `mapstructure:"external_ip"` // Public/reachable IP for outbound SDP and SIP Contact headers
+	InstanceID              string           `mapstructure:"instance_id" validate:"required"` // Unique identifier for this SIP server instance
+	ExternalIP              string           `mapstructure:"external_ip"`                     // Public/reachable IP for outbound SDP and SIP Contact headers
 	AllowLoopbackExternalIP bool             `mapstructure:"allow_loopback_external_ip"`
 	Port                    int              `mapstructure:"port"`
 	Transport               string           `mapstructure:"transport"`
 	RTPPortRangeStart       int              `mapstructure:"rtp_port_range_start"`
 	RTPPortRangeEnd         int              `mapstructure:"rtp_port_range_end"`
+	SymmetricRTP            bool             `mapstructure:"symmetric_rtp"`
+	IgnoreLocalAddrInSDP    bool             `mapstructure:"ignore_local_addr_in_sdp"`
 	RegisterTimeout         time.Duration    `mapstructure:"register_timeout"`
 	InviteTimeout           time.Duration    `mapstructure:"invite_timeout"`
 	SessionTimeout          time.Duration    `mapstructure:"session_timeout"`
+	MediaTimeoutInitial     time.Duration    `mapstructure:"media_timeout_initial"`
+	MediaTimeout            time.Duration    `mapstructure:"media_timeout"`
 	OutboundHealthGate      *bool            `mapstructure:"outbound_health_gate"`
 	Inbound                 SIPInboundConfig `mapstructure:"inbound"`
 }

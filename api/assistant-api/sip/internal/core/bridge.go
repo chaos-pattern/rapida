@@ -33,8 +33,8 @@ func (s *Server) MakeTransferBridgeCall(ctx context.Context, cfg *Config, toUser
 	}
 
 	outboundCall.answerContext = ctx
-	outboundCall.reportStatus(internal_type.ProviderCallStatusUpdate{CallStatus: string(OutboundCallStatusInitiated)})
-	if _, err := outboundCall.connect(); err != nil {
+	outboundCall.ReportStatus(internal_type.ProviderCallStatusUpdate{CallStatus: string(OutboundCallStatusInitiated)})
+	if _, err := outboundCall.Connect(); err != nil {
 		return nil, NewSIPError("MakeTransferBridgeCall", outboundCall.session.GetCallID(), "call not answered", err)
 	}
 

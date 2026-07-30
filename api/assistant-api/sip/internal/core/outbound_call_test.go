@@ -25,16 +25,36 @@ import (
 func TestNewOutboundCall_OwnsLifecycleDependencies(t *testing.T) {
 	server := &Server{}
 	session := &Session{}
-	invite := &outboundInvite{callID: "call-1"}
+	dialog := &outboundDialog{}
+	media := &outboundMedia{}
 	request, err := NewOutboundInviteRequest(testOutboundConfig(), "+15551234567", "+15557654321")
 	require.NoError(t, err)
 
-	outboundCall := newOutboundCall(server, session, invite, request)
+	outboundCall := NewOutbound(server, session, dialog, media, request)
 
 	assert.Same(t, server, outboundCall.server)
 	assert.Same(t, session, outboundCall.session)
-	assert.Same(t, invite, outboundCall.invite)
+	assert.Same(t, dialog, outboundCall.dialog)
+	assert.Same(t, media, outboundCall.media)
 	assert.Equal(t, request, outboundCall.request)
+}
+
+func TestOutboundMediaApplyAnswerEnablesSymmetricRTPForPrivateSDPWhenConfigured(t *testing.T) {
+	rtpHandler := newTestRTPHandler()
+	media := &outboundMedia{
+		server:     &Server{ignoreLocalAddrInSDP: true},
+		session:    &Session{},
+		rtpHandler: rtpHandler,
+	}
+
+	err := media.ApplyAnswer(OutboundMediaAnswer{
+		negotiatedCodec: &CodecPCMU,
+		remoteIP:        "10.0.0.10",
+		remotePort:      40000,
+	})
+
+	require.NoError(t, err)
+	assert.True(t, rtpHandler.symmetricRTP)
 }
 
 func TestOutboundCallStatus_Values(t *testing.T) {
@@ -42,14 +62,14 @@ func TestOutboundCallStatus_Values(t *testing.T) {
 	assert.Equal(t, "ringing", string(OutboundCallStatusRinging))
 	assert.Equal(t, "answered", string(OutboundCallStatusAnswered))
 	assert.Equal(t, "failed", string(OutboundCallStatusFailed))
+	assert.Equal(t, "completed", string(OutboundCallStatusCompleted))
 	assert.Equal(t, "cancelled", string(OutboundCallStatusCancelled))
 }
 
-func TestAcceptOutboundAnswer_ConfiguresRTPFromSDP(t *testing.T) {
+func TestNewOutboundMediaAnswer_ParsesSDP(t *testing.T) {
 	server := bridgeTestServer()
-	invite := &outboundInvite{
-		callID:     "call-1",
-		rtpHandler: newTestRTPHandler(),
+	dialog := &outboundDialog{
+		session: &Session{info: SessionInfo{CallID: "call-1"}},
 		dialogSession: &sipgo.DialogClientSession{
 			Dialog: sipgo.Dialog{
 				InviteResponse: newOutboundAnswerResponse([]byte(validOutboundAnswerSDP())),
@@ -57,21 +77,19 @@ func TestAcceptOutboundAnswer_ConfiguresRTPFromSDP(t *testing.T) {
 		},
 	}
 
-	answered, err := server.acceptOutboundAnswer(invite)
+	mediaAnswer, err := NewOutboundMediaAnswer(server, dialog)
 
 	require.NoError(t, err)
-	assert.Equal(t, "127.0.0.1", answered.remoteIP)
-	assert.Equal(t, 19000, answered.remotePort)
-	require.NotNil(t, answered.negotiatedCodec)
-	assert.Equal(t, CodecPCMU.Name, answered.negotiatedCodec.Name)
-	assert.Equal(t, "127.0.0.1:19000", invite.rtpHandler.GetRemoteAddr().String())
+	assert.Equal(t, "127.0.0.1", mediaAnswer.remoteIP)
+	assert.Equal(t, 19000, mediaAnswer.remotePort)
+	require.NotNil(t, mediaAnswer.negotiatedCodec)
+	assert.Equal(t, CodecPCMU.Name, mediaAnswer.negotiatedCodec.Name)
 }
 
-func TestAcceptOutboundAnswer_RejectsMissingSDP(t *testing.T) {
+func TestNewOutboundMediaAnswer_RejectsMissingSDP(t *testing.T) {
 	server := bridgeTestServer()
-	invite := &outboundInvite{
-		callID:     "call-1",
-		rtpHandler: newTestRTPHandler(),
+	dialog := &outboundDialog{
+		session: &Session{info: SessionInfo{CallID: "call-1"}},
 		dialogSession: &sipgo.DialogClientSession{
 			Dialog: sipgo.Dialog{
 				InviteResponse: newOutboundAnswerResponse(nil),
@@ -79,17 +97,16 @@ func TestAcceptOutboundAnswer_RejectsMissingSDP(t *testing.T) {
 		},
 	}
 
-	_, err := server.acceptOutboundAnswer(invite)
+	_, err := NewOutboundMediaAnswer(server, dialog)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrSDPParseFailed))
 }
 
-func TestAcceptOutboundAnswer_RejectsUnsupportedAudioCodec(t *testing.T) {
+func TestNewOutboundMediaAnswer_RejectsUnsupportedAudioCodec(t *testing.T) {
 	server := bridgeTestServer()
-	invite := &outboundInvite{
-		callID:     "call-1",
-		rtpHandler: newTestRTPHandler(),
+	dialog := &outboundDialog{
+		session: &Session{info: SessionInfo{CallID: "call-1"}},
 		dialogSession: &sipgo.DialogClientSession{
 			Dialog: sipgo.Dialog{
 				InviteResponse: newOutboundAnswerResponse([]byte(unsupportedOutboundAnswerSDP())),
@@ -97,7 +114,7 @@ func TestAcceptOutboundAnswer_RejectsUnsupportedAudioCodec(t *testing.T) {
 		},
 	}
 
-	_, err := server.acceptOutboundAnswer(invite)
+	_, err := NewOutboundMediaAnswer(server, dialog)
 
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrCodecNotSupported))
@@ -146,12 +163,14 @@ func TestOutboundCall_PreAnswerLifecycleCancelSendsSIPCancel(t *testing.T) {
 	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
 	require.NoError(t, err)
 	statusRecorder := newOutboundStatusRecorder()
-	outboundCall := newOutboundCall(server, session, &outboundInvite{
-		callID:        session.GetCallID(),
+	outboundCall := NewOutbound(server, session, &outboundDialog{
+		server:        server,
+		session:       session,
+		request:       request,
 		dialogSession: dialogSession,
-	}, request)
+	}, &outboundMedia{}, request)
 	outboundCall.statusObserver = statusRecorder.Record
-	outboundCall.start()
+	outboundCall.Start()
 
 	require.Eventually(t, func() bool {
 		return session.GetState() == CallStateRinging
@@ -174,6 +193,8 @@ func TestOutboundCall_PreAnswerLifecycleCancelSendsSIPCancel(t *testing.T) {
 	assert.Equal(t, inviteRequest.CSeq().SeqNo, cancelRequest.CSeq().SeqNo)
 	cancelledStatus := statusRecorder.LastStatus(t, OutboundCallStatusCancelled)
 	assert.Equal(t, string(OutboundFailureCancelled), cancelledStatus.FailureClass)
+	assert.Equal(t, string(CallTerminationClientError), cancelledStatus.SLIResult)
+	assert.Equal(t, "outbound_cancelled", cancelledStatus.SLIReason)
 	assert.Equal(t, LifecycleReasonOutboundCancelledBeforeAnswer.String(), cancelledStatus.DisconnectReason)
 }
 
@@ -219,12 +240,14 @@ func TestOutboundCall_RingingTimeoutSendsLifecycleCancel(t *testing.T) {
 	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
 	require.NoError(t, err)
 	statusRecorder := newOutboundStatusRecorder()
-	outboundCall := newOutboundCall(server, session, &outboundInvite{
-		callID:        session.GetCallID(),
+	outboundCall := NewOutbound(server, session, &outboundDialog{
+		server:        server,
+		session:       session,
+		request:       request,
 		dialogSession: dialogSession,
-	}, request)
+	}, &outboundMedia{}, request)
 	outboundCall.statusObserver = statusRecorder.Record
-	outboundCall.start()
+	outboundCall.Start()
 
 	require.Eventually(t, func() bool {
 		return requester.cancelRequests.Load() == 1
@@ -239,12 +262,90 @@ func TestOutboundCall_RingingTimeoutSendsLifecycleCancel(t *testing.T) {
 	require.True(t, ok)
 	failureReason, ok := session.GetMetadata("sip.failure_reason")
 	require.True(t, ok)
+	sliResult, ok := session.GetMetadata("sip.sli_result")
+	require.True(t, ok)
+	sliReason, ok := session.GetMetadata("sip.sli_reason")
+	require.True(t, ok)
 	assert.Equal(t, string(OutboundFailureNoAnswer), failureClass)
 	assert.Equal(t, "ringing timeout", failureReason)
+	assert.Equal(t, string(CallTerminationClientError), sliResult)
+	assert.Equal(t, "outbound_no_answer", sliReason)
 	assert.Zero(t, requester.byeRequests.Load())
 	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
 	assert.Equal(t, string(OutboundFailureNoAnswer), failedStatus.FailureClass)
+	assert.Equal(t, string(CallTerminationClientError), failedStatus.SLIResult)
+	assert.Equal(t, "outbound_no_answer", failedStatus.SLIReason)
 	assert.Equal(t, LifecycleReasonOutboundNoAnswer.String(), failedStatus.DisconnectReason)
+}
+
+func TestOutboundCall_RemoteBusyReportsFailure(t *testing.T) {
+	ua, err := sipgo.NewUA()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ua.Close() })
+
+	client, err := sipgo.NewClient(ua)
+	require.NoError(t, err)
+	requester := newRejectedInviteRequester(486, "Busy Here")
+	client.TxRequester = requester
+
+	contact := sip.ContactHeader{
+		Address: sip.Uri{Scheme: "sip", User: "rapida", Host: "127.0.0.1", Port: 5060},
+	}
+	dialogClientCache := sipgo.NewDialogClientCache(client, contact)
+	dialogSession, err := dialogClientCache.Invite(context.Background(), sip.Uri{
+		Scheme: "sip",
+		User:   "+15551234567",
+		Host:   "trunk.example.com",
+		Port:   5060,
+	}, nil)
+	require.NoError(t, err)
+
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	cfg.InviteTimeout = time.Minute
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    dialogSession.InviteRequest.CallID().Value(),
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetDialogClientSession(dialogSession)
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{
+		server:        server,
+		session:       session,
+		request:       request,
+		dialogSession: dialogSession,
+	}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+	outboundCall.Start()
+
+	require.Eventually(t, func() bool {
+		return session.GetState() == CallStateFailed
+	}, time.Second, 10*time.Millisecond)
+	assert.Equal(t, int32(1), requester.inviteRequests.Load())
+	assert.Zero(t, requester.cancelRequests.Load())
+	assert.Zero(t, requester.byeRequests.Load())
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureBusy))
+	assertSessionMetadata(t, session, "sip.failure_reason", "Busy Here")
+	assertSessionMetadata(t, session, "sip.sli_result", string(CallTerminationClientError))
+	assertSessionMetadata(t, session, "sip.sli_reason", "outbound_busy")
+	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
+	assert.Equal(t, string(OutboundFailureBusy), failedStatus.FailureClass)
+	assert.Equal(t, "Busy Here", failedStatus.FailureReason)
+	assert.Equal(t, string(CallTerminationClientError), failedStatus.SLIResult)
+	assert.Equal(t, "outbound_busy", failedStatus.SLIReason)
+	assert.Equal(t, LifecycleReasonOutboundRejected.String(), failedStatus.DisconnectReason)
+	assert.Equal(t, 486, failedStatus.ProviderStatusCode)
 }
 
 func TestOutboundCall_AnsweredSDPFailureSendsBYENotCancel(t *testing.T) {
@@ -290,13 +391,19 @@ func TestOutboundCall_AnsweredSDPFailureSendsBYENotCancel(t *testing.T) {
 	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
 	require.NoError(t, err)
 	statusRecorder := newOutboundStatusRecorder()
-	outboundCall := newOutboundCall(server, session, &outboundInvite{
-		callID:        session.GetCallID(),
+	outboundCall := NewOutbound(server, session, &outboundDialog{
+		server:        server,
+		session:       session,
+		request:       request,
 		dialogSession: dialogSession,
-		rtpHandler:    newTestRTPHandler(),
+	}, &outboundMedia{
+		server:     server,
+		session:    session,
+		request:    request,
+		rtpHandler: newTestRTPHandler(),
 	}, request)
 	outboundCall.statusObserver = statusRecorder.Record
-	outboundCall.start()
+	outboundCall.Start()
 
 	require.Eventually(t, func() bool {
 		return session.GetState() == CallStateFailed
@@ -318,7 +425,134 @@ func TestOutboundCall_AnsweredSDPFailureSendsBYENotCancel(t *testing.T) {
 	assert.Equal(t, sip.BYE, requester.byeRequest().CSeq().MethodName)
 	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
 	assert.Equal(t, string(OutboundFailureMedia), failedStatus.FailureClass)
+	assert.Equal(t, string(CallTerminationClientError), failedStatus.SLIResult)
+	assert.Equal(t, "outbound_answer_sdp_failed", failedStatus.SLIReason)
 	assert.Equal(t, LifecycleReasonOutboundAnswerSDPFailed.String(), failedStatus.DisconnectReason)
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureMedia))
+	assertSessionMetadata(t, session, "sip.sli_result", string(CallTerminationClientError))
+	assertSessionMetadata(t, session, "sip.sli_reason", "outbound_answer_sdp_failed")
+}
+
+func TestOutboundCall_ApplicationFailureRecordsFailure(t *testing.T) {
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    "call-application-failure",
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+
+	applicationErr := errors.New("pipeline failed")
+	outboundCall.failAfterAnswer(OutboundFailure{
+		Class:           OutboundFailureApplication,
+		Reason:          applicationErr.Error(),
+		Termination:     CallTermination{Result: CallTerminationServerError, Reason: "outbound_application"},
+		LifecycleReason: LifecycleReasonPipelineSetupFailed,
+		Err:             applicationErr,
+	})
+
+	assert.Equal(t, CallStateFailed, session.GetState())
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureApplication))
+	assertSessionMetadata(t, session, "sip.failure_reason", "pipeline failed")
+	assertSessionMetadata(t, session, "sip.sli_result", string(CallTerminationServerError))
+	assertSessionMetadata(t, session, "sip.sli_reason", "outbound_application")
+	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
+	assert.Equal(t, string(OutboundFailureApplication), failedStatus.FailureClass)
+	assert.Equal(t, "pipeline failed", failedStatus.FailureReason)
+	assert.Equal(t, string(CallTerminationServerError), failedStatus.SLIResult)
+	assert.Equal(t, "outbound_application", failedStatus.SLIReason)
+	assert.Equal(t, LifecycleReasonPipelineSetupFailed.String(), failedStatus.DisconnectReason)
+}
+
+func TestOutboundCall_MediaTimeoutWithoutReceivedRTPFails(t *testing.T) {
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    "call-media-timeout-no-rtp",
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	session.SetRTPHandler(&RTPHandler{})
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+
+	outboundCall.mediaTimeout()
+
+	assert.Equal(t, CallStateFailed, session.GetState())
+	failedStatus := statusRecorder.LastStatus(t, OutboundCallStatusFailed)
+	assert.Equal(t, string(OutboundFailureMedia), failedStatus.FailureClass)
+	assert.Equal(t, ErrRTPMediaTimeout.Error(), failedStatus.FailureReason)
+	assert.Equal(t, LifecycleReasonOutboundMediaTimeout.String(), failedStatus.DisconnectReason)
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureMedia))
+	assertSessionMetadata(t, session, "sip.failure_reason", ErrRTPMediaTimeout.Error())
+}
+
+func TestOutboundCall_MediaTimeoutAfterReceivedRTPEndsCompleted(t *testing.T) {
+	server := &Server{
+		logger:     bridgeTestLogger(),
+		sessions:   make(map[string]*Session),
+		lifecycles: make(map[string]*CallLifecycle),
+	}
+	cfg := testOutboundConfig()
+	session, err := NewSession(context.Background(), &SessionConfig{
+		Config:    cfg,
+		Direction: CallDirectionOutbound,
+		CallID:    "call-media-timeout-established",
+		Logger:    server.logger,
+	})
+	require.NoError(t, err)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	rtpHandler := &RTPHandler{}
+	rtpHandler.packetsReceived.Store(12)
+	session.SetRTPHandler(rtpHandler)
+	server.registerSession(session, session.GetCallID())
+
+	request, err := NewOutboundInviteRequest(cfg, "+15551234567", "+15557654321")
+	require.NoError(t, err)
+	statusRecorder := newOutboundStatusRecorder()
+	outboundCall := NewOutbound(server, session, &outboundDialog{}, &outboundMedia{}, request)
+	outboundCall.statusObserver = statusRecorder.Record
+
+	outboundCall.mediaTimeout()
+
+	assert.True(t, session.IsEnded())
+	assert.Equal(t, CallStateEnded, session.GetState())
+	completedStatus := statusRecorder.LastStatus(t, OutboundCallStatusCompleted)
+	assert.Equal(t, DisconnectReasonRemoteHangup, completedStatus.DisconnectReason)
+	assert.False(t, statusRecorder.HasStatus(OutboundCallStatusFailed), "established media timeout must not report failed")
+	assertSessionMetadata(t, session, "sip.media_timeout", true)
+	assertSessionMetadata(t, session, "sip.media_timeout_after_established_media", true)
+	metadata := session.GetDisconnectMetadata()
+	assert.Equal(t, DisconnectReasonRemoteHangup, metadata.Reason)
 }
 
 type outboundStatusRecorder struct {
@@ -351,6 +585,17 @@ func (r *outboundStatusRecorder) LastStatus(t *testing.T, status OutboundCallSta
 		return false
 	}, time.Second, 10*time.Millisecond)
 	return update
+}
+
+func (r *outboundStatusRecorder) HasStatus(status OutboundCallStatus) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for _, update := range r.updates {
+		if update.CallStatus == string(status) {
+			return true
+		}
+	}
+	return false
 }
 
 type cancelTrackingRequester struct {
@@ -420,6 +665,34 @@ type answeredDialogTrackingRequester struct {
 	ackRequests    atomic.Int32
 	byeRequests    atomic.Int32
 	cancelRequests atomic.Int32
+}
+
+type rejectedInviteRequester struct {
+	statusCode     int
+	reason         string
+	inviteRequests atomic.Int32
+	cancelRequests atomic.Int32
+	byeRequests    atomic.Int32
+}
+
+func newRejectedInviteRequester(statusCode int, reason string) *rejectedInviteRequester {
+	return &rejectedInviteRequester{statusCode: statusCode, reason: reason}
+}
+
+func (r *rejectedInviteRequester) Request(ctx context.Context, req *sip.Request) (sip.ClientTransaction, error) {
+	tx := newFakeClientTransaction()
+	switch req.Method {
+	case sip.INVITE:
+		r.inviteRequests.Add(1)
+		tx.respond(sip.NewResponseFromRequest(req, r.statusCode, r.reason, nil))
+	case sip.CANCEL:
+		r.cancelRequests.Add(1)
+		tx.respond(sip.NewResponseFromRequest(req, 200, "OK", nil))
+	case sip.BYE:
+		r.byeRequests.Add(1)
+		tx.respond(sip.NewResponseFromRequest(req, 200, "OK", nil))
+	}
+	return tx, nil
 }
 
 func newAnsweredDialogTrackingRequester() *answeredDialogTrackingRequester {

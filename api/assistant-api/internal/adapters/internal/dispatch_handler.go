@@ -704,6 +704,14 @@ func (h requestorDispatchHandler) HandleError(ctx context.Context, p internal_ty
 			conversationId = conversation.Id
 			webhookScope = internal_type.ObservabilityRecordScopeConversation
 		}
+		if h.r.metrics == nil {
+			h.r.metrics = make(map[string]*protos.Metric)
+		}
+		h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       "error",
+			Description: p.ErrMessage(),
+		}
 		h.r.OnPacket(ctx,
 			internal_type.ObservabilityWebhookRecordPacket{
 				ContextID: p.ContextId(),
@@ -726,9 +734,18 @@ func (h requestorDispatchHandler) HandleError(ctx context.Context, p internal_ty
 			internal_type.ObservabilityMetadataRecordPacket{
 				ContextID: h.r.GetID(),
 				Scope:     internal_type.ObservabilityRecordScopeConversation,
-				Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-					Key:   "disconnect_reason",
-					Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+				Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					p.ErrMessage(),
+				)),
+			},
+			internal_type.ObservabilityMetricRecordPacket{
+				ContextID: h.r.GetID(),
+				Scope:     internal_type.ObservabilityRecordScopeConversation,
+				Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       "error",
+					Description: p.ErrMessage(),
 				}}),
 			},
 		)
@@ -881,6 +898,14 @@ func (h requestorDispatchHandler) HandleIdleTimeoutExpired(ctx context.Context, 
 	if validator.NonNil(behavior.IdleTimeoutBackoff) && *behavior.IdleTimeoutBackoff > 0 {
 		if idleTimeoutCount >= *behavior.IdleTimeoutBackoff {
 			if _, err := h.r.Conversation(); err == nil {
+				if h.r.metrics == nil {
+					h.r.metrics = make(map[string]*protos.Metric)
+				}
+				h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       type_enums.CONVERSATION_COMPLETE.String(),
+					Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT.String(),
+				}
 				h.r.OnPacket(h.r.sessionCtx,
 					internal_type.ObservabilityEventRecordPacket{
 						ContextID: h.r.GetID(),
@@ -892,9 +917,18 @@ func (h requestorDispatchHandler) HandleIdleTimeoutExpired(ctx context.Context, 
 					internal_type.ObservabilityMetadataRecordPacket{
 						ContextID: h.r.GetID(),
 						Scope:     internal_type.ObservabilityRecordScopeConversation,
-						Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-							Key:   "disconnect_reason",
-							Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT.String(),
+						Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+							protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT.String(),
+							"",
+						)),
+					},
+					internal_type.ObservabilityMetricRecordPacket{
+						ContextID: h.r.GetID(),
+						Scope:     internal_type.ObservabilityRecordScopeConversation,
+						Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       type_enums.CONVERSATION_COMPLETE.String(),
+							Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_IDLE_TIMEOUT.String(),
 						}}),
 					},
 				)
@@ -945,6 +979,14 @@ func (h requestorDispatchHandler) HandleIdleTimeoutExpired(ctx context.Context, 
 
 func (h requestorDispatchHandler) HandleMaxSessionExpired(ctx context.Context, p internal_type.MaxSessionExpiredPacket) {
 	if _, err := h.r.Conversation(); err == nil {
+		if h.r.metrics == nil {
+			h.r.metrics = make(map[string]*protos.Metric)
+		}
+		h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       type_enums.CONVERSATION_COMPLETE.String(),
+			Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_MAX_DURATION.String(),
+		}
 		h.r.OnPacket(h.r.sessionCtx,
 			internal_type.ObservabilityEventRecordPacket{
 				ContextID: h.r.GetID(),
@@ -956,9 +998,18 @@ func (h requestorDispatchHandler) HandleMaxSessionExpired(ctx context.Context, p
 			internal_type.ObservabilityMetadataRecordPacket{
 				ContextID: h.r.GetID(),
 				Scope:     internal_type.ObservabilityRecordScopeConversation,
-				Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-					Key:   "disconnect_reason",
-					Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_MAX_DURATION.String(),
+				Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_MAX_DURATION.String(),
+					"",
+				)),
+			},
+			internal_type.ObservabilityMetricRecordPacket{
+				ContextID: h.r.GetID(),
+				Scope:     internal_type.ObservabilityRecordScopeConversation,
+				Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       type_enums.CONVERSATION_COMPLETE.String(),
+					Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_MAX_DURATION.String(),
 				}}),
 			},
 		)
@@ -1239,6 +1290,14 @@ func (h requestorDispatchHandler) HandleLLMToolResult(ctx context.Context, p int
 
 	switch p.Action {
 	case protos.ToolCallAction_TOOL_CALL_ACTION_END_CONVERSATION:
+		if h.r.metrics == nil {
+			h.r.metrics = make(map[string]*protos.Metric)
+		}
+		h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       type_enums.CONVERSATION_COMPLETE.String(),
+			Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+		}
 		h.r.OnPacket(ctx,
 			internal_type.ObservabilityEventRecordPacket{
 				ContextID: h.r.GetID(),
@@ -1250,9 +1309,18 @@ func (h requestorDispatchHandler) HandleLLMToolResult(ctx context.Context, p int
 			internal_type.ObservabilityMetadataRecordPacket{
 				ContextID: h.r.GetID(),
 				Scope:     internal_type.ObservabilityRecordScopeConversation,
-				Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-					Key:   "disconnect_reason",
-					Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+				Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+					p.Result["reason"],
+				)),
+			},
+			internal_type.ObservabilityMetricRecordPacket{
+				ContextID: h.r.GetID(),
+				Scope:     internal_type.ObservabilityRecordScopeConversation,
+				Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       type_enums.CONVERSATION_COMPLETE.String(),
+					Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
 				}}),
 			},
 		)
@@ -1262,6 +1330,14 @@ func (h requestorDispatchHandler) HandleLLMToolResult(ctx context.Context, p int
 		return
 	case protos.ToolCallAction_TOOL_CALL_ACTION_TRANSFER_CONVERSATION:
 		if p.Result["next_action"] == "end_call" {
+			if h.r.metrics == nil {
+				h.r.metrics = make(map[string]*protos.Metric)
+			}
+			h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+				Name:        type_enums.CONVERSATION_STATUS.String(),
+				Value:       type_enums.CONVERSATION_COMPLETE.String(),
+				Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+			}
 			h.r.OnPacket(ctx,
 				internal_type.ObservabilityEventRecordPacket{
 					ContextID: h.r.GetID(),
@@ -1273,9 +1349,18 @@ func (h requestorDispatchHandler) HandleLLMToolResult(ctx context.Context, p int
 				internal_type.ObservabilityMetadataRecordPacket{
 					ContextID: h.r.GetID(),
 					Scope:     internal_type.ObservabilityRecordScopeConversation,
-					Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-						Key:   "disconnect_reason",
-						Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+					Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+						protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
+						p.Result["reason"],
+					)),
+				},
+				internal_type.ObservabilityMetricRecordPacket{
+					ContextID: h.r.GetID(),
+					Scope:     internal_type.ObservabilityRecordScopeConversation,
+					Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+						Name:        type_enums.CONVERSATION_STATUS.String(),
+						Value:       type_enums.CONVERSATION_COMPLETE.String(),
+						Description: protos.ConversationDisconnection_DISCONNECTION_TYPE_TOOL.String(),
 					}}),
 				},
 			)
@@ -2870,6 +2955,12 @@ func (h requestorDispatchHandler) HandleInitializeInboundDispatcher(ctx context.
 	go h.r.runInputDispatcher(h.r.sessionCtx)
 }
 
+func (h requestorDispatchHandler) HandleFinalizeInboundDispatcher(ctx context.Context, p internal_type.FinalizeInboundDispatcherPacket) {
+	h.r.pauseInputDispatcher(h.r.sessionCtx, func() {
+		h.r.OnPacket(ctx, internal_type.FinalizeBehaviorPacket{ContextID: p.ContextID})
+	})
+}
+
 func (h requestorDispatchHandler) HandleFinalizeBehavior(ctx context.Context, p internal_type.FinalizeBehaviorPacket) {
 	if h.r.idleTimeoutWatchdog != nil {
 		h.r.idleTimeoutWatchdog.Cancel()
@@ -3137,10 +3228,12 @@ func (h requestorDispatchHandler) HandleFinalizeConversation(ctx context.Context
 	if h.r.metrics == nil {
 		h.r.metrics = make(map[string]*protos.Metric)
 	}
-	h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
-		Name:        type_enums.CONVERSATION_STATUS.String(),
-		Value:       type_enums.CONVERSATION_COMPLETE.String(),
-		Description: "Status of current conversation",
+	if h.r.metrics[type_enums.CONVERSATION_STATUS.String()] == nil {
+		h.r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       type_enums.CONVERSATION_COMPLETE.String(),
+			Description: "Status of current conversation",
+		}
 	}
 	assistant, assistantErr := h.r.Assistant()
 	conversation, conversationErr := h.r.Conversation()

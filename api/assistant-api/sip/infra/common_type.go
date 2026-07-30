@@ -22,6 +22,7 @@ var (
 	ErrRTPNotInitialized          = internal_core.ErrRTPNotInitialized
 	ErrRTPHandlerStopped          = internal_core.ErrRTPHandlerStopped
 	ErrRTPOutputQueueFull         = internal_core.ErrRTPOutputQueueFull
+	ErrRTPPortRangeExhausted      = internal_core.ErrRTPPortRangeExhausted
 	ErrSDPParseFailed             = internal_core.ErrSDPParseFailed
 	ErrCodecNotSupported          = internal_core.ErrCodecNotSupported
 	ErrConnectionFailed           = internal_core.ErrConnectionFailed
@@ -76,10 +77,12 @@ type Config struct {
 	RTPPortRangeEnd   int       `json:"rtp_port_range_end" mapstructure:"rtp_port_range_end"`
 	SRTPEnabled       bool      `json:"srtp_enabled" mapstructure:"srtp_enabled"`
 
-	RegisterTimeout  time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
-	InviteTimeout    time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
-	SessionTimeout   time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
-	KeepAliveEnabled bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
+	RegisterTimeout     time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
+	InviteTimeout       time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
+	SessionTimeout      time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
+	MediaTimeoutInitial time.Duration `json:"media_timeout_initial,omitempty" mapstructure:"media_timeout_initial"`
+	MediaTimeout        time.Duration `json:"media_timeout,omitempty" mapstructure:"media_timeout"`
+	KeepAliveEnabled    bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
 
 	InboundAnswerMode      InboundAnswerMode `json:"inbound_answer_mode,omitempty" mapstructure:"inbound_answer_mode"`
 	InboundMinRingDuration time.Duration     `json:"inbound_min_ring_duration,omitempty" mapstructure:"inbound_min_ring_duration"`
@@ -106,6 +109,15 @@ func (c *Config) ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTim
 	}
 	coreConfig := c.toCore()
 	coreConfig.ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTimeout)
+	*c = configFromCore(coreConfig)
+}
+
+func (c *Config) ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout time.Duration) {
+	if c == nil {
+		return
+	}
+	coreConfig := c.toCore()
+	coreConfig.ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout)
 	*c = configFromCore(coreConfig)
 }
 
@@ -168,6 +180,8 @@ func (c *Config) toCore() *internal_core.Config {
 		RegisterTimeout:        c.RegisterTimeout,
 		InviteTimeout:          c.InviteTimeout,
 		SessionTimeout:         c.SessionTimeout,
+		MediaTimeoutInitial:    c.MediaTimeoutInitial,
+		MediaTimeout:           c.MediaTimeout,
 		KeepAliveEnabled:       c.KeepAliveEnabled,
 		InboundAnswerMode:      internal_core.InboundAnswerMode(c.InboundAnswerMode),
 		InboundMinRingDuration: c.InboundMinRingDuration,
@@ -196,6 +210,8 @@ func configFromCore(c *internal_core.Config) Config {
 		RegisterTimeout:        c.RegisterTimeout,
 		InviteTimeout:          c.InviteTimeout,
 		SessionTimeout:         c.SessionTimeout,
+		MediaTimeoutInitial:    c.MediaTimeoutInitial,
+		MediaTimeout:           c.MediaTimeout,
 		KeepAliveEnabled:       c.KeepAliveEnabled,
 		InboundAnswerMode:      InboundAnswerMode(c.InboundAnswerMode),
 		InboundMinRingDuration: c.InboundMinRingDuration,
@@ -367,7 +383,6 @@ const (
 	MetadataBridgeTransferDuration       = "bridge_transfer_duration"
 	MetadataBridgeTransferOutboundCallID = "bridge_transfer_outbound_call_id"
 	MetadataDisconnectReason             = "disconnect_reason"
-	MetadataDisconnectText               = "disconnect_text"
 	MetadataDisconnectRawReason          = "disconnect_raw_reason"
 	PostTransferActionEndCall            = "end_call"
 	PostTransferActionResumeAI           = "resume_ai"

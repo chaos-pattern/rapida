@@ -135,13 +135,12 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Twilio websocket reader closed",
 				}},
 			})
@@ -166,7 +165,7 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Failed to unmarshal Twilio media event",
 				}},
 			})
@@ -187,12 +186,11 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				Metadata: []*protos.Metadata{
 					{Key: observability.MetadataClientChannel, Value: internal_twilio.TwilioProvider},
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
-					{Key: observability.MetadataCallStatus, Value: "connected"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Twilio websocket connected",
 				}},
 			})
@@ -217,13 +215,12 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: tws.GetConversationUuid()},
 					{Key: observability.MetadataClientCodec, Value: "mulaw"},
 					{Key: observability.MetadataClientSampleRate, Value: "8000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "twilio.stream_id", Value: tws.streamID},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Twilio media stream started",
 				}},
 			})
@@ -240,12 +237,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": tws.GetConversationUuid(),
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
-						Description: "Twilio media frame processing failed",
-					}},
 				})
 			}
 		case internal_twilio.EventTypeStop:
@@ -262,13 +253,12 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Twilio media stream stopped by provider",
 				}},
 			})
@@ -338,7 +328,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to create Twilio client for server-side disconnect",
 					}},
 				})
@@ -359,7 +349,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "FAILED",
+							Value:       observability.MetricCallStatusFailed,
 							Description: "Failed to end Twilio call on server-side disconnect",
 						}},
 					})
@@ -376,13 +366,12 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 						},
 					}, observability.RecordMetadata{
 						Metadata: []*protos.Metadata{
-							{Key: observability.MetadataCallStatus, Value: "completed"},
 							{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 						},
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "COMPLETE",
+							Value:       observability.MetricCallStatusComplete,
 							Description: "Twilio call ended by server-side disconnect",
 						}},
 					})
@@ -412,7 +401,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					}, observability.RecordMetric{
 						Metrics: []*protos.Metric{{
 							Name:        observability.MetricCallStatus,
-							Value:       "FAILED",
+							Value:       observability.MetricCallStatusFailed,
 							Description: "Failed to end Twilio call",
 						}},
 					})
@@ -434,7 +423,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 						}, observability.RecordMetric{
 							Metrics: []*protos.Metric{{
 								Name:        observability.MetricCallStatus,
-								Value:       "FAILED",
+								Value:       observability.MetricCallStatusFailed,
 								Description: "Failed to create Twilio client for end conversation",
 							}},
 						})
@@ -452,13 +441,12 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 							},
 						}, observability.RecordMetadata{
 							Metadata: []*protos.Metadata{
-								{Key: observability.MetadataCallStatus, Value: "completed"},
 								{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 							},
 						}, observability.RecordMetric{
 							Metrics: []*protos.Metric{{
 								Name:        observability.MetricCallStatus,
-								Value:       "COMPLETE",
+								Value:       observability.MetricCallStatusComplete,
 								Description: "Twilio call ended by tool action",
 							}},
 						})
@@ -490,13 +478,12 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: "missing target or call ID"},
 					},
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Twilio transfer failed before dispatch",
 					}},
 				})
@@ -538,7 +525,7 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Failed to create Twilio client for transfer",
 					}},
 				})
@@ -565,13 +552,12 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: err.Error()},
 					},
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Twilio transfer dispatch failed",
 					}},
 				})
@@ -594,14 +580,13 @@ func (tws *twilioWebsocketStreamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_dispatched"},
 						{Key: observability.MetadataBridgeTransferTarget, Value: to},
 						{Key: observability.MetadataBridgeTransferStatus, Value: "dispatched"},
 					},
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "INPROGRESS",
+						Value:       observability.MetricCallStatusInProgress,
 						Description: "Twilio transfer dispatched",
 					}},
 				})
@@ -681,12 +666,6 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 				"stream_id":         tws.streamID,
 				"conversation_uuid": tws.GetConversationUuid(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
-				Description: "Twilio media event missing media payload",
-			}},
 		})
 		return nil
 	}
@@ -702,12 +681,6 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 				"conversation_uuid": tws.GetConversationUuid(),
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
-				Description: "Failed to decode Twilio media payload",
-			}},
 		})
 		return nil
 	}
@@ -751,7 +724,7 @@ func (tws *twilioWebsocketStreamer) sendTwilioMessage(
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to marshal Twilio message",
 			}},
 		})
@@ -778,7 +751,7 @@ func (tws *twilioWebsocketStreamer) sendTwilioMessage(
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to send message to Twilio",
 			}},
 		})

@@ -17,7 +17,6 @@ import { ConversationDirectionIndicator } from '@/app/components/indicators/conv
 import { CONFIG } from '@/configs';
 import { AssistantConversationTelephonyEventDialog } from '@/app/components/base/modal/assistant-conversation-telephony-event-modal';
 import { ChannelIndicator } from './channel-indicator';
-import { normalizeDisconnectReason } from './disconnect-reason';
 import { DisconnectReasonIndicator } from './disconnect-reason-indicator';
 import { DurationBreakdownToggletip } from './duration-breakdown-toggletip';
 import {
@@ -163,13 +162,15 @@ export function Conversations({ currentAssistant }: ConversationProps) {
     setDownloading(true);
     const csvContent = [
       assistantConversationListAction.columns
-        .filter(column => column.visible)
+        .filter(column => column.visible && column.key !== 'disconnect_reason')
         .map(column => column.name)
         .join(','),
       ...assistantConversationListAction.assistantConversations.map(
         (row: AssistantConversation) =>
           assistantConversationListAction.columns
-            .filter(column => column.visible)
+            .filter(
+              column => column.visible && column.key !== 'disconnect_reason',
+            )
             .map(column => {
               switch (column.key) {
                 case 'id':
@@ -186,10 +187,6 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                   return row.getSource();
                 case 'status':
                   return getStatusMetric(row.getMetricsList());
-                case 'disconnect_reason':
-                  return normalizeDisconnectReason(
-                    getDisconnectReasonValue(row),
-                  ).label;
                 case 'created_date':
                   return row.getCreateddate()
                     ? toDate(row.getCreateddate()!)
@@ -215,7 +212,7 @@ export function Conversations({ currentAssistant }: ConversationProps) {
   };
 
   const visibleColumns = assistantConversationListAction.columns.filter(
-    c => c.visible,
+    c => c.visible && c.key !== 'disconnect_reason',
   );
 
   return (
@@ -304,18 +301,17 @@ export function Conversations({ currentAssistant }: ConversationProps) {
                       'status',
                     ) && (
                       <TableCell className="text-sm">
-                        <CarbonStatusIndicator
-                          state={getStatusMetric(row.getMetricsList())}
-                        />
-                      </TableCell>
-                    )}
-                    {assistantConversationListAction.visibleColumn(
-                      'disconnect_reason',
-                    ) && (
-                      <TableCell className="min-w-[180px] whitespace-nowrap text-sm">
-                        <DisconnectReasonIndicator
-                          reason={getDisconnectReasonValue(row)}
-                        />
+                        <div className="inline-flex items-center gap-1">
+                          <CarbonStatusIndicator
+                            state={getStatusMetric(row.getMetricsList())}
+                          />
+                          <DisconnectReasonIndicator
+                            reason={getDisconnectReasonValue(row)}
+                            status={getStatusMetric(row.getMetricsList())}
+                            metadata={row.getMetadataList()}
+                            showLabel={false}
+                          />
+                        </div>
                       </TableCell>
                     )}
                     {assistantConversationListAction.visibleColumn(

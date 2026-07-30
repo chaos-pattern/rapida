@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/emiago/sipgo/sip"
-	internal_inbound "github.com/rapidaai/api/assistant-api/sip/internal/inbound"
 )
 
 const (
@@ -22,7 +21,7 @@ const (
 )
 
 func (s *Server) handleInvite(req *sip.Request, tx sip.ServerTransaction) {
-	newInboundCall(s, req, tx).run()
+	NewInbound(s, req, tx).HandleInvite()
 }
 
 // handleReInvite processes a re-INVITE for an existing session.
@@ -56,16 +55,15 @@ func (s *Server) handleReInvite(req *sip.Request, tx sip.ServerTransaction, sess
 		"call_id", callID,
 		"sdp_body", string(req.Body()))
 
-	mediaOffer, err := parseInboundSDPMediaOffer(
+	mediaOffer, failure := NewInboundMediaOffer(
 		s,
 		req,
-		callID,
 		"re-INVITE",
 		LifecycleReasonInboundReinviteSDPRejected,
 		true,
 	)
-	if err != nil {
-		s.rejectInboundDialogMediaOffer(tx, req, callID, "re-INVITE", LifecycleReasonInboundReinviteSDPRejected, err)
+	if failure != nil {
+		s.rejectInboundDialogMediaOffer(tx, req, callID, "re-INVITE", *failure)
 		return
 	}
 	sdpInfo := mediaOffer.sdpInfo
@@ -85,6 +83,7 @@ func (s *Server) handleReInvite(req *sip.Request, tx sip.ServerTransaction, sess
 	if !sdpInfo.IsHold() {
 		rtpHandler := session.GetRTPHandler()
 		if rtpHandler != nil && sdpInfo.ConnectionIP != "" && sdpInfo.AudioPort > 0 {
+			rtpHandler.SetSymmetricRTP(s.useSymmetricRTPForRemoteIP(sdpInfo.ConnectionIP))
 			rtpHandler.SetRemoteAddr(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 			session.SetRemoteRTP(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 			s.logger.Debugw("Updated remote RTP from re-INVITE",
@@ -136,7 +135,7 @@ func (s *Server) respondWithCurrentSDP(tx sip.ServerTransaction, req *sip.Reques
 	sdpBody := s.GenerateSDP(sdpConfig)
 	if req.Method == sip.INVITE {
 		session.BeginReInviteACKWait()
-		if err := s.sendSDPResponseAndWaitACK(tx, req, session, sdpBody, LifecycleReasonInboundReinviteACKReceived, s.effectiveInboundACKTimeout()); err != nil {
+		if err := s.sendSDPResponseAndWaitACK(tx, req, session, sdpBody, LifecycleReasonInboundReinviteACKReceived, s.effectiveInboundACKTimeout(), nil); err != nil {
 			s.logger.Warnw("re-INVITE ACK wait failed",
 				"call_id", session.GetCallID(),
 				"error", err)
@@ -151,18 +150,21 @@ func (s *Server) rejectInboundDialogMediaOffer(
 	req *sip.Request,
 	callID string,
 	requestName string,
-	reason LifecycleReason,
-	err error,
+	failure inboundFailure,
 ) {
-	statusCode, failureClass, reason, err := inboundSetupFailureDetails(err, 400, internal_inbound.FailureMedia, reason)
 	s.logger.Warnw("Inbound SIP dialog SDP rejected",
 		"call_id", callID,
 		"request", requestName,
-		"status_code", statusCode,
-		"failure_class", string(failureClass),
-		"reason", reason,
-		"error", err)
-	s.sendResponse(tx, req, statusCode)
+		"status_code", failure.statusCode,
+		"failure_class", string(failure.class),
+		"failure_response_class", string(failure.responseClass),
+		"failure_reason", failure.reason,
+		"sli_result", string(failure.termination.Result),
+		"sli_reason", failure.termination.Reason,
+		"retryable", failure.retryable,
+		"reason", failure.lifecycleReason,
+		"error", failure.err)
+	s.sendResponse(tx, req, failure.statusCode)
 }
 
 func (s *Server) handleAck(req *sip.Request, tx sip.ServerTransaction) {
@@ -186,128 +188,31 @@ func (s *Server) handleAck(req *sip.Request, tx sip.ServerTransaction) {
 	s.acceptInboundACK(req, tx, session)
 }
 
-func (s *Server) handleBye(req *sip.Request, tx sip.ServerTransaction) {
-	callID := req.CallID().Value()
-	fromHdr := req.From()
-	fromUser := ""
-	if fromHdr != nil {
-		fromUser = fromHdr.Address.User
-	}
-
-	s.mu.RLock()
-	session, exists := s.sessions[callID]
-	s.mu.RUnlock()
-
-	if !exists {
-		// Try the outbound dialog cache — maybe this BYE is for a dialog we created
-		// but haven't registered in sessions yet, or that was already cleaned up.
-		if err := s.dialogClientCache.ReadBye(req, tx); err == nil {
-			s.logger.Infow("BYE handled by dialog client cache (no session)", "call_id", callID)
-			return
-		}
-		s.logger.Warnw("BYE received for unknown session", "call_id", callID, "from", fromUser)
-		s.sendResponse(tx, req, 481) // Call/Transaction Does Not Exist
-		return
-	}
-
-	info := session.GetInfo()
-	connectedDuration := ""
-	if info.ConnectedTime != nil {
-		connectedDuration = time.Since(*info.ConnectedTime).String()
-	}
-	s.logger.Infow("BYE received — tearing down call",
-		"call_id", callID,
-		"from", fromUser,
-		"direction", info.Direction,
-		"state", info.State,
-		"duration", info.Duration,
-		"connected_duration", connectedDuration,
-		"session_ended", session.IsEnded())
-
-	disconnectMetadata := parseSIPDisconnectMetadata(req)
-	session.SetDisconnectMetadata(disconnectMetadata)
-
-	// Signal BYE for both call directions before branch-specific teardown.
-	session.NotifyBye()
-
-	// Outbound BYE is acknowledged by the dialog cache; outboundCall observes
-	// dialog cancellation and lets the Talk path finish session teardown.
-	if info.Direction == CallDirectionOutbound {
-		if err := s.dialogClientCache.ReadBye(req, tx); err != nil {
-			// If dialog cache can't handle it (dialog already gone), respond ourselves
-			s.logger.Warnw("Dialog cache ReadBye failed, responding directly",
-				"error", err, "call_id", callID)
-			s.sendResponse(tx, req, 200)
-		}
-		s.logger.Infow("Outbound BYE processed via dialog cache",
-			"call_id", callID,
-			"duration", info.Duration,
-			"disconnect_reason", disconnectMetadata.Reason,
-			"provider_status_code", disconnectMetadata.ProviderStatusCode,
-			"reason_text", disconnectMetadata.Text)
-
-		// Fire the onBye callback for application-level cleanup
-		s.mu.RLock()
-		onBye := s.onBye
-		s.mu.RUnlock()
-		if onBye != nil {
-			if err := onBye(session); err != nil {
-				s.logger.Warnw("BYE handler returned error", "error", err, "call_id", callID)
-			}
-		}
-		return
-	}
-
-	// Inbound BYE must match the server-owned dialog so teardown cannot hide
-	// route, tag, or CSeq errors behind a synthetic 200 OK.
-	if err := s.dialogServerCache.ReadBye(req, tx); err != nil {
-		s.logger.Warnw("Inbound BYE rejected by dialog cache",
-			"error", err, "call_id", callID)
-		s.sendResponse(tx, req, 481)
-		return
-	}
-
-	// Get callback before calling it
-	s.mu.RLock()
-	onBye := s.onBye
-	s.mu.RUnlock()
-
-	if onBye != nil {
-		if err := onBye(session); err != nil {
-			s.logger.Warnw("BYE handler returned error", "error", err, "call_id", callID)
-		}
-	}
-
-	session.ClearOnDisconnect()
-	_ = s.EndInboundCall(session, LifecycleReasonRemoteBye)
-	s.logger.Infow("SIP call ended (BYE processed)",
-		"call_id", callID,
-		"duration", info.Duration,
-		"disconnect_reason", disconnectMetadata.Reason,
-		"provider_status_code", disconnectMetadata.ProviderStatusCode,
-		"reason_text", disconnectMetadata.Text)
-}
-
 func (s *Server) handleCancel(req *sip.Request, tx sip.ServerTransaction) {
-	callID := req.CallID().Value()
-	s.markInviteCancelled(callID)
+	identity, ok := inboundInviteIdentityFromRequest(req)
+	if !ok {
+		s.sendResponse(tx, req, 400)
+		return
+	}
+	key := inboundInviteKey{callID: identity.callID, fromTag: identity.fromTag}
+	s.markInviteCancelled(key)
 
 	s.mu.RLock()
-	session, exists := s.sessions[callID]
+	session, exists := s.sessions[identity.callID]
 	s.mu.RUnlock()
 
-	inviteTerminated := s.terminatePendingInvite(callID, 487)
+	inviteTerminated := s.terminatePendingInvite(key, 487)
 
 	if !exists && !inviteTerminated {
-		s.logger.Warnw("CANCEL received for unknown session", "call_id", callID)
+		s.logger.Warnw("CANCEL received for unknown session", "call_id", identity.callID)
 		s.sendResponse(tx, req, 481) // Call/Transaction Does Not Exist
 		return
 	}
 	if exists && !inviteTerminated {
 		state := session.GetState()
 		setupPhase := session.GetInboundSetupPhase()
-		if (state != CallStateInitializing && state != CallStateRinging) || inboundFinalAnswerStarted(setupPhase) || s.isPendingInviteFinalResponseStarted(callID) {
-			s.logger.Warnw("CANCEL received for non-pending dialog", "call_id", callID, "state", state, "inbound_setup_phase", setupPhase)
+		if (state != CallStateInitializing && state != CallStateRinging) || inboundFinalAnswerStarted(setupPhase) || s.isPendingInviteFinalResponseStarted(key) {
+			s.logger.Warnw("CANCEL received for non-pending dialog", "call_id", identity.callID, "state", state, "inbound_setup_phase", setupPhase)
 			s.sendResponse(tx, req, 481)
 			return
 		}
@@ -320,7 +225,7 @@ func (s *Server) handleCancel(req *sip.Request, tx sip.ServerTransaction) {
 
 	if exists && onCancel != nil {
 		if err := onCancel(session); err != nil {
-			s.logger.Warnw("CANCEL handler returned error", "error", err, "call_id", callID)
+			s.logger.Warnw("CANCEL handler returned error", "error", err, "call_id", identity.callID)
 		}
 	}
 
@@ -330,7 +235,7 @@ func (s *Server) handleCancel(req *sip.Request, tx sip.ServerTransaction) {
 		_ = s.CancelInboundCall(session, LifecycleReasonCancelReceived)
 	}
 	s.sendResponse(tx, req, 200) // OK
-	s.logger.Infow("SIP call cancelled", "call_id", callID)
+	s.logger.Infow("SIP call cancelled", "call_id", identity.callID)
 }
 
 func inboundFinalAnswerStarted(phase InboundSetupPhase) bool {
@@ -385,16 +290,15 @@ func (s *Server) handleUpdate(req *sip.Request, tx sip.ServerTransaction) {
 	}
 
 	if body := req.Body(); len(body) > 0 {
-		mediaOffer, err := parseInboundSDPMediaOffer(
+		mediaOffer, failure := NewInboundMediaOffer(
 			s,
 			req,
-			callID,
 			"UPDATE",
 			LifecycleReasonInboundUpdateSDPRejected,
 			true,
 		)
-		if err != nil {
-			s.rejectInboundDialogMediaOffer(tx, req, callID, "UPDATE", LifecycleReasonInboundUpdateSDPRejected, err)
+		if failure != nil {
+			s.rejectInboundDialogMediaOffer(tx, req, callID, "UPDATE", *failure)
 			return
 		}
 		sdpInfo := mediaOffer.sdpInfo
@@ -410,6 +314,7 @@ func (s *Server) handleUpdate(req *sip.Request, tx sip.ServerTransaction) {
 		if !sdpInfo.IsHold() {
 			rtpHandler := session.GetRTPHandler()
 			if rtpHandler != nil && sdpInfo.ConnectionIP != "" && sdpInfo.AudioPort > 0 {
+				rtpHandler.SetSymmetricRTP(s.useSymmetricRTPForRemoteIP(sdpInfo.ConnectionIP))
 				rtpHandler.SetRemoteAddr(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 				session.SetRemoteRTP(sdpInfo.ConnectionIP, sdpInfo.AudioPort)
 				s.logger.Debugw("Updated remote RTP from UPDATE",
@@ -635,14 +540,23 @@ func (s *Server) handleUnknownRequest(req *sip.Request, tx sip.ServerTransaction
 	}
 }
 
-func (s *Server) sendResponse(tx sip.ServerTransaction, req *sip.Request, statusCode int) {
+func (s *Server) sendResponse(tx sip.ServerTransaction, req *sip.Request, statusCode int) *sip.Response {
 	resp := sip.NewResponseFromRequest(req, statusCode, "", nil)
+	if req != nil && req.Method == sip.INVITE && statusCode >= 200 && resp.Contact() == nil && s.listenConfig != nil {
+		contactHeader := s.listenConfig.SIPContactHeader()
+		resp.AppendHeader(&contactHeader)
+	}
 	if err := tx.Respond(resp); err != nil {
+		callID := ""
+		if req != nil && req.CallID() != nil {
+			callID = req.CallID().Value()
+		}
 		s.logger.Errorw("Failed to send SIP response",
 			"error", err,
 			"status", statusCode,
-			"call_id", req.CallID().Value())
+			"call_id", callID)
 	}
+	return resp
 }
 
 // sendSDPResponse sends a SIP 200 OK response with the given SDP body.
@@ -669,6 +583,7 @@ func (s *Server) sendSDPResponseAndWaitACK(
 	sdpBody string,
 	ackReason LifecycleReason,
 	ackTimeout time.Duration,
+	onResponseSent func(time.Time),
 ) error {
 	ackAccepted := false
 	defer func() {
@@ -697,6 +612,9 @@ func (s *Server) sendSDPResponseAndWaitACK(
 	}
 	if err := tx.Respond(resp); err != nil {
 		return err
+	}
+	if onResponseSent != nil {
+		onResponseSent(time.Now())
 	}
 
 	var initialACKReceived <-chan struct{}
@@ -779,7 +697,7 @@ func inboundACKAlreadyAccepted(session *Session, reason LifecycleReason) bool {
 func (s *Server) newSDPResponse(req *sip.Request, sdpBody string) *sip.Response {
 	resp := sip.NewSDPResponseFromRequest(req, []byte(sdpBody))
 	if resp.Contact() == nil {
-		contactHeader := buildSIPContactHeader(s.listenConfig)
+		contactHeader := s.listenConfig.SIPContactHeader()
 		resp.AppendHeader(&contactHeader)
 	}
 	return resp

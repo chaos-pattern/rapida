@@ -2,6 +2,7 @@ import {
   COMPONENT_OPTIONS,
   EVENTS_BY_COMPONENT,
   LEVEL_OPTIONS,
+  METRIC_NAME_OPTIONS,
   ROLE_OPTIONS,
   SCOPE_OPTIONS,
   getEventOptionsForComponent,
@@ -118,6 +119,34 @@ describe('conversation activity v2 telemetry utilities', () => {
       'user',
       'assistant',
     ]);
+  });
+
+  it('uses current backend model and AgentKit metric names', () => {
+    const metricIds = METRIC_NAME_OPTIONS.map(option => option.id);
+
+    expect(metricIds).toEqual(
+      expect.arrayContaining([
+        'llm_latency_ms',
+        'llm_input_char_count',
+        'llm_history_count',
+        'llm_response_char_count',
+        'agent_time_taken',
+        'agent_status',
+        'agent_llm_request_id',
+        'agent_input_token',
+        'agent_output_token',
+        'agent_total_token',
+        'agent_cached_content_token',
+        'agent_cost',
+        'agent_input_cost',
+        'agent_output_cost',
+        'agent_token_pre_second',
+        'agent_time_to_first_token',
+        'agent_provider_total_time',
+        'agent_provider_generate_time',
+        'agent_token_count',
+      ]),
+    );
   });
 
   it('uses current backend observability components and events', () => {

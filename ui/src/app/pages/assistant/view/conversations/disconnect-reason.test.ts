@@ -1,33 +1,56 @@
-import { normalizeDisconnectReason } from './disconnect-reason';
+import { Metadata } from '@rapidaai/react';
+import { getDisconnectReasonDisplay } from './disconnect-reason';
 
-describe('normalizeDisconnectReason', () => {
-  it.each([
-    ['ConversationDisconnection_DISCONNECTION_TYPE_TOOL', 'Tool ended'],
-    ['DISCONNECTION_TYPE_USER', 'User disconnected'],
-    ['DISCONNECTION_TYPE_IDLE_TIMEOUT', 'Idle timeout'],
-    ['DISCONNECTION_TYPE_MAX_DURATION', 'Max duration'],
-    ['DISCONNECTION_TYPE_ERROR', 'Error'],
-  ])('normalizes %s to %s', (raw, label) => {
-    expect(normalizeDisconnectReason(raw).label).toBe(label);
+const metadata = (key: string, value: string): Metadata => {
+  const item = new Metadata();
+  item.setKey(key);
+  item.setValue(value);
+  return item;
+};
+
+describe('getDisconnectReasonDisplay', () => {
+  it('shows user busy when SIP busy metadata is present', () => {
+    const display = getDisconnectReasonDisplay('outbound_rejected', 'FAILED', [
+      metadata('disconnect_raw_reason', '486 Busy Here'),
+      metadata('failure_class', 'busy'),
+      metadata('failure_reason', 'Busy Here'),
+      metadata('sli_result', 'client_error'),
+      metadata('sli_reason', 'outbound_busy'),
+      metadata('provider_status_code', '486'),
+    ]);
+
+    expect(display.label).toBe('User busy');
+    expect(display.details).toEqual(
+      expect.arrayContaining([
+        { label: 'Status', value: 'FAILED' },
+        { label: 'Disconnect reason', value: 'outbound_rejected' },
+        { label: 'Raw reason', value: '486 Busy Here' },
+        { label: 'Failure class', value: 'busy' },
+        { label: 'Failure reason', value: 'Busy Here' },
+        { label: 'SLI result', value: 'client_error' },
+        { label: 'SLI reason', value: 'outbound_busy' },
+        { label: 'Provider status', value: '486' },
+      ]),
+    );
   });
 
-  it('normalizes numeric enum values', () => {
-    expect(normalizeDisconnectReason('1').label).toBe('Tool ended');
-    expect(normalizeDisconnectReason('2').label).toBe('User disconnected');
-    expect(normalizeDisconnectReason('3').label).toBe('Idle timeout');
-    expect(normalizeDisconnectReason('4').label).toBe('Max duration');
-    expect(normalizeDisconnectReason('5').label).toBe('Error');
+  it('shows in progress when a non-terminal session has no reason', () => {
+    expect(getDisconnectReasonDisplay('', 'ACTIVE').label).toBe('In progress');
   });
 
-  it('returns unknown when the value is missing or blank', () => {
-    expect(normalizeDisconnectReason(undefined).label).toBe('unknown');
-    expect(normalizeDisconnectReason('').label).toBe('unknown');
-    expect(normalizeDisconnectReason('   ').label).toBe('unknown');
+  it('does not treat unknown fallback as a real disconnect reason', () => {
+    expect(getDisconnectReasonDisplay('unknown', 'ACTIVE').label).toBe(
+      'In progress',
+    );
   });
 
-  it('humanizes unexpected non-empty values', () => {
-    expect(normalizeDisconnectReason('network-timeout').label).toBe(
-      'Network Timeout',
+  it('shows no reason when a terminal session has no reason', () => {
+    expect(getDisconnectReasonDisplay('', 'FAILED').label).toBe('No reason');
+  });
+
+  it('humanizes raw backend reasons', () => {
+    expect(getDisconnectReasonDisplay('outbound_rejected', 'FAILED').label).toBe(
+      'Outbound Rejected',
     );
   });
 });

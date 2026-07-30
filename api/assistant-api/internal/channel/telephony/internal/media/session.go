@@ -194,12 +194,6 @@ func (mediaSession *MediaSession) runOutputHealthReporter(mediaEngine MediaEngin
 						"idle_ratio":         fmt.Sprintf("%.4f", healthSnapshot.IdleRatio),
 						"output_error_state": "output_send_error",
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
-						Description: "Telephony output send error",
-					}},
 				})
 			}
 		}
@@ -276,12 +270,6 @@ func (mediaSession *MediaSession) ConsumeFrame(providerAudio []byte) error {
 					"component": observability.ComponentCall.String(),
 					"error":     err.Error(),
 				},
-			}, observability.RecordMetric{
-				Metrics: []*protos.Metric{{
-					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
-					Description: "Telephony output send failed",
-				}},
 			})
 		}
 		return err

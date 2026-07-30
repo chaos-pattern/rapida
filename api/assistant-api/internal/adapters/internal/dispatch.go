@@ -63,6 +63,10 @@ func (r *genericRequestor) runInputDispatcher(ctx context.Context) {
 	})
 }
 
+func (r *genericRequestor) pauseInputDispatcher(ctx context.Context, onPaused func()) {
+	r.channels.PauseIngress(ctx, onPaused)
+}
+
 func (r *genericRequestor) runOutputDispatcher(ctx context.Context) {
 	r.channels.RunEgress(ctx, func(e adapter_channel.Envelope) {
 		r.dispatch(e.Ctx, e.Pkt)

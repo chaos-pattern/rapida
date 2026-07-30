@@ -24,7 +24,9 @@ var (
 	ErrSessionClosed              = errors.New("SIP session is closed")
 	ErrRTPNotInitialized          = errors.New("RTP handler not initialized")
 	ErrRTPHandlerStopped          = errors.New("RTP handler is stopped")
+	ErrRTPMediaTimeout            = errors.New("RTP media timeout")
 	ErrRTPOutputQueueFull         = errors.New("RTP output queue is full")
+	ErrRTPPortRangeExhausted      = errors.New("no RTP ports available")
 	ErrSDPParseFailed             = errors.New("failed to parse SDP")
 	ErrCodecNotSupported          = errors.New("codec not supported")
 	ErrConnectionFailed           = errors.New("SIP connection failed")
@@ -101,10 +103,12 @@ type Config struct {
 	RTPPortRangeEnd   int       `json:"rtp_port_range_end" mapstructure:"rtp_port_range_end"`
 	SRTPEnabled       bool      `json:"srtp_enabled" mapstructure:"srtp_enabled"`
 
-	RegisterTimeout  time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
-	InviteTimeout    time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
-	SessionTimeout   time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
-	KeepAliveEnabled bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
+	RegisterTimeout     time.Duration `json:"register_timeout,omitempty" mapstructure:"register_timeout"`
+	InviteTimeout       time.Duration `json:"invite_timeout,omitempty" mapstructure:"invite_timeout"`
+	SessionTimeout      time.Duration `json:"session_timeout,omitempty" mapstructure:"session_timeout"`
+	MediaTimeoutInitial time.Duration `json:"media_timeout_initial,omitempty" mapstructure:"media_timeout_initial"`
+	MediaTimeout        time.Duration `json:"media_timeout,omitempty" mapstructure:"media_timeout"`
+	KeepAliveEnabled    bool          `json:"keepalive_enabled,omitempty" mapstructure:"keepalive_enabled"`
 
 	InboundAnswerMode      InboundAnswerMode `json:"inbound_answer_mode,omitempty" mapstructure:"inbound_answer_mode"`
 	InboundMinRingDuration time.Duration     `json:"inbound_min_ring_duration,omitempty" mapstructure:"inbound_min_ring_duration"`
@@ -142,6 +146,15 @@ func (c *Config) ApplyTimeoutDefaults(registerTimeout, inviteTimeout, sessionTim
 	}
 	if c.SessionTimeout <= 0 && sessionTimeout > 0 {
 		c.SessionTimeout = sessionTimeout
+	}
+}
+
+func (c *Config) ApplyMediaTimeoutDefaults(initialTimeout, mediaTimeout time.Duration) {
+	if c.MediaTimeoutInitial <= 0 && initialTimeout > 0 {
+		c.MediaTimeoutInitial = initialTimeout
+	}
+	if c.MediaTimeout <= 0 && mediaTimeout > 0 {
+		c.MediaTimeout = mediaTimeout
 	}
 }
 
@@ -231,8 +244,8 @@ func (c *Config) ValidateRTP() error {
 	if c.RTPPortRangeStart <= 0 || c.RTPPortRangeEnd <= 0 {
 		return fmt.Errorf("%w: rtp_port_range must be specified", ErrInvalidConfig)
 	}
-	if c.RTPPortRangeStart >= c.RTPPortRangeEnd {
-		return fmt.Errorf("%w: rtp_port_range_start must be less than rtp_port_range_end", ErrInvalidConfig)
+	if c.RTPPortRangeStart > c.RTPPortRangeEnd {
+		return fmt.Errorf("%w: rtp_port_range_start must be less than or equal to rtp_port_range_end", ErrInvalidConfig)
 	}
 	if c.RTPPortRangeStart < 1024 {
 		return fmt.Errorf("%w: rtp_port_range_start must be >= 1024 (non-privileged port)", ErrInvalidConfig)
@@ -416,9 +429,6 @@ const (
 
 	// MetadataDisconnectReason holds the normalized terminal disconnect reason.
 	MetadataDisconnectReason = "disconnect_reason"
-
-	// MetadataDisconnectText holds the provider reason phrase when supplied.
-	MetadataDisconnectText = "disconnect_text"
 
 	// MetadataDisconnectRawReason holds the raw provider Reason header.
 	MetadataDisconnectRawReason = "disconnect_raw_reason"

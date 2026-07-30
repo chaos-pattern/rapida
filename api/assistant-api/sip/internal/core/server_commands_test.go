@@ -130,18 +130,32 @@ func newServerForCommandTests(t *testing.T) *Server {
 		Address: sip.Uri{Scheme: "sip", Host: "127.0.0.1", Port: 5060},
 	}
 
-	return &Server{
+	server := &Server{
 		logger:            bridgeTestLogger(),
 		listenConfig:      &ListenConfig{Address: "127.0.0.1", Port: 5060, ExternalIP: "127.0.0.1"},
+		rtpPortRangeStart: 19000,
+		rtpPortRangeEnd:   19999,
 		dialogClientCache: sipgo.NewDialogClientCache(client, contact),
 		dialogServerCache: sipgo.NewDialogServerCache(client, contact),
 		sessions:          make(map[string]*Session),
 		lifecycles:        make(map[string]*CallLifecycle),
-		pendingInvites:    make(map[string]*pendingInvite),
-		cancelledInvites:  make(map[string]bool),
+		pendingInvites:    make(map[inboundInviteKey]*pendingInvite),
+		cancelledInvites:  make(map[inboundInviteKey]bool),
 		inboundACKTimeout: defaultInboundACKTimeout,
 		ctx:               context.Background(),
 	}
+	t.Cleanup(func() {
+		server.mu.RLock()
+		sessions := make([]*Session, 0, len(server.sessions))
+		for _, session := range server.sessions {
+			sessions = append(sessions, session)
+		}
+		server.mu.RUnlock()
+		for _, session := range sessions {
+			_ = server.EndCallWithReason(session, LifecycleReasonEndCall)
+		}
+	})
+	return server
 }
 
 func newSIPRequest(method sip.RequestMethod, callID string) *sip.Request {
@@ -150,6 +164,8 @@ func newSIPRequest(method sip.RequestMethod, callID string) *sip.Request {
 
 	params := sip.NewParams()
 	params["branch"] = sip.GenerateBranch()
+	fromParams := sip.NewParams()
+	fromParams.Add("tag", "fromtag")
 	req.AppendHeader(&sip.ViaHeader{
 		ProtocolName:    "SIP",
 		ProtocolVersion: "2.0",
@@ -166,7 +182,7 @@ func newSIPRequest(method sip.RequestMethod, callID string) *sip.Request {
 			Host:   "example.com",
 			Port:   5060,
 		},
-		Params: sip.NewParams(),
+		Params: fromParams,
 	})
 	req.AppendHeader(&sip.ToHeader{
 		DisplayName: "Bob",
@@ -182,9 +198,6 @@ func newSIPRequest(method sip.RequestMethod, callID string) *sip.Request {
 
 func newInboundInviteRequest(callID string) *sip.Request {
 	req := newSIPRequest(sip.INVITE, callID)
-	if fromHeader := req.From(); fromHeader != nil {
-		fromHeader.Params.Add("tag", "fromtag")
-	}
 	req.AppendHeader(&sip.ContactHeader{
 		Address: sip.Uri{Scheme: "sip", User: "alice", Host: "127.0.0.1", Port: 5060},
 	})
@@ -195,6 +208,9 @@ func newInboundInviteRequest(callID string) *sip.Request {
 
 func newDialogSDPRequest(method sip.RequestMethod, callID string, sdpBody string) *sip.Request {
 	req := newSIPRequest(method, callID)
+	if fromHeader := req.From(); fromHeader != nil {
+		fromHeader.Params.Add("tag", "fromtag")
+	}
 	req.AppendHeader(sip.NewHeader("Content-Type", internal_inbound.SDPContentType))
 	req.SetBody([]byte(sdpBody))
 	return req
@@ -247,14 +263,14 @@ func registerConnectedInboundDialogSession(t *testing.T, s *Server, callID strin
 
 	request := newInboundInviteRequest(callID)
 	transaction := newActiveTestServerTx()
-	inboundCall := newInboundCall(s, request, transaction)
-	require.NoError(t, inboundCall.loadIdentity())
-	require.NoError(t, inboundCall.parseMediaOffer())
-	inboundCall.resolvedConfig = inboundResolvedConfig{config: bridgeTestConfig()}
-	require.NoError(t, inboundCall.createSession())
+	inboundCall := NewInbound(s, request, transaction)
+	loadInboundIdentity(t, inboundCall)
+	loadInboundMediaOffer(t, inboundCall)
+	inboundCall.resolvedConfig = inboundConfig{config: bridgeTestConfig()}
+	createInboundSessionForTest(t, inboundCall)
 	inboundCall.session.SetRemoteRTP("127.0.0.1", 19000)
 	s.registerSession(inboundCall.session, inboundCall.identity.callID)
-	require.NoError(t, inboundCall.createDialog())
+	createInboundDialogForTest(t, inboundCall)
 	require.True(t, s.TransitionCall(inboundCall.session, CallStateRinging, LifecycleReasonInboundInviteRinging))
 	require.True(t, s.TransitionCall(inboundCall.session, CallStateConnected, LifecycleReasonInboundInviteAnswered))
 	require.True(t, inboundCall.session.MarkInitialACKReceived())
@@ -346,7 +362,7 @@ func TestSIPCommand_InitialAnswerRequiresDialogOwnership(t *testing.T) {
 	req := newInboundInviteRequest("call-ack-timeout")
 	tx := newAckableTestServerTx()
 
-	err := s.sendSDPResponseAndWaitACK(tx, req, session, validInboundOfferSDP(), LifecycleReasonInboundInviteACKReceived, s.effectiveInboundACKTimeout())
+	err := s.sendSDPResponseAndWaitACK(tx, req, session, validInboundOfferSDP(), LifecycleReasonInboundInviteACKReceived, s.effectiveInboundACKTimeout(), nil)
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "requires dialog ownership")
@@ -359,13 +375,13 @@ func TestSIPCommand_InitialAnswerWakesWhenACKHandledOutsideTransaction(t *testin
 	s.inboundACKTimeout = 500 * time.Millisecond
 	request := newInboundInviteRequest("call-ack-outside-tx")
 	inviteTransaction := newActiveTestServerTx()
-	inboundCall := newInboundCall(s, request, inviteTransaction)
-	require.NoError(t, inboundCall.loadIdentity())
-	require.NoError(t, inboundCall.parseMediaOffer())
-	inboundCall.resolvedConfig = inboundResolvedConfig{config: bridgeTestConfig()}
-	require.NoError(t, inboundCall.createSession())
+	inboundCall := NewInbound(s, request, inviteTransaction)
+	loadInboundIdentity(t, inboundCall)
+	loadInboundMediaOffer(t, inboundCall)
+	inboundCall.resolvedConfig = inboundConfig{config: bridgeTestConfig()}
+	createInboundSessionForTest(t, inboundCall)
 	s.registerSession(inboundCall.session, inboundCall.identity.callID)
-	require.NoError(t, inboundCall.createDialog())
+	createInboundDialogForTest(t, inboundCall)
 	require.True(t, s.TransitionCall(inboundCall.session, CallStateRinging, LifecycleReasonInboundInviteRinging))
 
 	answerTransaction := newAckableTestServerTx()
@@ -378,6 +394,7 @@ func TestSIPCommand_InitialAnswerWakesWhenACKHandledOutsideTransaction(t *testin
 			validInboundOfferSDP(),
 			LifecycleReasonInboundInviteACKReceived,
 			s.effectiveInboundACKTimeout(),
+			nil,
 		)
 	}()
 
@@ -407,6 +424,12 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	session.SetOnDisconnect(func(*Session) {
 		disconnectCalled = true
 	})
+	onByeCalled := false
+	s.SetOnBye(func(byeSession *Session) error {
+		onByeCalled = true
+		assert.True(t, byeSession.IsEnded(), "inbound remote BYE should end before onBye callback")
+		return s.EndCallWithReason(byeSession, LifecycleReasonRemoteBye)
+	})
 	req := newInboundDialogRequest(t, session, sip.BYE)
 	req.AppendHeader(sip.NewHeader("Reason", `Q.850;cause=16;text="Normal call clearing"`))
 	tx := newTestServerTx()
@@ -421,6 +444,7 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	}
 	require.NotEmpty(t, tx.responses)
 	assert.Equal(t, 200, tx.lastStatus())
+	assert.True(t, onByeCalled)
 	metadata := session.GetDisconnectMetadata()
 	assert.Equal(t, DisconnectReasonNormalClearing, metadata.Reason)
 	assert.Equal(t, 16, metadata.ProviderStatusCode)
@@ -430,12 +454,52 @@ func TestSIPCommand_BYE_InboundSession_NotifiesAndEnds(t *testing.T) {
 	metadataValue, ok := session.GetMetadata(MetadataDisconnectReason)
 	require.True(t, ok)
 	assert.Equal(t, DisconnectReasonNormalClearing, metadataValue)
-	metadataValue, ok = session.GetMetadata(MetadataDisconnectText)
-	require.True(t, ok)
-	assert.Equal(t, "Normal call clearing", metadataValue)
 	metadataValue, ok = session.GetMetadata(MetadataDisconnectRawReason)
 	require.True(t, ok)
 	assert.Equal(t, `Q.850;cause=16;text="Normal call clearing"`, metadataValue)
+}
+
+func TestSIPCommand_BYE_OutboundSession_NotifiesAndEndsWithoutLocalBYE(t *testing.T) {
+	s := newServerForCommandTests(t)
+	session := newTestSession(t, "call-bye-outbound", CallDirectionOutbound)
+	session.SetState(CallStateConnected)
+	session.SetOutboundDialogPhase(OutboundDialogPhaseConfirmed)
+	s.registerSession(session, "call-bye-outbound")
+
+	disconnectCalled := false
+	session.SetOnDisconnect(func(*Session) {
+		disconnectCalled = true
+	})
+	onByeCalled := false
+	s.SetOnBye(func(byeSession *Session) error {
+		onByeCalled = true
+		assert.True(t, byeSession.IsEnded(), "outbound remote BYE should end before onBye callback")
+		return s.EndCallWithReason(byeSession, LifecycleReasonRemoteBye)
+	})
+
+	req := newSIPRequest(sip.BYE, "call-bye-outbound")
+	req.AppendHeader(sip.NewHeader("Reason", `Q.850;cause=16;text="Normal call clearing"`))
+	tx := newTestServerTx()
+
+	s.handleBye(req, tx)
+
+	assert.True(t, session.IsEnded())
+	select {
+	case <-session.ByeReceived():
+	default:
+		t.Fatalf("expected ByeReceived signal")
+	}
+	require.NotEmpty(t, tx.responses)
+	assert.Equal(t, 200, tx.lastStatus())
+	assert.True(t, onByeCalled)
+	assert.False(t, disconnectCalled, "remote outbound BYE must not trigger local BYE")
+
+	metadata := session.GetDisconnectMetadata()
+	assert.Equal(t, DisconnectReasonNormalClearing, metadata.Reason)
+	assert.Equal(t, 16, metadata.ProviderStatusCode)
+	assert.Equal(t, "Normal call clearing", metadata.Text)
+	_, ok := s.GetSession("call-bye-outbound")
+	assert.False(t, ok, "remote outbound BYE should remove the ended session")
 }
 
 func TestSIPCommand_BYE_InboundSessionWithoutDialogReturns481(t *testing.T) {
@@ -446,10 +510,21 @@ func TestSIPCommand_BYE_InboundSessionWithoutDialogReturns481(t *testing.T) {
 	session := newTestSession(t, "call-bye-missing-dialog", CallDirectionInbound)
 	session.SetState(CallStateConnected)
 	s.sessions["call-bye-missing-dialog"] = session
+	onByeCalled := false
+	s.SetOnBye(func(*Session) error {
+		onByeCalled = true
+		return nil
+	})
 
 	s.handleBye(req, tx)
 
 	assert.False(t, session.IsEnded())
+	select {
+	case <-session.ByeReceived():
+		t.Fatalf("unexpected ByeReceived signal for invalid inbound BYE")
+	default:
+	}
+	assert.False(t, onByeCalled)
 	require.NotEmpty(t, tx.responses)
 	assert.Equal(t, 481, tx.lastStatus())
 }
@@ -494,7 +569,7 @@ func TestSIPCommand_CANCEL_PendingInvite_Sends200And487(t *testing.T) {
 
 	inviteReq := newSIPRequest(sip.INVITE, "call-cancel-pending")
 	inviteTx := newTestServerTx()
-	s.setPendingInvite("call-cancel-pending", inviteReq, inviteTx)
+	s.setPendingInvite(inboundInviteKey{callID: "call-cancel-pending", fromTag: "fromtag"}, inviteReq, inviteTx)
 
 	cancelReq := newSIPRequest(sip.CANCEL, "call-cancel-pending")
 	cancelTx := newTestServerTx()
@@ -867,6 +942,24 @@ func TestInboundLifecycle_ServerStopDisconnectsAnsweredCall(t *testing.T) {
 	assert.True(t, session.IsEnded())
 	assert.Equal(t, CallStateEnded, session.GetState())
 	assert.True(t, disconnectCalled, "server stop must send BYE for answered inbound calls")
+}
+
+func TestServerStopEndsSessionsThroughSessionCleanup(t *testing.T) {
+	s := newServerForCommandTests(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	s.ctx = ctx
+	s.cancel = cancel
+	s.state.Store(int32(ServerStateRunning))
+
+	session := newTestSession(t, "call-server-stop-rtp", CallDirectionInbound)
+	session.SetLocalRTP("127.0.0.1", 19000)
+	s.registerSession(session, "call-server-stop-rtp")
+
+	require.True(t, s.TransitionCall(session, CallStateConnected, LifecycleReasonInboundInviteACKReceived))
+	s.Stop()
+
+	assert.True(t, session.IsEnded())
+	assert.Equal(t, 0, s.SessionCount())
 }
 
 func TestCallLifecycle_TransferSequence(t *testing.T) {

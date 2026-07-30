@@ -107,8 +107,24 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 				},
 			})
 		case *protos.ConversationDisconnection:
+			ctx := context.Background()
+			if t.metrics == nil {
+				t.metrics = make(map[string]*protos.Metric)
+			}
+			if payload.GetType() == protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR {
+				t.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       "error",
+					Description: payload.GetType().String(),
+				}
+			} else {
+				t.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+					Name:        type_enums.CONVERSATION_STATUS.String(),
+					Value:       type_enums.CONVERSATION_COMPLETE.String(),
+					Description: payload.GetType().String(),
+				}
+			}
 			if conversation, err := t.Conversation(); err == nil {
-				ctx := context.Background()
 				t.OnPacket(ctx,
 					internal_type.ObservabilityEventRecordPacket{
 						ContextID: t.GetID(),
@@ -125,12 +141,23 @@ func (t *genericRequestor) Talk(_ context.Context, auth types.SimplePrinciple) e
 					internal_type.ObservabilityMetadataRecordPacket{
 						ContextID: fmt.Sprintf("%d", conversation.Id),
 						Scope:     internal_type.ObservabilityRecordScopeConversation,
-						Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-							Key:   "disconnect_reason",
-							Value: payload.GetType().String(),
+						Record:    observability.NewConversationMetadataRecord(observability.DisconnectMetadata(payload.GetType().String(), "")),
+					},
+					internal_type.ObservabilityMetricRecordPacket{
+						ContextID: fmt.Sprintf("%d", conversation.Id),
+						Scope:     internal_type.ObservabilityRecordScopeConversation,
+						Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       t.metrics[type_enums.CONVERSATION_STATUS.String()].GetValue(),
+							Description: t.metrics[type_enums.CONVERSATION_STATUS.String()].GetDescription(),
 						}}),
-					})
+					},
+				)
 			}
+			// client calling disconnect, we can safely cleanup the session and return
+			t.OnCallCompletion(totalTime)
+			t.OnDisconnect(ctx)
+			return nil
 
 		}
 
@@ -168,10 +195,12 @@ func (t *genericRequestor) OnCallCompletion(startTime time.Time) {
 	if t.metrics == nil {
 		t.metrics = make(map[string]*protos.Metric)
 	}
-	t.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
-		Name:        type_enums.CONVERSATION_STATUS.String(),
-		Value:       type_enums.CONVERSATION_COMPLETE.String(),
-		Description: "Status of current conversation",
+	if t.metrics[type_enums.CONVERSATION_STATUS.String()] == nil {
+		t.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+			Name:        type_enums.CONVERSATION_STATUS.String(),
+			Value:       type_enums.CONVERSATION_COMPLETE.String(),
+			Description: "Status of current conversation",
+		}
 	}
 	t.metrics[type_enums.CONVERSATION_DURATION.String()] = &protos.Metric{
 		Name:        type_enums.CONVERSATION_DURATION.String(),
@@ -185,8 +214,8 @@ func (t *genericRequestor) OnCallCompletion(startTime time.Time) {
 			Record: observability.NewConversationMetricRecord([]*protos.Metric{
 				{
 					Name:        type_enums.CONVERSATION_STATUS.String(),
-					Value:       type_enums.CONVERSATION_COMPLETE.String(),
-					Description: "Status of current conversation",
+					Value:       t.metrics[type_enums.CONVERSATION_STATUS.String()].GetValue(),
+					Description: t.metrics[type_enums.CONVERSATION_STATUS.String()].GetDescription(),
 				},
 				{
 					Name:        type_enums.CONVERSATION_DURATION.String(),
@@ -243,6 +272,14 @@ func (r *genericRequestor) OnConnect(ctx context.Context, auth types.SimplePrinc
 			return
 		}
 		if conversation, err := r.Conversation(); err == nil {
+			if r.metrics == nil {
+				r.metrics = make(map[string]*protos.Metric)
+			}
+			r.metrics[type_enums.CONVERSATION_STATUS.String()] = &protos.Metric{
+				Name:        type_enums.CONVERSATION_STATUS.String(),
+				Value:       "error",
+				Description: "initialization timeout",
+			}
 			r.OnPacket(r.sessionCtx,
 				internal_type.ObservabilityEventRecordPacket{
 					ContextID: r.GetID(),
@@ -259,9 +296,18 @@ func (r *genericRequestor) OnConnect(ctx context.Context, auth types.SimplePrinc
 				internal_type.ObservabilityMetadataRecordPacket{
 					ContextID: fmt.Sprintf("%d", conversation.Id),
 					Scope:     internal_type.ObservabilityRecordScopeConversation,
-					Record: observability.NewConversationMetadataRecord([]*protos.Metadata{{
-						Key:   "disconnect_reason",
-						Value: protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					Record: observability.NewConversationMetadataRecord(observability.DisconnectMetadata(
+						protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+						"initialization timeout",
+					)),
+				},
+				internal_type.ObservabilityMetricRecordPacket{
+					ContextID: fmt.Sprintf("%d", conversation.Id),
+					Scope:     internal_type.ObservabilityRecordScopeConversation,
+					Record: observability.NewConversationMetricRecord([]*protos.Metric{{
+						Name:        type_enums.CONVERSATION_STATUS.String(),
+						Value:       "error",
+						Description: "initialization timeout",
 					}}),
 				},
 			)
@@ -303,6 +349,6 @@ func (r *genericRequestor) OnDisconnect(ctx context.Context) {
 		r.logger.Warnf("disconnect deadline %v exceeded, force-cancelling session", disconnectDeadline)
 		r.cancelSession()
 	}, func(disconnectCtx context.Context) {
-		r.OnPacket(disconnectCtx, internal_type.FinalizeBehaviorPacket{ContextID: r.GetID()})
+		r.OnPacket(disconnectCtx, internal_type.FinalizeInboundDispatcherPacket{ContextID: r.GetID()})
 	})
 }

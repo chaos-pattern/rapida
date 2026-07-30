@@ -12,293 +12,294 @@ import (
 	"fmt"
 	"net"
 	"testing"
-	"time"
 
 	"github.com/emiago/sipgo"
 	"github.com/emiago/sipgo/sip"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestClassifyOutboundFailure(t *testing.T) {
-	deadlineContext, cancelDeadlineContext := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
-	cancelDeadlineContext()
+func TestOutboundFailureError(t *testing.T) {
+	cause := fmt.Errorf("%w: unsupported answer payload", ErrCodecNotSupported)
+	failure := OutboundFailure{
+		Class:           OutboundFailureMedia,
+		Reason:          cause.Error(),
+		Termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_answer_sdp_failed"},
+		LifecycleReason: LifecycleReasonOutboundAnswerSDPFailed,
+		Err:             cause,
+	}
 
-	cases := []struct {
-		name                    string
-		err                     error
-		answerCtx               context.Context
-		expectedClass           OutboundFailureClass
-		expectedFailureReason   string
-		expectedLifecycleReason LifecycleReason
-		expectedRetryable       bool
-		expectedStatusCode      int
+	assert.Equal(t, "codec not supported: unsupported answer payload", failure.Error())
+	assert.ErrorIs(t, failure, ErrCodecNotSupported)
+}
+
+func TestNewOutboundSetupFailure(t *testing.T) {
+	cause := errors.New("failed to create RTP handler")
+
+	failure := NewOutboundSetupFailure(cause)
+
+	assert.Equal(t, OutboundFailureSetup, failure.Class)
+	assert.Equal(t, "failed to create RTP handler", failure.Reason)
+	assert.Equal(t, CallTerminationServerError, failure.Termination.Result)
+	assert.Equal(t, "outbound_setup_failed", failure.Termination.Reason)
+	assert.Equal(t, LifecycleReasonOutboundSetupFailure, failure.LifecycleReason)
+	assert.ErrorIs(t, failure, cause)
+}
+
+func TestOutboundFailure_StatusUpdateAndRecord(t *testing.T) {
+	failure := OutboundFailure{
+		StatusCode:      sip.StatusBusyHere,
+		Class:           OutboundFailureBusy,
+		Reason:          "Busy Here",
+		Termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_busy"},
+		Retryable:       true,
+		LifecycleReason: LifecycleReasonOutboundRejected,
+		Err:             errors.New("busy"),
+	}
+
+	update := failure.StatusUpdate("call-1")
+
+	assert.Equal(t, "call-1", update.ChannelUUID)
+	assert.Equal(t, string(OutboundCallStatusFailed), update.CallStatus)
+	assert.Equal(t, "busy", update.ErrorMessage)
+	assert.Equal(t, string(OutboundFailureBusy), update.FailureClass)
+	assert.Equal(t, "Busy Here", update.FailureReason)
+	assert.Equal(t, string(CallTerminationClientError), update.SLIResult)
+	assert.Equal(t, "outbound_busy", update.SLIReason)
+	assert.Equal(t, LifecycleReasonOutboundRejected.String(), update.DisconnectReason)
+	assert.True(t, update.Retryable)
+	assert.Equal(t, sip.StatusBusyHere, update.ProviderStatusCode)
+
+	session := &Session{}
+	failure.Record(session)
+
+	assertSessionMetadata(t, session, "sip.failure_class", string(OutboundFailureBusy))
+	assertSessionMetadata(t, session, "sip.failure_reason", "Busy Here")
+	assertSessionMetadata(t, session, "sip.sli_result", string(CallTerminationClientError))
+	assertSessionMetadata(t, session, "sip.sli_reason", "outbound_busy")
+	assertSessionMetadata(t, session, "sip.failure_retryable", true)
+	assertSessionMetadata(t, session, "sip.failure_status_code", sip.StatusBusyHere)
+}
+
+func TestNewOutboundInviteFailure_MapsPreAnswerCancel(t *testing.T) {
+	failure := NewOutboundInviteFailure(context.Canceled)
+
+	assert.Equal(t, OutboundFailureCancelled, failure.Class)
+	assert.Equal(t, "cancelled", failure.Reason)
+	assert.Equal(t, CallTerminationClientError, failure.Termination.Result)
+	assert.Equal(t, "outbound_cancelled", failure.Termination.Reason)
+	assert.Equal(t, LifecycleReasonOutboundCancelledBeforeAnswer, failure.LifecycleReason)
+}
+
+func TestNewOutboundInviteFailure_MapsRingingTimeout(t *testing.T) {
+	failure := NewOutboundInviteFailure(context.DeadlineExceeded)
+
+	assert.Equal(t, OutboundFailureNoAnswer, failure.Class)
+	assert.Equal(t, "ringing timeout", failure.Reason)
+	assert.Equal(t, CallTerminationClientError, failure.Termination.Result)
+	assert.Equal(t, "outbound_no_answer", failure.Termination.Reason)
+	assert.Equal(t, LifecycleReasonOutboundNoAnswer, failure.LifecycleReason)
+	assert.True(t, failure.Retryable)
+}
+
+func TestNewOutboundInviteFailure_MapsAuthRequired(t *testing.T) {
+	failure := NewOutboundInviteFailure(fmt.Errorf("challenge rejected: %w", ErrAuthRequired))
+
+	assert.Equal(t, OutboundFailureAuthRequired, failure.Class)
+	assert.Equal(t, "auth credentials missing", failure.Reason)
+	assert.Equal(t, CallTerminationClientError, failure.Termination.Result)
+	assert.Equal(t, "outbound_auth_required", failure.Termination.Reason)
+	assert.Equal(t, LifecycleReasonOutboundAuthFailed, failure.LifecycleReason)
+}
+
+func TestNewOutboundInviteFailure_MapsSIPStatus(t *testing.T) {
+	tests := []struct {
+		name            string
+		statusCode      int
+		reason          string
+		class           OutboundFailureClass
+		termination     CallTermination
+		lifecycleReason LifecycleReason
+		retryable       bool
 	}{
 		{
-			name:                    "nil error",
-			expectedClass:           OutboundFailureUnknown,
-			expectedFailureReason:   "unknown",
-			expectedLifecycleReason: LifecycleReasonOutboundWaitAnswerFailed,
+			name:            "forbidden",
+			statusCode:      sip.StatusForbidden,
+			reason:          "Forbidden",
+			class:           OutboundFailureForbidden,
+			termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_forbidden"},
+			lifecycleReason: LifecycleReasonOutboundRejected,
 		},
 		{
-			name:                    "auth required",
-			err:                     ErrAuthRequired,
-			expectedClass:           OutboundFailureAuthRequired,
-			expectedFailureReason:   "auth credentials missing",
-			expectedLifecycleReason: LifecycleReasonOutboundAuthFailed,
+			name:            "request timeout",
+			statusCode:      sip.StatusRequestTimeout,
+			reason:          "Request Timeout",
+			class:           OutboundFailureNoAnswer,
+			termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_request_timeout"},
+			lifecycleReason: LifecycleReasonOutboundNoAnswer,
+			retryable:       true,
 		},
 		{
-			name:                    "wrapped auth required",
-			err:                     fmt.Errorf("auth challenge failed: %w", ErrAuthRequired),
-			expectedClass:           OutboundFailureAuthRequired,
-			expectedFailureReason:   "auth credentials missing",
-			expectedLifecycleReason: LifecycleReasonOutboundAuthFailed,
+			name:            "busy",
+			statusCode:      sip.StatusBusyHere,
+			reason:          "Busy Here",
+			class:           OutboundFailureBusy,
+			termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_busy"},
+			lifecycleReason: LifecycleReasonOutboundRejected,
 		},
 		{
-			name:                    "context cancelled",
-			err:                     context.Canceled,
-			expectedClass:           OutboundFailureCancelled,
-			expectedFailureReason:   "cancelled",
-			expectedLifecycleReason: LifecycleReasonOutboundCancelledBeforeAnswer,
+			name:            "media rejected",
+			statusCode:      sip.StatusNotAcceptableHere,
+			reason:          "Not Acceptable Here",
+			class:           OutboundFailureMedia,
+			termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_not_acceptable"},
+			lifecycleReason: LifecycleReasonOutboundMediaRejected,
 		},
 		{
-			name:                    "context deadline exceeded",
-			err:                     context.DeadlineExceeded,
-			expectedClass:           OutboundFailureNoAnswer,
-			expectedFailureReason:   "ringing timeout",
-			expectedLifecycleReason: LifecycleReasonOutboundNoAnswer,
-			expectedRetryable:       true,
+			name:            "upstream unavailable",
+			statusCode:      sip.StatusServiceUnavailable,
+			reason:          "Service Unavailable",
+			class:           OutboundFailureUpstreamFailure,
+			termination:     CallTermination{Result: CallTerminationServerError, Reason: "outbound_upstream_server_error"},
+			lifecycleReason: LifecycleReasonOutboundUpstreamFailure,
+			retryable:       true,
 		},
 		{
-			name:                    "answer context deadline exceeded",
-			err:                     errors.New("answer wait failed"),
-			answerCtx:               deadlineContext,
-			expectedClass:           OutboundFailureNoAnswer,
-			expectedFailureReason:   "ringing timeout",
-			expectedLifecycleReason: LifecycleReasonOutboundNoAnswer,
-			expectedRetryable:       true,
-		},
-		{
-			name:                    "401 unauthorized",
-			err:                     dialogStatusError(401, "Unauthorized"),
-			expectedClass:           OutboundFailureAuthRequired,
-			expectedFailureReason:   "Unauthorized",
-			expectedLifecycleReason: LifecycleReasonOutboundAuthFailed,
-			expectedStatusCode:      401,
-		},
-		{
-			name:                    "407 proxy auth required",
-			err:                     dialogStatusError(407, "Proxy Authentication Required"),
-			expectedClass:           OutboundFailureAuthRequired,
-			expectedFailureReason:   "Proxy Authentication Required",
-			expectedLifecycleReason: LifecycleReasonOutboundAuthFailed,
-			expectedStatusCode:      407,
-		},
-		{
-			name:                    "403 forbidden",
-			err:                     dialogStatusError(403, "Forbidden"),
-			expectedClass:           OutboundFailureForbidden,
-			expectedFailureReason:   "Forbidden",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      403,
-		},
-		{
-			name:                    "404 not found",
-			err:                     dialogStatusError(404, "Not Found"),
-			expectedClass:           OutboundFailureNotFound,
-			expectedFailureReason:   "Not Found",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      404,
-		},
-		{
-			name:                    "408 request timeout",
-			err:                     dialogStatusError(408, "Request Timeout"),
-			expectedClass:           OutboundFailureNoAnswer,
-			expectedFailureReason:   "Request Timeout",
-			expectedLifecycleReason: LifecycleReasonOutboundNoAnswer,
-			expectedRetryable:       true,
-			expectedStatusCode:      408,
-		},
-		{
-			name:                    "480 temporarily unavailable",
-			err:                     dialogStatusError(480, "Temporarily Unavailable"),
-			expectedClass:           OutboundFailureUnavailable,
-			expectedFailureReason:   "Temporarily Unavailable",
-			expectedLifecycleReason: LifecycleReasonOutboundUnavailable,
-			expectedRetryable:       true,
-			expectedStatusCode:      480,
-		},
-		{
-			name:                    "486 busy",
-			err:                     dialogStatusError(486, "Busy Here"),
-			expectedClass:           OutboundFailureBusy,
-			expectedFailureReason:   "Busy Here",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      486,
-		},
-		{
-			name:                    "487 request terminated",
-			err:                     dialogStatusError(487, "Request Terminated"),
-			expectedClass:           OutboundFailureRejected,
-			expectedFailureReason:   "Request Terminated",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      487,
-		},
-		{
-			name:                    "488 media rejected",
-			err:                     dialogStatusError(488, "Not Acceptable Here"),
-			expectedClass:           OutboundFailureMedia,
-			expectedFailureReason:   "Not Acceptable Here",
-			expectedLifecycleReason: LifecycleReasonOutboundMediaRejected,
-			expectedStatusCode:      488,
-		},
-		{
-			name:                    "generic 4xx rejected",
-			err:                     dialogStatusError(410, "Gone"),
-			expectedClass:           OutboundFailureRejected,
-			expectedFailureReason:   "Gone",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      410,
-		},
-		{
-			name:                    "500 upstream failure",
-			err:                     dialogStatusError(500, "Server Internal Error"),
-			expectedClass:           OutboundFailureUpstreamFailure,
-			expectedFailureReason:   "Server Internal Error",
-			expectedLifecycleReason: LifecycleReasonOutboundUpstreamFailure,
-			expectedRetryable:       true,
-			expectedStatusCode:      500,
-		},
-		{
-			name:                    "502 bad gateway",
-			err:                     dialogStatusError(502, "Bad Gateway"),
-			expectedClass:           OutboundFailureUpstreamFailure,
-			expectedFailureReason:   "Bad Gateway",
-			expectedLifecycleReason: LifecycleReasonOutboundUpstreamFailure,
-			expectedRetryable:       true,
-			expectedStatusCode:      502,
-		},
-		{
-			name:                    "503 service unavailable",
-			err:                     dialogStatusError(503, "Service Unavailable"),
-			expectedClass:           OutboundFailureUpstreamFailure,
-			expectedFailureReason:   "Service Unavailable",
-			expectedLifecycleReason: LifecycleReasonOutboundUpstreamFailure,
-			expectedRetryable:       true,
-			expectedStatusCode:      503,
-		},
-		{
-			name:                    "504 gateway timeout",
-			err:                     dialogStatusError(504, "Gateway Timeout"),
-			expectedClass:           OutboundFailureUpstreamFailure,
-			expectedFailureReason:   "Gateway Timeout",
-			expectedLifecycleReason: LifecycleReasonOutboundUpstreamFailure,
-			expectedRetryable:       true,
-			expectedStatusCode:      504,
-		},
-		{
-			name:                    "generic 5xx upstream failure",
-			err:                     dialogStatusError(501, "Not Implemented"),
-			expectedClass:           OutboundFailureUpstreamFailure,
-			expectedFailureReason:   "Not Implemented",
-			expectedLifecycleReason: LifecycleReasonOutboundUpstreamFailure,
-			expectedRetryable:       true,
-			expectedStatusCode:      501,
-		},
-		{
-			name:                    "600 global busy",
-			err:                     dialogStatusError(600, "Busy Everywhere"),
-			expectedClass:           OutboundFailureBusy,
-			expectedFailureReason:   "Busy Everywhere",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      600,
-		},
-		{
-			name:                    "603 global decline",
-			err:                     dialogStatusError(603, "Decline"),
-			expectedClass:           OutboundFailureRejected,
-			expectedFailureReason:   "Decline",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      603,
-		},
-		{
-			name:                    "generic 6xx rejected",
-			err:                     dialogStatusError(606, "Not Acceptable"),
-			expectedClass:           OutboundFailureRejected,
-			expectedFailureReason:   "Not Acceptable",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      606,
-		},
-		{
-			name:                    "wrapped SIP status",
-			err:                     fmt.Errorf("INVITE failed: %w", dialogStatusError(486, "Busy Here")),
-			expectedClass:           OutboundFailureBusy,
-			expectedFailureReason:   "Busy Here",
-			expectedLifecycleReason: LifecycleReasonOutboundRejected,
-			expectedStatusCode:      486,
-		},
-		{
-			name:                    "dns",
-			err:                     &net.DNSError{Err: "no such host", Name: "trunk.example.com"},
-			expectedClass:           OutboundFailureNetwork,
-			expectedFailureReason:   "dns resolution failed",
-			expectedLifecycleReason: LifecycleReasonOutboundNetworkFailure,
-			expectedRetryable:       true,
-		},
-		{
-			name:                    "address",
-			err:                     &net.AddrError{Err: "missing port", Addr: "trunk.example.com"},
-			expectedClass:           OutboundFailureNetwork,
-			expectedFailureReason:   "invalid SIP address",
-			expectedLifecycleReason: LifecycleReasonOutboundNetworkFailure,
-		},
-		{
-			name:                    "transport",
-			err:                     &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
-			expectedClass:           OutboundFailureNetwork,
-			expectedFailureReason:   "SIP transport failed",
-			expectedLifecycleReason: LifecycleReasonOutboundNetworkFailure,
-			expectedRetryable:       true,
-		},
-		{
-			name:                    "sdp parse failed",
-			err:                     ErrSDPParseFailed,
-			expectedClass:           OutboundFailureMedia,
-			expectedFailureReason:   ErrSDPParseFailed.Error(),
-			expectedLifecycleReason: LifecycleReasonOutboundAnswerSDPFailed,
-		},
-		{
-			name:                    "codec unsupported",
-			err:                     ErrCodecNotSupported,
-			expectedClass:           OutboundFailureMedia,
-			expectedFailureReason:   ErrCodecNotSupported.Error(),
-			expectedLifecycleReason: LifecycleReasonOutboundAnswerSDPFailed,
-		},
-		{
-			name:                    "unknown",
-			err:                     errors.New("unexpected invite failure"),
-			expectedClass:           OutboundFailureUnknown,
-			expectedFailureReason:   "unknown",
-			expectedLifecycleReason: LifecycleReasonOutboundWaitAnswerFailed,
+			name:            "generic global decline",
+			statusCode:      606,
+			reason:          "Not Acceptable",
+			class:           OutboundFailureRejected,
+			termination:     CallTermination{Result: CallTerminationClientError, Reason: "outbound_global_decline"},
+			lifecycleReason: LifecycleReasonOutboundRejected,
 		},
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			answerCtx := tc.answerCtx
-			if answerCtx == nil {
-				answerCtx = context.Background()
-			}
-			failure := classifyOutboundFailure(tc.err, answerCtx)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := &sipgo.ErrDialogResponse{Res: sip.NewResponse(tt.statusCode, tt.reason)}
 
-			assert.Equal(t, tc.expectedClass, failure.Class)
-			assert.Equal(t, tc.expectedFailureReason, failure.Reason)
-			assert.Equal(t, tc.expectedLifecycleReason, failure.LifecycleReason)
-			assert.Equal(t, tc.expectedRetryable, failure.Retryable)
-			assert.Equal(t, tc.expectedStatusCode, failure.StatusCode)
+			failure := NewOutboundInviteFailure(err)
+
+			assert.Equal(t, tt.statusCode, failure.StatusCode)
+			assert.Equal(t, tt.class, failure.Class)
+			assert.Equal(t, tt.reason, failure.Reason)
+			assert.Equal(t, tt.termination, failure.Termination)
+			assert.Equal(t, tt.lifecycleReason, failure.LifecycleReason)
+			assert.Equal(t, tt.retryable, failure.Retryable)
+			assert.ErrorIs(t, failure, err)
 		})
 	}
 }
 
-func dialogStatusError(statusCode int, reason string) error {
-	return &sipgo.ErrDialogResponse{Res: sip.NewResponse(statusCode, reason)}
+func TestNewOutboundInviteFailure_MapsProviderCapacity5xx(t *testing.T) {
+	tests := []struct {
+		name        string
+		statusCode  int
+		reason      string
+		body        string
+		header      string
+		failureText string
+		sliReason   string
+	}{
+		{
+			name:        "cps limit in body",
+			statusCode:  sip.StatusServiceUnavailable,
+			reason:      "Service Unavailable",
+			body:        "CPS limit exceeded",
+			failureText: "CPS limit exceeded",
+			sliReason:   "outbound_cps_limit_exceeded",
+		},
+		{
+			name:        "concurrent call limit in body",
+			statusCode:  sip.StatusInternalServerError,
+			reason:      "Internal Server Error",
+			body:        "Concurrent call limit exceeded",
+			failureText: "Concurrent call limit exceeded",
+			sliReason:   "outbound_concurrent_limit_exceeded",
+		},
+		{
+			name:        "cps limit in provider header",
+			statusCode:  sip.StatusServiceUnavailable,
+			reason:      "Service Unavailable",
+			header:      "CPS limit exceeded",
+			failureText: "CPS limit exceeded",
+			sliReason:   "outbound_cps_limit_exceeded",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := sip.NewResponse(tt.statusCode, tt.reason)
+			if tt.body != "" {
+				response.SetBody([]byte(tt.body))
+			}
+			if tt.header != "" {
+				response.AppendHeader(sip.NewHeader("X-Twilio-Error", tt.header))
+			}
+			err := &sipgo.ErrDialogResponse{Res: response}
+
+			failure := NewOutboundInviteFailure(err)
+			update := failure.StatusUpdate("call-1")
+
+			assert.Equal(t, tt.statusCode, failure.StatusCode)
+			assert.Equal(t, OutboundFailureTrunkCapacity, failure.Class)
+			assert.Equal(t, tt.failureText, failure.Reason)
+			assert.Equal(t, CallTerminationClientError, failure.Termination.Result)
+			assert.Equal(t, tt.sliReason, failure.Termination.Reason)
+			assert.Equal(t, LifecycleReasonOutboundTrunkCapacity, failure.LifecycleReason)
+			assert.True(t, failure.Retryable)
+			assert.ErrorIs(t, failure, err)
+
+			assert.Equal(t, string(OutboundFailureTrunkCapacity), update.FailureClass)
+			assert.Equal(t, tt.failureText, update.FailureReason)
+			assert.Equal(t, string(CallTerminationClientError), update.SLIResult)
+			assert.Equal(t, tt.sliReason, update.SLIReason)
+			assert.Equal(t, LifecycleReasonOutboundTrunkCapacity.String(), update.DisconnectReason)
+			assert.True(t, update.Retryable)
+			assert.Equal(t, tt.statusCode, update.ProviderStatusCode)
+		})
+	}
+}
+
+func TestNewOutboundInviteFailure_MapsNetworkFailure(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		reason      string
+		termination CallTermination
+		retryable   bool
+	}{
+		{
+			name:        "dns",
+			err:         &net.DNSError{Err: "no such host", Name: "trunk.example.com"},
+			reason:      "dns resolution failed",
+			termination: CallTermination{Result: CallTerminationClientError, Reason: "outbound_dns_resolution"},
+			retryable:   true,
+		},
+		{
+			name:        "address",
+			err:         &net.AddrError{Err: "missing port", Addr: "trunk.example.com"},
+			reason:      "invalid SIP address",
+			termination: CallTermination{Result: CallTerminationClientError, Reason: "outbound_invalid_address"},
+		},
+		{
+			name:        "transport",
+			err:         &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")},
+			reason:      "SIP transport failed",
+			termination: CallTermination{Result: CallTerminationServerError, Reason: "outbound_network_error"},
+			retryable:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			failure := NewOutboundInviteFailure(tt.err)
+
+			assert.Equal(t, OutboundFailureNetwork, failure.Class)
+			assert.Equal(t, tt.reason, failure.Reason)
+			assert.Equal(t, tt.termination, failure.Termination)
+			assert.Equal(t, LifecycleReasonOutboundNetworkFailure, failure.LifecycleReason)
+			assert.Equal(t, tt.retryable, failure.Retryable)
+			assert.ErrorIs(t, failure, tt.err)
+		})
+	}
 }

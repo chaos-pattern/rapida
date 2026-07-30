@@ -21,7 +21,6 @@ import (
 
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
 	"github.com/rapidaai/pkg/commons"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +35,6 @@ const (
 	defaultSIPListenAddress   = "127.0.0.1"
 	defaultSIPRTPPortStart    = 21000
 	defaultSIPRTPPortEnd      = 21200
-	defaultRedisDB            = 15
 
 	freeSWITCHCommandTimeout = 5 * time.Second
 	callSetupTimeout         = 20 * time.Second
@@ -50,8 +48,6 @@ type freeSWITCHIntegrationConfig struct {
 	fsPassword  string
 	fsSIPHost   string
 	fsSIPPort   int
-	redisAddr   string
-	redisDB     int
 	listenHost  string
 	externalIP  string
 	listenPort  int
@@ -63,7 +59,6 @@ type freeSWITCHHarness struct {
 	t          *testing.T
 	config     freeSWITCHIntegrationConfig
 	logger     commons.Logger
-	redis      *redis.Client
 	server     *sip_infra.Server
 	sipConfig  *sip_infra.Config
 	cancelFunc context.CancelFunc
@@ -80,8 +75,6 @@ func newFreeSWITCHHarness(t *testing.T, credentials sipCredentialConfig) *freeSW
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	redisClient := newIntegrationRedisClient(t, config)
-	cleanupIntegrationRTPKeys(t, redisClient)
 
 	sipConfig := &sip_infra.Config{
 		Server:            config.fsSIPHost,
@@ -112,7 +105,6 @@ func newFreeSWITCHHarness(t *testing.T, credentials sipCredentialConfig) *freeSW
 			},
 		},
 		Logger:            logger,
-		RedisClient:       redisClient,
 		RTPPortRangeStart: config.rtpPortFrom,
 		RTPPortRangeEnd:   config.rtpPortTo,
 	})
@@ -124,7 +116,6 @@ func newFreeSWITCHHarness(t *testing.T, credentials sipCredentialConfig) *freeSW
 		t:          t,
 		config:     config,
 		logger:     logger,
-		redis:      redisClient,
 		server:     server,
 		sipConfig:  sipConfig,
 		cancelFunc: cancel,
@@ -152,8 +143,6 @@ func loadFreeSWITCHIntegrationConfig(t *testing.T) freeSWITCHIntegrationConfig {
 		fsPassword:  integrationEnv("FREESWITCH_PASSWORD", defaultFreeSWITCHPassword),
 		fsSIPHost:   integrationEnv("FREESWITCH_SIP_HOST", defaultFreeSWITCHHost),
 		fsSIPPort:   integrationEnvInt(t, "FREESWITCH_SIP_PORT", defaultFreeSWITCHSIPPort),
-		redisAddr:   requiredIntegrationEnv(t, "RAPIDA_SIP_REDIS_ADDR"),
-		redisDB:     integrationEnvInt(t, "RAPIDA_SIP_REDIS_DB", defaultRedisDB),
 		listenHost:  integrationEnv("RAPIDA_SIP_LISTEN_ADDRESS", defaultSIPListenAddress),
 		externalIP:  integrationEnv("RAPIDA_SIP_EXTERNAL_IP", defaultSIPListenAddress),
 		listenPort:  listenPort,
@@ -252,35 +241,9 @@ func (h *freeSWITCHHarness) close() {
 	if h.server != nil {
 		h.server.Stop()
 	}
-	if h.redis != nil {
-		cleanupIntegrationRTPKeys(h.t, h.redis)
-		_ = h.redis.Close()
-	}
 	if h.cancelFunc != nil {
 		h.cancelFunc()
 	}
-}
-
-func newIntegrationRedisClient(t *testing.T, config freeSWITCHIntegrationConfig) *redis.Client {
-	t.Helper()
-	client := redis.NewClient(&redis.Options{Addr: config.redisAddr, DB: config.redisDB})
-
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	require.NoErrorf(t, client.Ping(ctx).Err(), "Redis is required for SIP RTP allocation")
-	return client
-}
-
-func cleanupIntegrationRTPKeys(t *testing.T, client *redis.Client) {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	iter := client.Scan(ctx, 0, "{rtp:ports}:*", 100).Iterator()
-	for iter.Next(ctx) {
-		require.NoError(t, client.Del(ctx, iter.Val()).Err())
-	}
-	require.NoError(t, iter.Err())
 }
 
 func reserveUDPPort(t *testing.T, address string) int {

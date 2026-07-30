@@ -14,7 +14,10 @@ import (
 	"testing"
 	"time"
 
+	callcontext "github.com/rapidaai/api/assistant-api/internal/callcontext"
+	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	sip_infra "github.com/rapidaai/api/assistant-api/sip/infra"
+	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -139,6 +142,46 @@ func newTransferTestOutboundSession(t *testing.T) *sip_infra.Session {
 	return s
 }
 
+type fakeSIPTransferStreamer struct {
+	handler            func(targets []string, postTransferAction string)
+	transferDurationMs string
+	disconnectCalls    int
+	events             []internal_type.Stream
+}
+
+func (f *fakeSIPTransferStreamer) Context() context.Context { return context.Background() }
+
+func (f *fakeSIPTransferStreamer) Recv() (internal_type.Stream, error) { return nil, nil }
+
+func (f *fakeSIPTransferStreamer) Send(internal_type.Stream) error { return nil }
+
+func (f *fakeSIPTransferStreamer) SetTransferRequestHandler(handler func(targets []string, postTransferAction string)) {
+	f.handler = handler
+}
+
+func (f *fakeSIPTransferStreamer) ConnectTransferMedia(internal_type.SIPRTPBridgeTarget, string) {}
+
+func (f *fakeSIPTransferStreamer) DisconnectTransferMedia() {
+	f.disconnectCalls++
+}
+
+func (f *fakeSIPTransferStreamer) StopTransferRingback() {}
+
+func (f *fakeSIPTransferStreamer) ResumeAssistant() {}
+
+func (f *fakeSIPTransferStreamer) RecordTransferOperatorAudio([]byte) {}
+
+func (f *fakeSIPTransferStreamer) RecordTransferDurationMetric(durationMs string) {
+	f.transferDurationMs = durationMs
+}
+
+func (f *fakeSIPTransferStreamer) SendTransferToolResult(string, string, string, protos.ToolCallAction, map[string]string) {
+}
+
+func (f *fakeSIPTransferStreamer) SendTransferEvent(event internal_type.Stream) {
+	f.events = append(f.events, event)
+}
+
 // =============================================================================
 // Pipeline routing — TransferInitiated/Connected/Failed routed correctly
 // =============================================================================
@@ -188,6 +231,39 @@ func TestDispatcher_RoutesTransferStages(t *testing.T) {
 
 	// TransferInitiated's OnFailed should fire (nil server)
 	assert.True(t, failedCount.Load() > 0, "OnFailed should be called when server is nil")
+}
+
+func TestConfigureSIPTransfer_OnTeardownRecordsTransferDurationMetric(t *testing.T) {
+	t.Parallel()
+
+	d := New(WithLogger(newPipelineTestLogger(t)))
+	session := newTransferTestSession(t)
+	session.SetMetadata(sip_infra.MetadataBridgeTransferDuration, (1234 * time.Millisecond).String())
+	streamer := &fakeSIPTransferStreamer{}
+
+	d.configureSIPTransfer(context.Background(), session, newTransferTestConfig(), &callcontext.CallContext{
+		ConversationID: 42,
+	}, streamer)
+
+	require.NotNil(t, streamer.handler)
+	streamer.handler([]string{"918031405561"}, "resume_ai")
+
+	var stage sip_infra.TransferInitiatedPipeline
+	select {
+	case envelope := <-d.signalCh:
+		var ok bool
+		stage, ok = envelope.p.(sip_infra.TransferInitiatedPipeline)
+		require.True(t, ok, "expected TransferInitiatedPipeline, got %T", envelope.p)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for transfer stage")
+	}
+
+	require.NotNil(t, stage.OnTeardown)
+	stage.OnTeardown()
+
+	assert.Equal(t, "1234", streamer.transferDurationMs)
+	assert.Equal(t, 1, streamer.disconnectCalls)
+	require.Len(t, streamer.events, 1)
 }
 
 // =============================================================================

@@ -60,6 +60,8 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 				"direction": "outbound",
 				"error":     err.Error(),
 			},
+		}, observability.RecordMetric{
+			Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 		})
 		return &PipelineResult{Error: fmt.Errorf("invalid assistant: %w", err)}
 	}
@@ -84,6 +86,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction": "outbound",
 					"error":     "Please check phone deployment not enabled",
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, "Please check phone deployment not enabled"),
 			})
 		return &PipelineResult{Error: fmt.Errorf("phone deployment not enabled")}
 	}
@@ -115,6 +120,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 						"stage":     "from_phone_resolve",
 						"error":     err.Error(),
 					},
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 				})
 			return &PipelineResult{Error: fmt.Errorf("no phone number configured: %w", err)}
 		}
@@ -145,6 +153,9 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction": "outbound",
 					"error":     err.Error(),
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: fmt.Errorf("failed to create conversation: %w", err)}
 	}
@@ -189,14 +200,14 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 	}
 
 	//
-	callInfo := &internal_type.CallInfo{
-		CallerNumber: v.ToPhone,
-		FromNumber:   fromPhone,
-		Direction:    "outbound",
-		Provider:     assistant.AssistantPhoneDeployment.TelephonyProvider,
-		Status:       callcontext.CallStatusNew,
-	}
-	contextID, err := d.inboundDispatcher.SaveCallContext(ctx, v.Auth, assistant, conversation.Id, callInfo, assistant.AssistantPhoneDeployment.TelephonyProvider)
+	contextID, err := d.inboundDispatcher.SaveCallContext(ctx, v.Auth, assistant, conversation.Id,
+		&internal_type.CallInfo{
+			CallerNumber: v.ToPhone,
+			FromNumber:   fromPhone,
+			Direction:    "outbound",
+			Provider:     assistant.AssistantPhoneDeployment.TelephonyProvider,
+			Status:       callcontext.CallStatusNew,
+		}, assistant.AssistantPhoneDeployment.TelephonyProvider)
 	if err != nil {
 		v.Observer.Record(ctx,
 			observability.ConversationScope{
@@ -226,6 +237,15 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction":  "outbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: fmt.Errorf("failed to save call context: %w", err)}
 	}
@@ -273,7 +293,7 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 			},
 		})
 
-	callInfo, err = d.outboundDispatcher.Dispatch(ctx, contextID)
+	callInfo, err := d.outboundDispatcher.Dispatch(ctx, contextID)
 	if err != nil {
 		v.Observer.Record(ctx,
 			observability.ConversationScope{
@@ -312,8 +332,14 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"error":      err.Error(),
 				},
 			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
+			},
 			observability.RecordMetric{
-				Metrics: observability.CallStatusMetric("FAILED", err.Error()),
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{ContextID: contextID, ConversationID: conversation.Id, Error: err}
 	}

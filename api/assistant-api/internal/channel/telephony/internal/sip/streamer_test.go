@@ -63,6 +63,19 @@ func (c *testSIPCollector) hasEvent(event observability.EventName, reason string
 	return false
 }
 
+func (c *testSIPCollector) metricValue(name string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, recorded := range c.metrics {
+		for _, metric := range recorded.Metrics {
+			if metric.GetName() == name {
+				return metric.GetValue(), true
+			}
+		}
+	}
+	return "", false
+}
+
 func newTestSIPStreamerWithCollector(t *testing.T) (*Streamer, *testSIPCollector) {
 	t.Helper()
 	logger, err := commons.NewApplicationLogger()
@@ -230,6 +243,20 @@ func TestSend_ConversationDisconnection_RecordsEventAndClosesStreamer(t *testing
 	}
 
 	require.Equal(t, []sip_infra.LifecycleReason{sip_infra.LifecycleReasonStreamerEndSession}, lifecycle.endReasons)
+}
+
+func TestRecordTransferDurationMetric_RecordsCallTransferMetric(t *testing.T) {
+	s, collector := newTestSIPStreamerWithCollector(t)
+
+	s.RecordTransferDurationMetric("1234")
+
+	var value string
+	require.Eventually(t, func() bool {
+		var ok bool
+		value, ok = collector.metricValue(observability.MetricCallTransferDurationMs)
+		return ok
+	}, time.Second, 10*time.Millisecond, "expected SIP transfer teardown to record transfer duration metric")
+	assert.Equal(t, "1234", value)
 }
 
 func TestSend_ConversationDisconnection_PreservesExplicitReason(t *testing.T) {

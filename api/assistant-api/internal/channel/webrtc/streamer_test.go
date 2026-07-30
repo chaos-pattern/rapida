@@ -52,6 +52,7 @@ type testObservabilityCollector struct {
 	logs     []observability.RecordLog
 	events   []observability.RecordEvent
 	metrics  []observability.RecordMetric
+	metadata []observability.RecordMetadata
 	webhooks []observability.RecordWebhook
 }
 
@@ -69,6 +70,8 @@ func (c *testObservabilityCollector) Collect(_ context.Context, _ observability.
 		c.events = append(c.events, typed)
 	case observability.RecordMetric:
 		c.metrics = append(c.metrics, typed)
+	case observability.RecordMetadata:
+		c.metadata = append(c.metadata, typed)
 	case observability.RecordWebhook:
 		c.webhooks = append(c.webhooks, typed)
 	}
@@ -109,9 +112,19 @@ type fakeAmbientMixer struct {
 
 type failingGRPCStream struct {
 	sendErr error
+	recvMsg []*protos.WebTalkRequest
+	recvErr error
 }
 
 func (f *failingGRPCStream) Recv() (*protos.WebTalkRequest, error) {
+	if len(f.recvMsg) > 0 {
+		msg := f.recvMsg[0]
+		f.recvMsg = f.recvMsg[1:]
+		return msg, nil
+	}
+	if f.recvErr != nil {
+		return nil, f.recvErr
+	}
 	return nil, io.EOF
 }
 
@@ -219,6 +232,30 @@ func requireObservabilityWebhook(t *testing.T, collector *testObservabilityColle
 			collector.mu.Unlock()
 		case <-deadline:
 			t.Fatalf("timed out waiting for WebRTC webhook %q", event)
+		}
+	}
+}
+
+func requireObservabilityMetric(t *testing.T, collector *testObservabilityCollector, name string) *protos.Metric {
+	t.Helper()
+	deadline := time.After(time.Second)
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			collector.mu.Lock()
+			for _, record := range collector.metrics {
+				for _, metric := range record.Metrics {
+					if metric.Name == name {
+						collector.mu.Unlock()
+						return metric
+					}
+				}
+			}
+			collector.mu.Unlock()
+		case <-deadline:
+			t.Fatalf("timed out waiting for WebRTC metric %q", name)
 		}
 	}
 }
@@ -384,10 +421,90 @@ func TestDispatchOutput_SendFailureClosesStreamer(t *testing.T) {
 	assert.True(t, s.sessionState.CloseStarted())
 	select {
 	case msg := <-s.CriticalCh:
-		_, ok := msg.(*protos.ConversationDisconnection)
-		assert.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR, disc.GetType())
 	default:
 		t.Fatal("expected disconnection on gRPC send failure")
+	}
+}
+
+func TestDispatchOutput_NormalStreamCloseUsesUserDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{sendErr: io.EOF}
+
+	ok := s.dispatchOutput(&protos.WebTalkResponse{})
+
+	assert.False(t, ok)
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC stream close")
+	}
+}
+
+func TestRunGrpcReader_ReceiveFailureUsesErrorDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{recvErr: errors.New("recv failed")}
+
+	s.runGrpcReader()
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC receive failure")
+	}
+}
+
+func TestRunGrpcReader_NormalStreamCloseUsesUserDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{recvErr: io.EOF}
+
+	s.runGrpcReader()
+
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC stream close")
+	}
+}
+
+func TestRunGrpcReader_ClientDisconnectionClosesStreamer(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{
+		recvMsg: []*protos.WebTalkRequest{{
+			Request: &protos.WebTalkRequest_Disconnection{
+				Disconnection: &protos.ConversationDisconnection{
+					Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_USER,
+				},
+			},
+		}},
+	}
+
+	s.runGrpcReader()
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on client disconnection request")
 	}
 }
 
@@ -1015,6 +1132,8 @@ func TestHandlePeerState_ConnectedMarksAudioConnected(t *testing.T) {
 	assert.Equal(t, s.sessionID, webhook.Payload[webrtc_internal.DataSessionID])
 	assert.Equal(t, mediaSessionID, webhook.Payload[webrtc_internal.DataMediaSessionID])
 	assert.Equal(t, int64(25), webhook.Payload[webrtc_internal.DataICELatencyMs])
+	metric := requireObservabilityMetric(t, collector, observability.MetricICELatencyMs)
+	assert.Equal(t, "25", metric.Value)
 }
 
 func TestQueueMediaSessionRestart_QueuesLifecycleEvent(t *testing.T) {
@@ -2312,6 +2431,27 @@ func TestQueueClientSignal_QueuesPeerEvent(t *testing.T) {
 	}
 }
 
+func TestHandleClientSignal_DisconnectClosesStreamer(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+
+	s.handleClientSignal(&protos.ClientSignaling{
+		Message: &protos.ClientSignaling_Disconnect{
+			Disconnect: true,
+		},
+	})
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on client signaling disconnect")
+	}
+}
+
 func TestEnqueuePeerEvent_PreservesPeerConnectionStateTransitions(t *testing.T) {
 	t.Parallel()
 	s := newTestStreamer(t)
@@ -2423,7 +2563,8 @@ func TestEnqueueOutputAudio_BoundedDropOldest_EmitsOverflowEvent(t *testing.T) {
 	assert.Equal(t, "1", log.Attributes[webrtc_internal.DataDroppedFrames])
 	assert.Equal(t, fmt.Sprintf("%d", limit), log.Attributes[webrtc_internal.DataLimitFrames])
 	assert.Equal(t, fmt.Sprintf("%d", limit), log.Attributes[webrtc_internal.DataQueueDepthFrames])
-	assert.Empty(t, collector.metrics)
+	metric := requireObservabilityMetric(t, collector, observability.MetricWebRTCOutputQueueDrops)
+	assert.Equal(t, "1", metric.Value)
 }
 
 func TestClearOutputAudio_ReturnsClearedFrameCount(t *testing.T) {

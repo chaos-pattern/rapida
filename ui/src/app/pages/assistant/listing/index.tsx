@@ -21,13 +21,15 @@ import {
   TableHead,
   TableRow,
   TableHeader,
+  TableCell,
   TableBody,
   TableToolbar,
   TableToolbarContent,
   TableToolbarSearch,
-  DataTableSkeleton,
   Button,
   ClickableTile,
+  SkeletonPlaceholder,
+  SkeletonText,
 } from '@carbon/react';
 import { PrimaryButton } from '@/app/components/carbon/button';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
@@ -67,6 +69,22 @@ const assistantColumns = [
   { name: 'Updated', key: 'updated' },
   { name: 'Owner', key: 'owner' },
 ];
+
+const assistantSkeletonCellWidth: Record<string, string> = {
+  name: '72%',
+  id: '170px',
+  provider: '84px',
+  version: '132px',
+  status: '92px',
+  deployments: '120px',
+  actions: '96px',
+  tags: '116px',
+  sessions: '44px',
+  users: '44px',
+  lastActivity: '112px',
+  updated: '128px',
+  owner: '84px',
+};
 
 export function AssistantPage() {
   const navigate = useNavigate();
@@ -149,19 +167,9 @@ export function AssistantPage() {
 
       {/* Content */}
       {loading ? (
-        <div className="overflow-auto flex-1">
-          <DataTableSkeleton
-            headers={assistantColumns.map(col => ({
-              key: col.key,
-              header: col.name,
-            }))}
-            rowCount={Math.min(assistantAction.pageSize, 10)}
-            columnCount={assistantColumns.length}
-            showHeader={false}
-            showToolbar={false}
-            className="min-w-max"
-          />
-        </div>
+        <AssistantTableSkeleton
+          rowCount={Math.min(assistantAction.pageSize, 10)}
+        />
       ) : assistantAction.assistants &&
         assistantAction.assistants.length > 0 ? (
         <div className="overflow-auto flex-1">
@@ -213,22 +221,24 @@ export function AssistantPage() {
       )}
 
       {/* Pagination */}
-      {assistantAction.assistants && assistantAction.assistants.length > 0 && (
-        <Pagination
-          className="shrink-0"
-          totalItems={assistantAction.totalCount}
-          page={assistantAction.page}
-          pageSize={assistantAction.pageSize}
-          pageSizes={[10, 20, 50]}
-          onChange={({ page, pageSize }) => {
-            if (pageSize !== assistantAction.pageSize) {
-              assistantAction.setPageSize(pageSize);
-            } else {
-              assistantAction.setPage(page);
-            }
-          }}
-        />
-      )}
+      {!loading &&
+        assistantAction.assistants &&
+        assistantAction.assistants.length > 0 && (
+          <Pagination
+            className="shrink-0"
+            totalItems={assistantAction.totalCount}
+            page={assistantAction.page}
+            pageSize={assistantAction.pageSize}
+            pageSizes={[10, 20, 50]}
+            onChange={({ page, pageSize }) => {
+              if (pageSize !== assistantAction.pageSize) {
+                assistantAction.setPageSize(pageSize);
+              } else {
+                assistantAction.setPage(page);
+              }
+            }}
+          />
+        )}
 
       <CreateAssistantDialog
         open={createAssistantModalOpen}
@@ -239,6 +249,90 @@ export function AssistantPage() {
         }}
       />
     </div>
+  );
+}
+
+function AssistantTableSkeleton({ rowCount }: { rowCount: number }) {
+  const rows = Array.from({ length: rowCount }, (_, index) => index);
+
+  return (
+    <div className="overflow-auto flex-1" aria-label="Loading assistants">
+      <Table>
+        <TableHead>
+          <TableRow>
+            {assistantColumns.map(col => (
+              <TableHeader
+                key={col.key}
+                className={assistantColumnClassName[col.key]}
+              >
+                {col.name}
+              </TableHeader>
+            ))}
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {rows.map(rowIndex => (
+            <TableRow key={`assistant_skeleton_row_${rowIndex}`}>
+              {assistantColumns.map(col => (
+                <TableCell
+                  key={`${col.key}_${rowIndex}`}
+                  className={assistantColumnClassName[col.key]}
+                >
+                  <AssistantSkeletonCell columnKey={col.key} />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
+function AssistantSkeletonCell({ columnKey }: { columnKey: string }) {
+  if (columnKey === 'actions') {
+    return (
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map(index => (
+          <SkeletonPlaceholder key={index} className="!h-8 !w-8 shrink-0" />
+        ))}
+      </div>
+    );
+  }
+
+  if (columnKey === 'deployments') {
+    return (
+      <div className="flex items-center gap-1">
+        {[0, 1, 2, 3].map(index => (
+          <SkeletonPlaceholder key={index} className="!h-5 !w-5 shrink-0" />
+        ))}
+      </div>
+    );
+  }
+
+  if (columnKey === 'tags') {
+    return (
+      <div className="flex items-center gap-1">
+        <SkeletonPlaceholder className="!h-6 !w-16 shrink-0" />
+        <SkeletonPlaceholder className="!h-6 !w-14 shrink-0" />
+      </div>
+    );
+  }
+
+  if (columnKey === 'id') {
+    return (
+      <div className="flex min-w-0 items-center gap-1">
+        <SkeletonText width={assistantSkeletonCellWidth.id} className="!mb-0" />
+        <SkeletonPlaceholder className="!h-6 !w-6 shrink-0" />
+      </div>
+    );
+  }
+
+  return (
+    <SkeletonText
+      width={assistantSkeletonCellWidth[columnKey] ?? '70%'}
+      className="!mb-0"
+    />
   );
 }
 
