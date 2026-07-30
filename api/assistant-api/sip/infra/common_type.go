@@ -383,7 +383,6 @@ const (
 	MetadataBridgeTransferDuration       = "bridge_transfer_duration"
 	MetadataBridgeTransferOutboundCallID = "bridge_transfer_outbound_call_id"
 	MetadataDisconnectReason             = "disconnect_reason"
-	MetadataDisconnectText               = "disconnect_text"
 	MetadataDisconnectRawReason          = "disconnect_raw_reason"
 	PostTransferActionEndCall            = "end_call"
 	PostTransferActionResumeAI           = "resume_ai"

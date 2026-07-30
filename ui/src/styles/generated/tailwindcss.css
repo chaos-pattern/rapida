@@ -2783,6 +2783,9 @@
   .\!min-h-0 {
     min-height: calc(var(--spacing) * 0) !important;
   }
+  .\!min-h-6 {
+    min-height: calc(var(--spacing) * 6) !important;
+  }
   .\!min-h-7 {
     min-height: calc(var(--spacing) * 7) !important;
   }
@@ -5198,6 +5201,9 @@
   }
   .\!whitespace-nowrap {
     white-space: nowrap !important;
+  }
+  .whitespace-normal {
+    white-space: normal;
   }
   .whitespace-nowrap {
     white-space: nowrap;
@@ -10533,6 +10539,16 @@
   .\[\&\>svg\]\:block {
     &>svg {
       display: block;
+    }
+  }
+  .\[\&\>svg\]\:\!h-3\.5 {
+    &>svg {
+      height: calc(var(--spacing) * 3.5) !important;
+    }
+  }
+  .\[\&\>svg\]\:\!w-3\.5 {
+    &>svg {
+      width: calc(var(--spacing) * 3.5) !important;
     }
   }
 }

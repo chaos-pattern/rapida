@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -47,7 +49,13 @@ func (apt *asteriskTelephony) StatusCallback(
 	assistantConversationId uint64,
 ) (*internal_type.StatusInfo, error) {
 	var eventDetails map[string]interface{}
-	if err := c.ShouldBindJSON(&eventDetails); err != nil {
+	rawPayloadBytes, err := c.GetRawData()
+	if err != nil {
+		apt.logger.Errorf("failed to read ARI event body: %+v", err)
+		return nil, fmt.Errorf("failed to read ARI event body: %w", err)
+	}
+	rawPayload := string(rawPayloadBytes)
+	if err := json.Unmarshal(rawPayloadBytes, &eventDetails); err != nil {
 		apt.logger.Errorf("failed to parse ARI event body: %+v", err)
 		return nil, fmt.Errorf("failed to parse ARI event body: %w", err)
 	}
@@ -56,8 +64,162 @@ func (apt *asteriskTelephony) StatusCallback(
 	if v, ok := eventDetails["type"]; ok {
 		eventType = fmt.Sprintf("%v", v)
 	}
+	if eventType == "unknown" {
+		if v, ok := eventDetails["event"]; ok {
+			eventType = fmt.Sprintf("%v", v)
+		}
+	}
 
-	return &internal_type.StatusInfo{Event: eventType, Payload: eventDetails}, nil
+	channelUUID := ""
+	if channel, ok := eventDetails["channel"].(map[string]interface{}); ok {
+		if v, ok := channel["id"]; ok {
+			channelUUID = fmt.Sprintf("%v", v)
+		}
+		if channelUUID == "" {
+			if v, ok := channel["name"]; ok {
+				channelUUID = fmt.Sprintf("%v", v)
+			}
+		}
+	}
+	if channelUUID == "" {
+		if v, ok := eventDetails["channel_id"]; ok {
+			channelUUID = fmt.Sprintf("%v", v)
+		}
+	}
+	if channelUUID == "" {
+		if v, ok := eventDetails["uniqueid"]; ok {
+			channelUUID = fmt.Sprintf("%v", v)
+		}
+	}
+	if channelUUID == "" {
+		if v, ok := eventDetails["id"]; ok {
+			channelUUID = fmt.Sprintf("%v", v)
+		}
+	}
+
+	var durationPtr *time.Duration
+	duration, durationErr := utils.Option(eventDetails).GetDuration("duration")
+	if durationErr != nil {
+		duration, durationErr = utils.Option(eventDetails).GetDuration("billsec")
+	}
+	if durationErr == nil {
+		durationPtr = utils.Ptr(duration)
+	}
+	if durationPtr == nil {
+		switch v := eventDetails["duration_ms"].(type) {
+		case string:
+			if ms, parseErr := strconv.ParseFloat(strings.TrimSpace(v), 64); parseErr == nil {
+				duration := time.Duration(ms * float64(time.Millisecond))
+				durationPtr = utils.Ptr(duration)
+			}
+		case float64:
+			duration := time.Duration(v * float64(time.Millisecond))
+			durationPtr = utils.Ptr(duration)
+		case int:
+			duration := time.Duration(v) * time.Millisecond
+			durationPtr = utils.Ptr(duration)
+		case int64:
+			duration := time.Duration(v) * time.Millisecond
+			durationPtr = utils.Ptr(duration)
+		}
+	}
+
+	price, _ := eventDetails["price"].(string)
+	if price == "" {
+		price, _ = eventDetails["cost"].(string)
+	}
+	reason := ""
+	if v, ok := eventDetails["cause_txt"]; ok {
+		reason = fmt.Sprintf("%v", v)
+	}
+	if reason == "" {
+		if v, ok := eventDetails["cause"]; ok {
+			reason = fmt.Sprintf("%v", v)
+		}
+	}
+	if reason == "" {
+		if v, ok := eventDetails["dialstatus"]; ok {
+			reason = fmt.Sprintf("%v", v)
+		}
+	}
+	if reason == "" {
+		if v, ok := eventDetails["reason"]; ok {
+			reason = fmt.Sprintf("%v", v)
+		}
+	}
+
+	statusInfo := &internal_type.StatusInfo{
+		Event:       eventType,
+		ChannelUUID: channelUUID,
+		Duration:    durationPtr,
+		Price:       price,
+		RawPayload:  rawPayload,
+		Payload:     eventDetails,
+	}
+
+	if strings.EqualFold(eventType, "ChannelStateChange") {
+		if channel, ok := eventDetails["channel"].(map[string]interface{}); ok {
+			if state, ok := channel["state"]; ok {
+				switch strings.ToUpper(fmt.Sprintf("%v", state)) {
+				case "RING", "RINGING":
+					statusInfo.Event = "ringing"
+				case "UP":
+					statusInfo.Event = "answered"
+				}
+			}
+		}
+	}
+
+	if strings.EqualFold(eventType, "Dial") {
+		if dialStatus, ok := eventDetails["dialstatus"]; ok {
+			switch strings.ToUpper(fmt.Sprintf("%v", dialStatus)) {
+			case "ANSWER", "ANSWERED":
+				statusInfo.Event = "answered"
+			case "RING", "RINGING", "PROGRESS":
+				statusInfo.Event = "ringing"
+			case "CANCEL", "CANCELED", "CANCELLED":
+				statusInfo.Event = "cancelled"
+			case "BUSY", "NOANSWER", "NO_ANSWER", "CHANUNAVAIL", "CONGESTION", "FAILED", "FAILURE", "REJECTED", "TIMEOUT":
+				statusInfo.Error = &internal_type.StatusError{Error: "failed", Reason: fmt.Sprintf("%v", dialStatus)}
+			}
+		}
+	}
+
+	if strings.EqualFold(eventType, "ChannelDestroyed") || strings.EqualFold(eventType, "ChannelHangupRequest") {
+		cause := ""
+		if v, ok := eventDetails["cause"]; ok {
+			cause = fmt.Sprintf("%v", v)
+		}
+		causeText := ""
+		if v, ok := eventDetails["cause_txt"]; ok {
+			causeText = fmt.Sprintf("%v", v)
+		}
+		switch strings.ToUpper(causeText) {
+		case "NORMAL_CLEARING", "NORMAL CLEARING":
+			statusInfo.Completed = true
+		case "USER_BUSY", "BUSY", "NO_ANSWER", "NO ANSWER", "CALL_REJECTED", "REJECTED", "CONGESTION", "NETWORK_OUT_OF_ORDER", "NORMAL_TEMPORARY_FAILURE":
+			if reason == "" {
+				reason = causeText
+			}
+			statusInfo.Error = &internal_type.StatusError{Error: "failed", Reason: reason}
+		}
+		if statusInfo.Error == nil && !statusInfo.Completed {
+			switch cause {
+			case "", "16", "0":
+				statusInfo.Completed = true
+			default:
+				if reason == "" {
+					reason = cause
+				}
+				statusInfo.Error = &internal_type.StatusError{Error: "failed", Reason: reason}
+			}
+		}
+	}
+	if strings.EqualFold(eventType, "StasisEnd") && statusInfo.Error == nil {
+		statusInfo.Completed = true
+	}
+
+	return statusInfo, nil
 }
 
 func (apt *asteriskTelephony) CatchAllStatusCallback(ctx *gin.Context) (*internal_type.StatusInfo, error) {

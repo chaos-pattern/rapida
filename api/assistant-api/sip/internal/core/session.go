@@ -834,9 +834,6 @@ func (s *Session) SetDisconnectMetadata(metadata DisconnectMetadata) {
 		s.metadata = make(map[string]interface{})
 	}
 	s.metadata[MetadataDisconnectReason] = metadata.Reason
-	if metadata.Text != "" {
-		s.metadata[MetadataDisconnectText] = metadata.Text
-	}
 	if metadata.Raw != "" {
 		s.metadata[MetadataDisconnectRawReason] = metadata.Raw
 	}

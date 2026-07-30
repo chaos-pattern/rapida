@@ -122,13 +122,12 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "websocket_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "websocket_closed"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz websocket reader closed",
 				}},
 			})
@@ -153,7 +152,7 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Failed to unmarshal Vobiz media event",
 				}},
 			})
@@ -182,13 +181,12 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 					{Key: observability.MetadataClientProviderCallID, Value: vws.ChannelUUID},
 					{Key: observability.MetadataClientCodec, Value: "mulaw"},
 					{Key: observability.MetadataClientSampleRate, Value: "8000"},
-					{Key: observability.MetadataCallStatus, Value: "media_started"},
 					{Key: "vobiz.stream_id", Value: vws.streamID},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "INPROGRESS",
+					Value:       observability.MetricCallStatusInProgress,
 					Description: "Vobiz media stream started",
 				}},
 			})
@@ -204,12 +202,6 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": vws.ChannelUUID,
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
-						Description: "Vobiz media frame processing failed",
-					}},
 				})
 			}
 		case internal_vobiz.EventTypePlayedStream, internal_vobiz.EventTypeClearedAudio:
@@ -228,13 +220,12 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_stop"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_stop"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz media stream stopped by provider",
 				}},
 			})
@@ -294,13 +285,12 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 			},
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "completed"},
 				{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 			},
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "COMPLETE",
+				Value:       observability.MetricCallStatusComplete,
 				Description: "Vobiz call ended by server-side disconnect",
 			}},
 		})
@@ -323,13 +313,12 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Vobiz call ended by tool action",
 				}},
 			})
@@ -355,13 +344,12 @@ func (vws *vobizWebsocketStreamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for Vobiz"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Vobiz call transfer is not supported",
 				}},
 			})
@@ -424,12 +412,6 @@ func (vws *vobizWebsocketStreamer) handleMediaEvent(mediaEvent internal_vobiz.Vo
 				"conversation_uuid": vws.ChannelUUID,
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
-				Description: "Failed to decode Vobiz media payload",
-			}},
 		})
 		return nil
 	}
@@ -485,7 +467,7 @@ func (vws *vobizWebsocketStreamer) sendVobizMessage(eventType internal_vobiz.Eve
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "FAILED",
+				Value:       observability.MetricCallStatusFailed,
 				Description: "Failed to marshal Vobiz message",
 			}},
 		})

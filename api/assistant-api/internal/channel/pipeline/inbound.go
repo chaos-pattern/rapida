@@ -8,6 +8,7 @@ package channel_pipeline
 
 import (
 	"context"
+	"strings"
 
 	"github.com/rapidaai/api/assistant-api/internal/observability"
 	"github.com/rapidaai/api/assistant-api/internal/observability/collectors"
@@ -105,6 +106,9 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"direction": "inbound",
 					"error":     err.Error(),
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: err}
 	}
@@ -145,6 +149,9 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"stage":     "conversation_create",
 					"error":     err.Error(),
 				},
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: err}
 	}
@@ -195,6 +202,15 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"direction":  "inbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: err}
 	}
@@ -244,6 +260,53 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"status_event": callInfo.StatusInfo.Event,
 				},
 			})
+		switch strings.ToUpper(callInfo.StatusInfo.Event) {
+		case "RINGING":
+			_ = v.Observer.Record(ctx,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: v.AssistantID},
+					ConversationID: conversation.Id,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusRinging, callInfo.StatusInfo.Event),
+				})
+		case "CANCELLED", "CANCELED":
+			_ = v.Observer.Record(ctx,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: v.AssistantID},
+					ConversationID: conversation.Id,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusCancelled, callInfo.StatusInfo.Event),
+				})
+		case "FAILED":
+			_ = v.Observer.Record(ctx,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: v.AssistantID},
+					ConversationID: conversation.Id,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, callInfo.StatusInfo.Event),
+				})
+		case "COMPLETED", "COMPLETE":
+			_ = v.Observer.Record(ctx,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: v.AssistantID},
+					ConversationID: conversation.Id,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusComplete, callInfo.StatusInfo.Event),
+				})
+		default:
+			_ = v.Observer.Record(ctx,
+				observability.ConversationScope{
+					AssistantScope: observability.AssistantScope{AssistantID: v.AssistantID},
+					ConversationID: conversation.Id,
+				},
+				observability.RecordMetric{
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusInProgress, callInfo.StatusInfo.Event),
+				})
+		}
 	}
 
 	v.GinContext.Set("contextId", contextID)
@@ -278,6 +341,15 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"direction":  "inbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
+			},
+			observability.RecordMetric{
+				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
 		return &PipelineResult{Error: err}
 	}

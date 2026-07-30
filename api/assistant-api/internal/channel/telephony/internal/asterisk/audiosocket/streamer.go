@@ -198,12 +198,11 @@ func (as *Streamer) runFrameReader() {
 		Metadata: []*protos.Metadata{
 			{Key: observability.MetadataClientChannel, Value: "asterisk_as"},
 			{Key: observability.MetadataClientProviderCallID, Value: as.ChannelUUID},
-			{Key: observability.MetadataCallStatus, Value: "connected"},
 		},
 	}, observability.RecordMetric{
 		Metrics: []*protos.Metric{{
 			Name:        observability.MetricCallStatus,
-			Value:       "INPROGRESS",
+			Value:       observability.MetricCallStatusInProgress,
 			Description: "Asterisk AudioSocket connected",
 		}},
 	})
@@ -242,13 +241,12 @@ func (as *Streamer) runFrameReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "reader_closed"},
 					{Key: observability.MetadataDisconnectReason, Value: "reader_closed"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket reader closed",
 				}},
 			})
@@ -285,7 +283,7 @@ func (as *Streamer) runFrameReader() {
 				}, observability.RecordMetric{
 					Metrics: []*protos.Metric{{
 						Name:        observability.MetricCallStatus,
-						Value:       "FAILED",
+						Value:       observability.MetricCallStatusFailed,
 						Description: "Asterisk AudioSocket input audio processing failed",
 					}},
 				})
@@ -305,13 +303,12 @@ func (as *Streamer) runFrameReader() {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "provider_hangup"},
 					{Key: observability.MetadataDisconnectReason, Value: "provider_hangup"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket hangup received",
 				}},
 			})
@@ -332,7 +329,7 @@ func (as *Streamer) runFrameReader() {
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Asterisk AudioSocket error frame received",
 				}},
 			})
@@ -385,13 +382,12 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 			},
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "completed"},
 				{Key: observability.MetadataDisconnectReason, Value: "server_side_disconnect"},
 			},
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
-				Value:       "COMPLETE",
+				Value:       observability.MetricCallStatusComplete,
 				Description: "Asterisk AudioSocket call ended by server-side disconnect",
 			}},
 		})
@@ -412,13 +408,12 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "COMPLETE",
+					Value:       observability.MetricCallStatusComplete,
 					Description: "Asterisk AudioSocket call ended by tool action",
 				}},
 			})
@@ -449,13 +444,12 @@ func (as *Streamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 					{Key: observability.MetadataFailureReason, Value: "transfer not supported for AudioSocket"},
 				},
 			}, observability.RecordMetric{
 				Metrics: []*protos.Metric{{
 					Name:        observability.MetricCallStatus,
-					Value:       "FAILED",
+					Value:       observability.MetricCallStatusFailed,
 					Description: "Asterisk AudioSocket transfer is not supported",
 				}},
 			})

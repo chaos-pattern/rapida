@@ -465,7 +465,7 @@ func TestRecorder_RecordVariadicRecords_AllCollected(t *testing.T) {
 			Metrics: []*protos.Metric{{Name: MetricCallStatus, Value: "started"}},
 		},
 		RecordMetadata{
-			Metadata: []*protos.Metadata{{Key: MetadataCallStatus, Value: "started"}},
+			Metadata: []*protos.Metadata{{Key: MetadataDisconnectReason, Value: "started"}},
 		},
 	)
 	if err != nil {

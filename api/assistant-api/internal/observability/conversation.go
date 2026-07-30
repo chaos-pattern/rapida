@@ -50,10 +50,8 @@ const (
 	MetadataLanguageCode = "language_code"
 
 	MetadataDisconnectReason    = "disconnect_reason"
-	MetadataDisconnectText      = "disconnect_text"
 	MetadataDisconnectRawReason = "disconnect_raw_reason"
 
-	MetadataCallStatus         = "call_status"
 	MetadataCallError          = "call_error"
 	MetadataFailureClass       = "failure_class"
 	MetadataFailureReason      = "failure_reason"
@@ -87,18 +85,17 @@ func ClientMetadata(phone, assistantPhone, direction, provider, providerCallID, 
 }
 
 // DisconnectMetadata returns standardized terminal disconnect metadata.
-func DisconnectMetadata(reason, text, rawReason string) []*protos.Metadata {
-	metadata := make([]*protos.Metadata, 0, 3)
+func DisconnectMetadata(reason, rawReason string) []*protos.Metadata {
+	metadata := make([]*protos.Metadata, 0, 2)
 	metadata = appendMetadata(metadata, MetadataDisconnectReason, reason)
-	metadata = appendMetadata(metadata, MetadataDisconnectText, text)
 	metadata = appendMetadata(metadata, MetadataDisconnectRawReason, rawReason)
 	return metadata
 }
 
-// CallStatusMetric returns the current CONVERSATION_STATUS metric shape.
+// CallStatusMetric returns the canonical call status metric shape.
 func CallStatusMetric(status, reason string) []*protos.Metric {
 	return []*protos.Metric{{
-		Name:        MetricConversationStatus,
+		Name:        MetricCallStatus,
 		Value:       status,
 		Description: reason,
 	}}

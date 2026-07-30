@@ -69,9 +69,7 @@ func TestConversationMetadataNames_MirrorCurrentImplementation(t *testing.T) {
 		{MetadataLanguage, "language"},
 		{MetadataLanguageCode, "language_code"},
 		{MetadataDisconnectReason, "disconnect_reason"},
-		{MetadataDisconnectText, "disconnect_text"},
 		{MetadataDisconnectRawReason, "disconnect_raw_reason"},
-		{MetadataCallStatus, "call_status"},
 		{MetadataCallError, "call_error"},
 		{MetadataFailureClass, "failure_class"},
 		{MetadataFailureReason, "failure_reason"},
@@ -101,10 +99,9 @@ func TestClientMetadata_SkipsBlankValues(t *testing.T) {
 }
 
 func TestDisconnectMetadata_MirrorCurrentImplementation(t *testing.T) {
-	metadata := DisconnectMetadata("remote_hangup", "Normal Clearing", "Q.850;cause=16")
+	metadata := DisconnectMetadata("remote_hangup", "Q.850;cause=16")
 	expected := []*protos.Metadata{
 		{Key: MetadataDisconnectReason, Value: "remote_hangup"},
-		{Key: MetadataDisconnectText, Value: "Normal Clearing"},
 		{Key: MetadataDisconnectRawReason, Value: "Q.850;cause=16"},
 	}
 
@@ -118,15 +115,15 @@ func TestDisconnectMetadata_MirrorCurrentImplementation(t *testing.T) {
 	}
 }
 
-func TestCallStatusMetric_UsesCurrentConversationStatusShape(t *testing.T) {
+func TestCallStatusMetric_UsesCanonicalCallStatusShape(t *testing.T) {
 	metrics := CallStatusMetric("failed", "no_answer_timeout")
 	if len(metrics) != 1 {
 		t.Fatalf("expected one status metric, got %d", len(metrics))
 	}
 
 	metric := metrics[0]
-	if metric.Name != MetricConversationStatus {
-		t.Fatalf("expected status metric name %q, got %q", MetricConversationStatus, metric.Name)
+	if metric.Name != MetricCallStatus {
+		t.Fatalf("expected status metric name %q, got %q", MetricCallStatus, metric.Name)
 	}
 	if metric.Value != "failed" || metric.Description != "no_answer_timeout" {
 		t.Fatalf("unexpected status metric: %+v", metric)

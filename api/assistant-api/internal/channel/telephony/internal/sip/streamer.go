@@ -140,7 +140,6 @@ func New(opts ...FuncOption) (internal_type.SIPCallStreamer, error) {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "bye_received"},
 					{Key: observability.MetadataDisconnectReason, Value: "bye_received"},
 				},
 			}, observability.RecordMetric{
@@ -217,7 +216,6 @@ func New(opts ...FuncOption) (internal_type.SIPCallStreamer, error) {
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
 				{Key: observability.MetadataClientChannel, Value: internal_sip.Provider},
-				{Key: observability.MetadataCallStatus, Value: "media_started"},
 			},
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
@@ -239,7 +237,6 @@ func New(opts ...FuncOption) (internal_type.SIPCallStreamer, error) {
 	}, observability.RecordMetadata{
 		Metadata: []*protos.Metadata{
 			{Key: observability.MetadataClientChannel, Value: internal_sip.Provider},
-			{Key: observability.MetadataCallStatus, Value: "connected"},
 		},
 	}, observability.RecordMetric{
 		Metrics: []*protos.Metric{{
@@ -311,7 +308,6 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 			},
 		}, observability.RecordMetadata{
 			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "completed"},
 				{Key: observability.MetadataDisconnectReason, Value: data.GetType().String()},
 			},
 		}, observability.RecordMetric{
@@ -337,7 +333,6 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 				},
 			}, observability.RecordMetadata{
 				Metadata: []*protos.Metadata{
-					{Key: observability.MetadataCallStatus, Value: "completed"},
 					{Key: observability.MetadataDisconnectReason, Value: "tool_end_conversation"},
 				},
 			}, observability.RecordMetric{
@@ -364,7 +359,6 @@ func (s *Streamer) Send(response internal_type.Stream) error {
 					},
 				}, observability.RecordMetadata{
 					Metadata: []*protos.Metadata{
-						{Key: observability.MetadataCallStatus, Value: "transfer_failed"},
 						{Key: observability.MetadataFailureReason, Value: "missing transfer target"},
 					},
 				}, observability.RecordMetric{
@@ -411,9 +405,7 @@ func (s *Streamer) StartAssistantOutput() {
 				"provider":  internal_sip.Provider,
 			},
 		}, observability.RecordMetadata{
-			Metadata: []*protos.Metadata{
-				{Key: observability.MetadataCallStatus, Value: "media_started"},
-			},
+			Metadata: []*protos.Metadata{},
 		}, observability.RecordMetric{
 			Metrics: []*protos.Metric{{
 				Name:        observability.MetricCallStatus,
@@ -551,6 +543,19 @@ func (s *Streamer) RecordTransferOperatorAudio(audio []byte) {
 	}
 }
 
+func (s *Streamer) RecordTransferDurationMetric(durationMs string) {
+	if durationMs == "" {
+		return
+	}
+	_ = s.Record(observability.RecordMetric{
+		Metrics: []*protos.Metric{{
+			Name:        observability.MetricCallTransferDurationMs,
+			Value:       durationMs,
+			Description: "SIP transfer bridge duration in milliseconds",
+		}},
+	})
+}
+
 func (s *Streamer) SendTransferToolResult(contextID, toolID, toolName string, action protos.ToolCallAction, result map[string]string) {
 	s.Input(&protos.ConversationToolCallResult{
 		Id:     contextID,
@@ -593,9 +598,7 @@ func (s *Streamer) Close() error {
 			"status":    "media_stopped",
 		},
 	}, observability.RecordMetadata{
-		Metadata: []*protos.Metadata{
-			{Key: observability.MetadataCallStatus, Value: "media_stopped"},
-		},
+		Metadata: []*protos.Metadata{},
 	}, observability.RecordMetric{
 		Metrics: []*protos.Metric{{
 			Name:        observability.MetricCallStatus,

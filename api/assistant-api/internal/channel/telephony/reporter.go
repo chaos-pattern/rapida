@@ -18,6 +18,7 @@ import (
 	observability_collector_conversationmetadata "github.com/rapidaai/api/assistant-api/internal/observability/collectors/conversationmetadata"
 	observability_collector_conversationmetric "github.com/rapidaai/api/assistant-api/internal/observability/collectors/conversationmetric"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/protos"
 )
 
@@ -162,7 +163,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("RINGING", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: observability.CallStatusMetric(observability.MetricCallStatusRinging, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
 					Attributes: observability.Attributes{
 						"component":     observability.ComponentCall.String(),
 						"context_id":    currentCallContext.ContextID,
@@ -237,7 +238,18 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("CANCELLED", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: []*protos.Metric{
+						{
+							Name:        observability.MetricCallStatus,
+							Value:       observability.MetricCallStatusCancelled,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+						{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+					},
 					Attributes: observability.Attributes{
 						"component":     observability.ComponentCall.String(),
 						"context_id":    currentCallContext.ContextID,
@@ -250,9 +262,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 			)
-			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
+			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.ErrorMessage)
 			metadata = append(metadata,
-				&protos.Metadata{Key: observability.MetadataCallStatus, Value: update.CallStatus},
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},
@@ -339,7 +350,18 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric("FAILED", cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: []*protos.Metric{
+						{
+							Name:        observability.MetricCallStatus,
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+						{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+					},
 					Attributes: observability.Attributes{
 						"to":            currentCallContext.CallerNumber,
 						"from":          currentCallContext.FromNumber,
@@ -353,9 +375,8 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 			)
-			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
+			metadata := observability.DisconnectMetadata(protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(), update.ErrorMessage)
 			metadata = append(metadata,
-				&protos.Metadata{Key: observability.MetadataCallStatus, Value: update.CallStatus},
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
 				&protos.Metadata{Key: observability.MetadataRetryable, Value: strconv.FormatBool(update.Retryable)},

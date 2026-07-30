@@ -14,8 +14,8 @@ const DURATION_BREAKDOWN_METRICS = [
     sourceUnit: 'nanoseconds',
   },
   {
-    key: 'telephony_duration',
-    sourceUnit: 'seconds',
+    key: 'call.duration_ms',
+    sourceUnit: 'milliseconds',
   },
   {
     key: 'tts_duration',
@@ -68,7 +68,11 @@ const formatDurationMetricSeconds = (
   if (!Number.isFinite(numericValue)) return UNKNOWN_DURATION_VALUE;
 
   const seconds =
-    sourceUnit === 'nanoseconds' ? numericValue / 1_000_000_000 : numericValue;
+    sourceUnit === 'nanoseconds'
+      ? numericValue / 1_000_000_000
+      : sourceUnit === 'milliseconds'
+        ? numericValue / 1_000
+        : numericValue;
   return seconds.toFixed(2);
 };
 

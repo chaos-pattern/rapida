@@ -12,8 +12,9 @@ export type DisconnectReasonDisplay = {
 };
 
 const DETAIL_FIELDS = [
-  { key: 'call_status', label: 'Call status' },
+  { key: 'status', label: 'Status' },
   { key: 'disconnect_reason', label: 'Disconnect reason' },
+  { key: 'disconnect_raw_reason', label: 'Raw reason' },
   { key: 'failure_class', label: 'Failure class' },
   { key: 'failure_reason', label: 'Failure reason' },
   { key: 'sli_result', label: 'SLI result' },
@@ -63,10 +64,14 @@ const getDetails = (
   metadata?: Metadata[],
 ): DisconnectReasonDetail[] => {
   const values = new Map<string, string>();
-  if (status?.trim()) values.set('call_status', status.trim());
-  if (reason?.trim()) values.set('disconnect_reason', reason.trim());
+  const cleanReason = reason?.trim() ?? '';
+  if (status?.trim()) values.set('status', status.trim());
+  if (cleanReason && cleanReason.toLowerCase() !== 'unknown') {
+    values.set('disconnect_reason', cleanReason);
+  }
 
   DETAIL_FIELDS.forEach(field => {
+    if (field.key === 'status') return;
     const value = getMetadataValue(metadata, field.key);
     if (value) values.set(field.key, value);
   });
@@ -83,6 +88,8 @@ export const getDisconnectReasonDisplay = (
   metadata?: Metadata[],
 ): DisconnectReasonDisplay => {
   const details = getDetails(reason, status, metadata);
+  const cleanReason = reason?.trim() ?? '';
+  const hasReason = cleanReason && cleanReason.toLowerCase() !== 'unknown';
 
   if (isBusy(reason, metadata)) {
     return {
@@ -92,9 +99,9 @@ export const getDisconnectReasonDisplay = (
     };
   }
 
-  if (reason?.trim()) {
+  if (hasReason) {
     return {
-      label: humanize(reason),
+      label: humanize(cleanReason),
       tooltip: 'The backend reported this disconnect reason for the session.',
       details,
     };

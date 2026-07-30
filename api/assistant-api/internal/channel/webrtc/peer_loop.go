@@ -103,6 +103,12 @@ func (s *webrtcStreamer) handlePeerState(mediaSessionID uint64, state pionwebrtc
 					webrtc_internal.DataICELatencyMs:        iceLatencyMs,
 					webrtc_internal.DataPeerConnectionState: state.String(),
 				},
+			}, observability.RecordMetric{
+				Metrics: []*protos.Metric{{
+					Name:        observability.MetricICELatencyMs,
+					Value:       fmt.Sprintf("%d", iceLatencyMs),
+					Description: "WebRTC ICE connection latency in milliseconds",
+				}},
 			})
 		s.reportSelectedICECandidatePair(peerConnection, peerStateChangedAt)
 		s.signalReady()
@@ -389,9 +395,16 @@ func (s *webrtcStreamer) handleClientSignal(signaling *protos.ClientSignaling) {
 
 	case *protos.ClientSignaling_Disconnect:
 		if msg.Disconnect {
+			_ = s.observer.Record(s.Ctx, s.sessionState.Scope, observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_USER.String(),
+					"client_signaling_disconnect",
+				),
+			})
 			if disc := s.Disconnect(protos.ConversationDisconnection_DISCONNECTION_TYPE_USER); disc != nil {
 				s.Input(disc)
 			}
+			s.Close()
 		}
 	}
 }
