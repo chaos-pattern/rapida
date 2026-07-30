@@ -11,6 +11,7 @@ const metadata = (key: string, value: string): Metadata => {
 describe('getDisconnectReasonDisplay', () => {
   it('shows user busy when SIP busy metadata is present', () => {
     const display = getDisconnectReasonDisplay('outbound_rejected', 'FAILED', [
+      metadata('disconnect_raw_reason', '486 Busy Here'),
       metadata('failure_class', 'busy'),
       metadata('failure_reason', 'Busy Here'),
       metadata('sli_result', 'client_error'),
@@ -21,7 +22,9 @@ describe('getDisconnectReasonDisplay', () => {
     expect(display.label).toBe('User busy');
     expect(display.details).toEqual(
       expect.arrayContaining([
+        { label: 'Status', value: 'FAILED' },
         { label: 'Disconnect reason', value: 'outbound_rejected' },
+        { label: 'Raw reason', value: '486 Busy Here' },
         { label: 'Failure class', value: 'busy' },
         { label: 'Failure reason', value: 'Busy Here' },
         { label: 'SLI result', value: 'client_error' },
@@ -33,6 +36,12 @@ describe('getDisconnectReasonDisplay', () => {
 
   it('shows in progress when a non-terminal session has no reason', () => {
     expect(getDisconnectReasonDisplay('', 'ACTIVE').label).toBe('In progress');
+  });
+
+  it('does not treat unknown fallback as a real disconnect reason', () => {
+    expect(getDisconnectReasonDisplay('unknown', 'ACTIVE').label).toBe(
+      'In progress',
+    );
   });
 
   it('shows no reason when a terminal session has no reason', () => {
