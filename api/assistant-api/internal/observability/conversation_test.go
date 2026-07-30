@@ -69,7 +69,6 @@ func TestConversationMetadataNames_MirrorCurrentImplementation(t *testing.T) {
 		{MetadataLanguage, "language"},
 		{MetadataLanguageCode, "language_code"},
 		{MetadataDisconnectReason, "disconnect_reason"},
-		{MetadataDisconnectText, "disconnect_text"},
 		{MetadataDisconnectRawReason, "disconnect_raw_reason"},
 		{MetadataCallError, "call_error"},
 		{MetadataFailureClass, "failure_class"},
@@ -100,10 +99,9 @@ func TestClientMetadata_SkipsBlankValues(t *testing.T) {
 }
 
 func TestDisconnectMetadata_MirrorCurrentImplementation(t *testing.T) {
-	metadata := DisconnectMetadata("remote_hangup", "Normal Clearing", "Q.850;cause=16")
+	metadata := DisconnectMetadata("remote_hangup", "Q.850;cause=16")
 	expected := []*protos.Metadata{
 		{Key: MetadataDisconnectReason, Value: "remote_hangup"},
-		{Key: MetadataDisconnectText, Value: "Normal Clearing"},
 		{Key: MetadataDisconnectRawReason, Value: "Q.850;cause=16"},
 	}
 

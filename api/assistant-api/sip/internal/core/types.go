@@ -430,9 +430,6 @@ const (
 	// MetadataDisconnectReason holds the normalized terminal disconnect reason.
 	MetadataDisconnectReason = "disconnect_reason"
 
-	// MetadataDisconnectText holds the provider reason phrase when supplied.
-	MetadataDisconnectText = "disconnect_text"
-
 	// MetadataDisconnectRawReason holds the raw provider Reason header.
 	MetadataDisconnectRawReason = "disconnect_raw_reason"
 

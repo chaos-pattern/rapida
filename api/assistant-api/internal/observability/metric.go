@@ -19,9 +19,6 @@ const (
 	MetricConversationDuration    = "duration"
 	MetricConversationSTTDuration = "stt_duration"
 	MetricConversationTTSDuration = "tts_duration"
-
-	MetricConversationComplete   = "complete"
-	MetricConversationInProgress = "in_progress"
 )
 
 // Current call, SIP, and WebRTC metric names.

@@ -137,7 +137,7 @@ func (cApi *ConversationApi) UnviersalCallback(c *gin.Context) {
 					ConversationID: cc.ConversationID,
 				},
 				observability.RecordMetadata{
-					Metadata: observability.DisconnectMetadata(statusInfo.Error.Reason, "", ""),
+					Metadata: observability.DisconnectMetadata(protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(), statusInfo.RawPayload),
 				})
 		}
 	} else if statusInfo.Completed {
@@ -331,7 +331,7 @@ func (cApi *ConversationApi) CallbackByContext(c *gin.Context) {
 				ConversationID: cc.ConversationID,
 			},
 				observability.RecordMetadata{
-					Metadata: observability.DisconnectMetadata(statusInfo.Error.Reason, "", ""),
+					Metadata: observability.DisconnectMetadata(protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(), statusInfo.RawPayload),
 				})
 		}
 	} else if statusInfo.Completed {

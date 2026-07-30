@@ -200,14 +200,14 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 	}
 
 	//
-	callInfo := &internal_type.CallInfo{
-		CallerNumber: v.ToPhone,
-		FromNumber:   fromPhone,
-		Direction:    "outbound",
-		Provider:     assistant.AssistantPhoneDeployment.TelephonyProvider,
-		Status:       callcontext.CallStatusNew,
-	}
-	contextID, err := d.inboundDispatcher.SaveCallContext(ctx, v.Auth, assistant, conversation.Id, callInfo, assistant.AssistantPhoneDeployment.TelephonyProvider)
+	contextID, err := d.inboundDispatcher.SaveCallContext(ctx, v.Auth, assistant, conversation.Id,
+		&internal_type.CallInfo{
+			CallerNumber: v.ToPhone,
+			FromNumber:   fromPhone,
+			Direction:    "outbound",
+			Provider:     assistant.AssistantPhoneDeployment.TelephonyProvider,
+			Status:       callcontext.CallStatusNew,
+		}, assistant.AssistantPhoneDeployment.TelephonyProvider)
 	if err != nil {
 		v.Observer.Record(ctx,
 			observability.ConversationScope{
@@ -237,6 +237,12 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction":  "outbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
 			},
 			observability.RecordMetric{
 				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
@@ -287,7 +293,7 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 			},
 		})
 
-	callInfo, err = d.outboundDispatcher.Dispatch(ctx, contextID)
+	callInfo, err := d.outboundDispatcher.Dispatch(ctx, contextID)
 	if err != nil {
 		v.Observer.Record(ctx,
 			observability.ConversationScope{
@@ -325,6 +331,12 @@ func (d *Dispatcher) runOutbound(ctx context.Context, v OutboundRequestedPipelin
 					"direction":  "outbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
 			},
 			observability.RecordMetric{
 				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),

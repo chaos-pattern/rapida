@@ -250,7 +250,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 			)
-			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
+			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.ErrorMessage)
 			metadata = append(metadata,
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},
@@ -352,7 +352,7 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 			)
-			metadata := observability.DisconnectMetadata(update.DisconnectReason, update.FailureReason, update.ErrorMessage)
+			metadata := observability.DisconnectMetadata(protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(), update.ErrorMessage)
 			metadata = append(metadata,
 				&protos.Metadata{Key: observability.MetadataFailureClass, Value: update.FailureClass},
 				&protos.Metadata{Key: observability.MetadataFailureReason, Value: update.FailureReason},

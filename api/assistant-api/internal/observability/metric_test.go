@@ -22,8 +22,6 @@ func TestMetricNames_MirrorCurrentImplementation(t *testing.T) {
 		{MetricConversationDuration, "duration"},
 		{MetricConversationSTTDuration, "stt_duration"},
 		{MetricConversationTTSDuration, "tts_duration"},
-		{MetricConversationComplete, "complete"},
-		{MetricConversationInProgress, "in_progress"},
 		{MetricCallDurationMs, "call.duration_ms"},
 		{MetricCallStatus, "call.status"},
 		{MetricCallPrice, "call.price"},

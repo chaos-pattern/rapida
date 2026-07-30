@@ -323,8 +323,11 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	for _, metadata := range service.metadata {
 		metadataByKey[metadata.Key] = metadata.Value
 	}
-	if metadataByKey[observability.MetadataDisconnectReason] != "outbound_rejected" {
+	if metadataByKey[observability.MetadataDisconnectReason] != protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String() {
 		t.Fatalf("expected disconnect reason metadata, got %q", metadataByKey[observability.MetadataDisconnectReason])
+	}
+	if metadataByKey[observability.MetadataDisconnectRawReason] != "486 Busy Here" {
+		t.Fatalf("expected disconnect raw reason metadata, got %q", metadataByKey[observability.MetadataDisconnectRawReason])
 	}
 	if metadataByKey[observability.MetadataFailureClass] != "busy" {
 		t.Fatalf("expected failure class metadata, got %q", metadataByKey[observability.MetadataFailureClass])

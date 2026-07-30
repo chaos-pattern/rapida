@@ -203,6 +203,12 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"error":      err.Error(),
 				},
 			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
+			},
 			observability.RecordMetric{
 				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
 			})
@@ -335,6 +341,12 @@ func (d *Dispatcher) runInboundCall(ctx context.Context, v CallReceivedPipeline)
 					"direction":  "inbound",
 					"error":      err.Error(),
 				},
+			},
+			observability.RecordMetadata{
+				Metadata: observability.DisconnectMetadata(
+					protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR.String(),
+					err.Error(),
+				),
 			},
 			observability.RecordMetric{
 				Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, err.Error()),
