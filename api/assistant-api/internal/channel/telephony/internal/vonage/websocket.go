@@ -249,12 +249,6 @@ func (vng *vonageWebsocketStreamer) runWebSocketReader() {
 						"payload_bytes":     fmt.Sprintf("%d", len(message)),
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "Vonage media frame processing failed",
-					}},
 				})
 			}
 		default:

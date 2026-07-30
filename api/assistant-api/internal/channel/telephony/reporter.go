@@ -18,6 +18,7 @@ import (
 	observability_collector_conversationmetadata "github.com/rapidaai/api/assistant-api/internal/observability/collectors/conversationmetadata"
 	observability_collector_conversationmetric "github.com/rapidaai/api/assistant-api/internal/observability/collectors/conversationmetric"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/protos"
 )
 
@@ -237,7 +238,18 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric(observability.MetricCallStatusCancelled, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: []*protos.Metric{
+						{
+							Name:        observability.MetricCallStatus,
+							Value:       observability.MetricCallStatusCancelled,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+						{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+					},
 					Attributes: observability.Attributes{
 						"component":     observability.ComponentCall.String(),
 						"context_id":    currentCallContext.ContextID,
@@ -338,7 +350,18 @@ func (d *OutboundDispatcher) NewStatusReporter(contextID string) internal_type.P
 					},
 				},
 				observability.RecordMetric{
-					Metrics: observability.CallStatusMetric(observability.MetricCallStatusFailed, cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus)),
+					Metrics: []*protos.Metric{
+						{
+							Name:        observability.MetricCallStatus,
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+						{
+							Name:        type_enums.CONVERSATION_STATUS.String(),
+							Value:       observability.MetricCallStatusFailed,
+							Description: cmp.Or(update.FailureReason, update.DisconnectReason, update.ErrorMessage, update.CallStatus),
+						},
+					},
 					Attributes: observability.Attributes{
 						"to":            currentCallContext.CallerNumber,
 						"from":          currentCallContext.FromNumber,

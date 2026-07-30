@@ -15,6 +15,7 @@ import (
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
 	"github.com/rapidaai/pkg/types"
+	type_enums "github.com/rapidaai/pkg/types/enums"
 	"github.com/rapidaai/protos"
 )
 
@@ -308,13 +309,22 @@ func TestOutboundDispatcher_StatusReporterRecordsTerminalObservability(t *testin
 	if service.metricAssistantID != 33 || service.metricConversationID != 44 {
 		t.Fatalf("unexpected metric scope: assistant=%d conversation=%d", service.metricAssistantID, service.metricConversationID)
 	}
-	if len(service.metrics) != 1 {
-		t.Fatalf("expected one status metric, got %+v", service.metrics)
+	if len(service.metrics) != 2 {
+		t.Fatalf("expected call and conversation status metrics, got %+v", service.metrics)
 	}
-	if service.metrics[0].Name != observability.MetricCallStatus ||
-		service.metrics[0].Value != observability.MetricCallStatusFailed ||
-		service.metrics[0].Description != "Busy Here" {
-		t.Fatalf("unexpected status metric: %+v", service.metrics[0])
+	metricByName := make(map[string]*protos.Metric, len(service.metrics))
+	for _, metric := range service.metrics {
+		metricByName[metric.Name] = metric
+	}
+	if metricByName[observability.MetricCallStatus] == nil ||
+		metricByName[observability.MetricCallStatus].Value != observability.MetricCallStatusFailed ||
+		metricByName[observability.MetricCallStatus].Description != "Busy Here" {
+		t.Fatalf("unexpected call status metric: %+v", metricByName[observability.MetricCallStatus])
+	}
+	if metricByName[type_enums.CONVERSATION_STATUS.String()] == nil ||
+		metricByName[type_enums.CONVERSATION_STATUS.String()].Value != observability.MetricCallStatusFailed ||
+		metricByName[type_enums.CONVERSATION_STATUS.String()].Description != "Busy Here" {
+		t.Fatalf("unexpected conversation status metric: %+v", metricByName[type_enums.CONVERSATION_STATUS.String()])
 	}
 	if service.metadataAuth == nil {
 		t.Fatal("expected terminal status metadata to be recorded")

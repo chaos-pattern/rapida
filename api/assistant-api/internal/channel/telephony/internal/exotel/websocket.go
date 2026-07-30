@@ -237,12 +237,6 @@ func (exotel *exotelWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": exotel.ChannelUUID,
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "Exotel media frame processing failed",
-					}},
 				})
 			}
 		case internal_exotel.EventTypeDTMF:
@@ -471,12 +465,6 @@ func (exotel *exotelWebsocketStreamer) handleMediaEvent(mediaEvent internal_exot
 				"conversation_uuid": exotel.ChannelUUID,
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       observability.MetricCallStatusFailed,
-				Description: "Failed to decode Exotel media payload",
-			}},
 		})
 		return nil
 	}

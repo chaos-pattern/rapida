@@ -273,12 +273,6 @@ func (tws *telnyxWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": tws.GetConversationUuid(),
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "Telnyx media frame processing failed",
-					}},
 				})
 			}
 		case internal_telnyx.EventTypeDTMF:
@@ -551,12 +545,6 @@ func (tws *telnyxWebsocketStreamer) handleMediaEvent(mediaEvent internal_telnyx.
 				"conversation_uuid": tws.GetConversationUuid(),
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       observability.MetricCallStatusFailed,
-				Description: "Failed to decode Telnyx media payload",
-			}},
 		})
 		return nil
 	}

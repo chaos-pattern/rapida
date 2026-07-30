@@ -52,6 +52,7 @@ type testObservabilityCollector struct {
 	logs     []observability.RecordLog
 	events   []observability.RecordEvent
 	metrics  []observability.RecordMetric
+	metadata []observability.RecordMetadata
 	webhooks []observability.RecordWebhook
 }
 
@@ -69,6 +70,8 @@ func (c *testObservabilityCollector) Collect(_ context.Context, _ observability.
 		c.events = append(c.events, typed)
 	case observability.RecordMetric:
 		c.metrics = append(c.metrics, typed)
+	case observability.RecordMetadata:
+		c.metadata = append(c.metadata, typed)
 	case observability.RecordWebhook:
 		c.webhooks = append(c.webhooks, typed)
 	}
@@ -109,9 +112,19 @@ type fakeAmbientMixer struct {
 
 type failingGRPCStream struct {
 	sendErr error
+	recvMsg []*protos.WebTalkRequest
+	recvErr error
 }
 
 func (f *failingGRPCStream) Recv() (*protos.WebTalkRequest, error) {
+	if len(f.recvMsg) > 0 {
+		msg := f.recvMsg[0]
+		f.recvMsg = f.recvMsg[1:]
+		return msg, nil
+	}
+	if f.recvErr != nil {
+		return nil, f.recvErr
+	}
 	return nil, io.EOF
 }
 
@@ -408,10 +421,90 @@ func TestDispatchOutput_SendFailureClosesStreamer(t *testing.T) {
 	assert.True(t, s.sessionState.CloseStarted())
 	select {
 	case msg := <-s.CriticalCh:
-		_, ok := msg.(*protos.ConversationDisconnection)
-		assert.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR, disc.GetType())
 	default:
 		t.Fatal("expected disconnection on gRPC send failure")
+	}
+}
+
+func TestDispatchOutput_NormalStreamCloseUsesUserDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{sendErr: io.EOF}
+
+	ok := s.dispatchOutput(&protos.WebTalkResponse{})
+
+	assert.False(t, ok)
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC stream close")
+	}
+}
+
+func TestRunGrpcReader_ReceiveFailureUsesErrorDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{recvErr: errors.New("recv failed")}
+
+	s.runGrpcReader()
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_ERROR, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC receive failure")
+	}
+}
+
+func TestRunGrpcReader_NormalStreamCloseUsesUserDisconnect(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{recvErr: io.EOF}
+
+	s.runGrpcReader()
+
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on gRPC stream close")
+	}
+}
+
+func TestRunGrpcReader_ClientDisconnectionClosesStreamer(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+	s.grpcStream = &failingGRPCStream{
+		recvMsg: []*protos.WebTalkRequest{{
+			Request: &protos.WebTalkRequest_Disconnection{
+				Disconnection: &protos.ConversationDisconnection{
+					Type: protos.ConversationDisconnection_DISCONNECTION_TYPE_USER,
+				},
+			},
+		}},
+	}
+
+	s.runGrpcReader()
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on client disconnection request")
 	}
 }
 
@@ -2335,6 +2428,27 @@ func TestQueueClientSignal_QueuesPeerEvent(t *testing.T) {
 		assert.Same(t, signaling, event.SignalClientMessage)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for peer event")
+	}
+}
+
+func TestHandleClientSignal_DisconnectClosesStreamer(t *testing.T) {
+	t.Parallel()
+	s := newTestStreamer(t)
+
+	s.handleClientSignal(&protos.ClientSignaling{
+		Message: &protos.ClientSignaling_Disconnect{
+			Disconnect: true,
+		},
+	})
+
+	assert.True(t, s.sessionState.CloseStarted())
+	select {
+	case msg := <-s.CriticalCh:
+		disc, ok := msg.(*protos.ConversationDisconnection)
+		require.True(t, ok, "expected ConversationDisconnection, got %T", msg)
+		assert.Equal(t, protos.ConversationDisconnection_DISCONNECTION_TYPE_USER, disc.GetType())
+	default:
+		t.Fatal("expected disconnection on client signaling disconnect")
 	}
 }
 

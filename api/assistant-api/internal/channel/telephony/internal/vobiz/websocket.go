@@ -202,12 +202,6 @@ func (vws *vobizWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": vws.ChannelUUID,
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "Vobiz media frame processing failed",
-					}},
 				})
 			}
 		case internal_vobiz.EventTypePlayedStream, internal_vobiz.EventTypeClearedAudio:
@@ -418,12 +412,6 @@ func (vws *vobizWebsocketStreamer) handleMediaEvent(mediaEvent internal_vobiz.Vo
 				"conversation_uuid": vws.ChannelUUID,
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       observability.MetricCallStatusFailed,
-				Description: "Failed to decode Vobiz media payload",
-			}},
 		})
 		return nil
 	}

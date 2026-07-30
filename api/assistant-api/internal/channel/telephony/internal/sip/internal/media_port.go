@@ -302,12 +302,6 @@ func (port *MediaPort) forwardIncomingAudio() {
 						"call_id":   port.session.GetCallID(),
 						"error":     err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "SIP provider audio processing failed",
-					}},
 				})
 			}
 		}
@@ -366,12 +360,6 @@ func (port *MediaPort) deliverAssistantFrame(outputFrame internal_telephony_medi
 					"call_id":   port.session.GetCallID(),
 					"error":     err.Error(),
 				},
-			}, observability.RecordMetric{
-				Metrics: []*protos.Metric{{
-					Name:        observability.MetricCallStatus,
-					Value:       observability.MetricCallStatusFailed,
-					Description: "SIP assistant audio encoding failed",
-				}},
 			})
 		}
 		return err
@@ -390,12 +378,6 @@ func (port *MediaPort) deliverAssistantFrame(outputFrame internal_telephony_medi
 					"call_id":   port.session.GetCallID(),
 					"error":     err.Error(),
 				},
-			}, observability.RecordMetric{
-				Metrics: []*protos.Metric{{
-					Name:        observability.MetricCallStatus,
-					Value:       observability.MetricCallStatusFailed,
-					Description: "SIP assistant audio output failed",
-				}},
 			})
 		}
 		if errors.Is(err, sip_infra.ErrRTPOutputQueueFull) {

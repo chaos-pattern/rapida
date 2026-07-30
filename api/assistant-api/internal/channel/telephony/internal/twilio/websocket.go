@@ -237,12 +237,6 @@ func (tws *twilioWebsocketStreamer) runWebSocketReader() {
 						"conversation_uuid": tws.GetConversationUuid(),
 						"error":             err.Error(),
 					},
-				}, observability.RecordMetric{
-					Metrics: []*protos.Metric{{
-						Name:        observability.MetricCallStatus,
-						Value:       observability.MetricCallStatusFailed,
-						Description: "Twilio media frame processing failed",
-					}},
 				})
 			}
 		case internal_twilio.EventTypeStop:
@@ -672,12 +666,6 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 				"stream_id":         tws.streamID,
 				"conversation_uuid": tws.GetConversationUuid(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       observability.MetricCallStatusFailed,
-				Description: "Twilio media event missing media payload",
-			}},
 		})
 		return nil
 	}
@@ -693,12 +681,6 @@ func (tws *twilioWebsocketStreamer) handleMediaEvent(mediaEvent internal_twilio.
 				"conversation_uuid": tws.GetConversationUuid(),
 				"error":             err.Error(),
 			},
-		}, observability.RecordMetric{
-			Metrics: []*protos.Metric{{
-				Name:        observability.MetricCallStatus,
-				Value:       observability.MetricCallStatusFailed,
-				Description: "Failed to decode Twilio media payload",
-			}},
 		})
 		return nil
 	}

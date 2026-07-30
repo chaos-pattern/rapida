@@ -373,12 +373,6 @@ func (p *AudioProcessor) ForwardUserAudio(audioData []byte) bool {
 					"reason":               "bridge_audio_out_full",
 					"dropped_frames_total": fmt.Sprintf("%d", dropped),
 				},
-			}, observability.RecordMetric{
-				Metrics: []*protos.Metric{{
-					Name:        observability.MetricCallStatus,
-					Value:       observability.MetricCallStatusFailed,
-					Description: "SIP bridge audio output queue full",
-				}},
 			})
 		}
 		return true
