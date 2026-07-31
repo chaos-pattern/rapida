@@ -22,7 +22,7 @@ jest.mock('@/app/components/carbon/form', () => ({
 }));
 
 jest.mock('@/app/components/providers/help-label', () => ({
-  HelpLabel: ({ label }: any) => <>{label}</>,
+  HelpToggletip: () => null,
 }));
 
 jest.mock('@carbon/react', () => {

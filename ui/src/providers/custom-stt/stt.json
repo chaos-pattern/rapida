@@ -18,6 +18,7 @@
         }
       ],
       "helpText": "Runtime value for query {\"$var\":\"encoding\"} and request {\"$path\":\"config.audio.encoding\"}. The backend validates references before the provider starts.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please select a valid audio encoding for custom STT."
     },
     {
@@ -57,6 +58,7 @@
         }
       ],
       "helpText": "Runtime value for query {\"$var\":\"sample_rate\"} and request {\"$path\":\"config.audio.sample_rate\"}. Use {\"$cast\":\"number\",\"value\":...} when the upstream expects a number.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please select a valid sample rate for custom STT."
     },
     {
@@ -69,6 +71,7 @@
       "editorMode": "query_params",
       "placeholder": "Type { for DSL snippets",
       "helpText": "Optional flat JSON object appended to the credential URL. Runtime variables are {\"$var\":\"model\"}, {\"$var\":\"language\"}, {\"$var\":\"encoding\"}, and {\"$var\":\"sample_rate\"}. Values must resolve to string, number, or boolean.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid query parameters for custom STT."
     },
     {
@@ -82,6 +85,7 @@
       "editorMode": "request_rules",
       "placeholder": "Type [ for rule snippets",
       "helpText": "Ordered request rules for packets turn_change, audio, and interrupt. send.body may use {\"$path\":\"config.model\"}, config.language, config.audio.encoding, config.audio.sample_rate, packet.context_id, and packet.audio bytes/base64/pcm_base64/wav_base64. HTTP v1 uses only the first audio rule and requires send.frame \"json\".",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid request rules for custom STT."
     },
     {
@@ -94,6 +98,7 @@
       "editorMode": "response_rules",
       "placeholder": "Type [ for rule snippets",
       "helpText": "Required response rule list. Match json or text frames and emit script, confidence, language, interim, or error using {\"$path\":\"field.path\"}; text frames may also use {\"$frame\":\"text\"}.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid response rules for custom STT."
     }
   ]

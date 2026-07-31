@@ -11,7 +11,8 @@ import {
   validateFromConfig,
 } from '@/providers/config-defaults';
 import { ConfigRenderer } from '@/app/components/providers/config-renderer';
-import { HelpLabel } from '@/app/components/providers/help-label';
+import { HelpToggletip } from '@/app/components/providers/help-label';
+import { FormLabel } from '@/app/components/form-label';
 
 const VONAGE_PHONE_REGEX = /^\+?[1-9]\d{1,14}$/;
 
@@ -106,14 +107,16 @@ export const TelephonyProvider: React.FC<ProviderComponentProps> = props => {
 
   return (
     <Stack gap={6}>
+      <div className="inline-flex items-center gap-1">
+        <FormLabel htmlFor="telephony-provider">Telephony provider</FormLabel>
+        <HelpToggletip
+          label="Telephony provider"
+          helpText="Select a telephony provider for inbound and outbound phone calls."
+        />
+      </div>
       <Dropdown
         id="telephony-provider"
-        titleText={
-          <HelpLabel
-            label="Telephony provider"
-            helpText="Select a telephony provider for inbound and outbound phone calls."
-          />
-        }
+        titleText=""
         label="Select telephony provider"
         items={TELEPHONY_PROVIDER}
         selectedItem={selectedProvider}

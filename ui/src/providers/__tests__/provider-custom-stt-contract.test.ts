@@ -107,6 +107,22 @@ describe('Custom STT config contract', () => {
     expect(keys).not.toContain('listen.language');
   });
 
+  it('shows custom STT runtime help in label toggletips', () => {
+    const params = config.stt?.parameters ?? [];
+
+    for (const key of [
+      'listen.audio.encoding',
+      'listen.audio.sample_rate',
+      CUSTOM_STT_QUERY_PARAMS_KEY,
+      CUSTOM_STT_REQUEST_RULES_KEY,
+      CUSTOM_STT_RESPONSE_RULES_KEY,
+    ]) {
+      const param = params.find(item => item.key === key);
+      expect(param?.helpText).toBeTruthy();
+      expect(param?.helpTextDisplay).toBe('toggletip');
+    }
+  });
+
   it('applies encoding, sample-rate, and request-rule defaults', () => {
     const defaults = getDefaultsFromConfig(
       config,
