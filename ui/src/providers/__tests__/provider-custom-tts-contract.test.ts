@@ -109,6 +109,22 @@ describe('Custom TTS config contract', () => {
     expect(keys).not.toContain('speak.voice.id');
   });
 
+  it('shows custom TTS runtime help in label toggletips', () => {
+    const params = config.tts?.parameters ?? [];
+
+    for (const key of [
+      'speak.audio.encoding',
+      'speak.audio.sample_rate',
+      CUSTOM_TTS_QUERY_PARAMS_KEY,
+      CUSTOM_TTS_REQUEST_RULES_KEY,
+      CUSTOM_TTS_RESPONSE_RULES_KEY,
+    ]) {
+      const param = params.find(item => item.key === key);
+      expect(param?.helpText).toBeTruthy();
+      expect(param?.helpTextDisplay).toBe('toggletip');
+    }
+  });
+
   it('applies encoding, sample-rate, and request-rule defaults', () => {
     const defaults = getDefaultsFromConfig(
       config,
@@ -174,6 +190,28 @@ describe('Custom TTS config contract', () => {
     ).toBeUndefined();
   });
 
+  it('accepts all backend-supported query runtime variables', () => {
+    const options = upsertMetadata(
+      buildValidOptions(),
+      CUSTOM_TTS_QUERY_PARAMS_KEY,
+      JSON.stringify({
+        message_id: { $var: 'message_id' },
+        voice_id: { $var: 'voice_id' },
+        model: { $var: 'model' },
+        language: { $var: 'language' },
+        encoding: { $var: 'encoding' },
+        sample_rate: {
+          $cast: 'number',
+          value: { $var: 'sample_rate' },
+        },
+      }),
+    );
+
+    expect(
+      validateFromConfig(config, 'tts', 'custom-tts', options),
+    ).toBeUndefined();
+  });
+
   it('allows query params to be omitted', () => {
     const options = buildValidOptions().filter(
       item => item.getKey() !== CUSTOM_TTS_QUERY_PARAMS_KEY,
@@ -205,6 +243,18 @@ describe('Custom TTS config contract', () => {
 
     const result = validateFromConfig(config, 'tts', 'custom-tts', options);
     expect(result).toContain('Unsupported custom tts variable "text"');
+  });
+
+  it('rejects request rule payload paths outside backend runtime scope', () => {
+    const options = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_TTS_REQUEST_RULES_KEY),
+      CUSTOM_TTS_REQUEST_RULES_KEY,
+      '[{"when":{"packet":"text"},"send":{"frame":"json","body":{"text":{"$path":"state.text"}}}}]',
+    );
+
+    expect(validateFromConfig(config, 'tts', 'custom-tts', options)).toBe(
+      'Custom TTS request rules only supports "$path" roots of config, packet.',
+    );
   });
 
   it('rejects invalid request rules JSON', () => {
@@ -240,6 +290,44 @@ describe('Custom TTS config contract', () => {
 
     expect(validateFromConfig(config, 'tts', 'custom-tts', options)).toBe(
       'Please provide a valid JSON response rules for custom TTS.',
+    );
+  });
+
+  it('rejects response rules outside backend websocket response contract', () => {
+    const withTextFrame = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_TTS_RESPONSE_RULES_KEY),
+      CUSTOM_TTS_RESPONSE_RULES_KEY,
+      '[{"when":{"frame":"text"},"emit":{"audio":{"$frame":"text"}}}]',
+    );
+    expect(validateFromConfig(config, 'tts', 'custom-tts', withTextFrame)).toBe(
+      'Custom TTS response rules rule 1 must define when.frame as "binary" or "json".',
+    );
+
+    const withUnsupportedEmit = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_TTS_RESPONSE_RULES_KEY),
+      CUSTOM_TTS_RESPONSE_RULES_KEY,
+      '[{"when":{"frame":"binary"},"emit":{"transcript":{"$frame":"binary"}}}]',
+    );
+    expect(
+      validateFromConfig(config, 'tts', 'custom-tts', withUnsupportedEmit),
+    ).toBe(
+      'Custom TTS response rules rule 1 cannot emit "transcript". Supported keys: audio, message_id, done, error.',
+    );
+
+    const withUnsupportedFrameExpression = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_TTS_RESPONSE_RULES_KEY),
+      CUSTOM_TTS_RESPONSE_RULES_KEY,
+      '[{"when":{"frame":"binary"},"emit":{"audio":{"$frame":"text"}}}]',
+    );
+    expect(
+      validateFromConfig(
+        config,
+        'tts',
+        'custom-tts',
+        withUnsupportedFrameExpression,
+      ),
+    ).toBe(
+      'Custom TTS response rules "$frame" expressions only support {"$frame":"binary"}.',
     );
   });
 });

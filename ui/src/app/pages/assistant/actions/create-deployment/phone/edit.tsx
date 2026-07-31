@@ -210,10 +210,8 @@ const EditAssistantCallDeployment: FC<{ assistantId: string }> = ({
       });
   }, [assistantId, token, authId, projectId]);
 
-  const getProviderCredentialIds = (provider: string) =>
-    providerCredentials
-      .filter(c => c.getProvider() === provider)
-      .map(c => c.getId());
+  const getProviderCredentials = (provider: string) =>
+    providerCredentials.filter(c => c.getProvider() === provider);
 
   const activeIndex = EDIT_TABS.findIndex(tab => tab.code === activeTab);
 
@@ -251,7 +249,7 @@ const EditAssistantCallDeployment: FC<{ assistantId: string }> = ({
     const sttError = ValidateSpeechToTextIfInvalid(
       audioInputConfig.provider,
       audioInputConfig.parameters,
-      getProviderCredentialIds(audioInputConfig.provider),
+      getProviderCredentials(audioInputConfig.provider),
     );
     if (sttError) {
       setIsDeploying(false);
@@ -268,7 +266,7 @@ const EditAssistantCallDeployment: FC<{ assistantId: string }> = ({
     const ttsError = ValidateTextToSpeechIfInvalid(
       audioOutputConfig.provider,
       audioOutputConfig.parameters,
-      getProviderCredentialIds(audioOutputConfig.provider),
+      getProviderCredentials(audioOutputConfig.provider),
     );
     if (ttsError) {
       setIsDeploying(false);

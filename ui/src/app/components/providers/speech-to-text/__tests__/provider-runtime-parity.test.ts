@@ -1,4 +1,4 @@
-import { Metadata } from '@rapidaai/react';
+import { Metadata, VaultCredential } from '@rapidaai/react';
 import {
   GetDefaultSpeechToTextIfInvalid,
   ValidateSpeechToTextIfInvalid,
@@ -8,6 +8,7 @@ import {
   loadProviderConfig,
   loadProviderData,
 } from '@/providers/config-loader';
+import { Struct } from 'google-protobuf/google/protobuf/struct_pb';
 
 jest.mock('@/app/components/providers', () => ({}));
 jest.mock('@/app/components/providers/config-renderer', () => ({
@@ -19,6 +20,18 @@ const createMetadata = (key: string, value: string): Metadata => {
   m.setKey(key);
   m.setValue(value);
   return m;
+};
+
+const createCredential = (
+  id: string,
+  provider: string,
+  apiCompatibility: string,
+): VaultCredential => {
+  const credential = new VaultCredential();
+  credential.setId(id);
+  credential.setProvider(provider);
+  credential.setValue(Struct.fromJavaScript({ apiCompatibility }));
+  return credential;
 };
 
 const cloneMetadata = (source: Metadata[]): Metadata[] =>
@@ -59,6 +72,18 @@ const getMetadataValue = (
   source: Metadata[],
   key: string,
 ): string | undefined => source.find(m => m.getKey() === key)?.getValue();
+
+const withValidCustomSttResponseRules = (source: Metadata[]): Metadata[] =>
+  withMetadataValue(
+    source,
+    'listen.response_rules',
+    JSON.stringify([
+      {
+        when: { frame: 'json', path: 'type', equals: 'final' },
+        emit: { script: { $path: 'text' }, interim: false },
+      },
+    ]),
+  );
 
 describe('Speech-to-text provider runtime standard', () => {
   const configuredSttProviders = SPEECH_TO_TEXT_PROVIDER.filter(p =>
@@ -144,6 +169,84 @@ describe('Speech-to-text provider runtime standard', () => {
       ]),
     );
     expect(sttConfig?.parameters[0].data).toBeUndefined();
+  });
+
+  it('allows custom-stt websocket credentials to keep binary audio request defaults', () => {
+    const defaults = withValidCustomSttResponseRules(
+      GetDefaultSpeechToTextIfInvalid('custom-stt', [
+        createMetadata('rapida.credential_id', 'cred-custom-stt'),
+      ]),
+    );
+    const err = ValidateSpeechToTextIfInvalid('custom-stt', defaults, [
+      createCredential('cred-custom-stt', 'custom-stt', 'websocket_v1'),
+    ]);
+
+    expect(err).toBeUndefined();
+  });
+
+  it('rejects custom-stt http credentials when audio request rules use binary frames', () => {
+    const defaults = withValidCustomSttResponseRules(
+      GetDefaultSpeechToTextIfInvalid('custom-stt', [
+        createMetadata('rapida.credential_id', 'cred-custom-stt'),
+      ]),
+    );
+    const err = ValidateSpeechToTextIfInvalid('custom-stt', defaults, [
+      createCredential('cred-custom-stt', 'custom-stt', 'http_v1'),
+    ]);
+
+    expect(err).toBe(
+      'Custom STT HTTP v1 requires the first audio request rule to use send.frame "json".',
+    );
+  });
+
+  it('uses selected credential compatibility instead of stale form metadata', () => {
+    const defaults = withMetadataValue(
+      withValidCustomSttResponseRules(
+        GetDefaultSpeechToTextIfInvalid('custom-stt', [
+          createMetadata('rapida.credential_id', 'cred-custom-stt'),
+        ]),
+      ),
+      'rapida.credential_api_compatibility',
+      'websocket_v1',
+    );
+    const err = ValidateSpeechToTextIfInvalid('custom-stt', defaults, [
+      createCredential('cred-custom-stt', 'custom-stt', 'http_v1'),
+    ]);
+
+    expect(err).toBe(
+      'Custom STT HTTP v1 requires the first audio request rule to use send.frame "json".',
+    );
+  });
+
+  it('allows custom-stt http credentials when first audio request rule is json', () => {
+    const defaults = withValidCustomSttResponseRules(
+      GetDefaultSpeechToTextIfInvalid('custom-stt', [
+        createMetadata('rapida.credential_id', 'cred-custom-stt'),
+      ]),
+    );
+    const requestRules = JSON.stringify([
+      {
+        when: { packet: 'audio' },
+        send: {
+          frame: 'json',
+          body: {
+            audio: { $path: 'packet.audio.base64' },
+            encoding: { $path: 'config.audio.encoding' },
+            sample_rate: {
+              $cast: 'number',
+              value: { $path: 'config.audio.sample_rate' },
+            },
+          },
+        },
+      },
+    ]);
+    const err = ValidateSpeechToTextIfInvalid(
+      'custom-stt',
+      withMetadataValue(defaults, 'listen.request_rules', requestRules),
+      [createCredential('cred-custom-stt', 'custom-stt', 'http_v1')],
+    );
+
+    expect(err).toBeUndefined();
   });
 
   it('rejects stale credential ids that do not belong to selected provider', () => {

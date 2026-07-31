@@ -214,10 +214,8 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
       });
   }, [assistantId, token, authId, projectId]);
 
-  const getProviderCredentialIds = (provider: string) =>
-    providerCredentials
-      .filter(c => c.getProvider() === provider)
-      .map(c => c.getId());
+  const getProviderCredentials = (provider: string) =>
+    providerCredentials.filter(c => c.getProvider() === provider);
 
   const handleTabChange = (code: string) => {
     const clickedIndex = STEPS.findIndex(s => s.code === code);
@@ -256,7 +254,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
       const err = ValidateSpeechToTextIfInvalid(
         audioInputConfig.provider,
         audioInputConfig.parameters,
-        getProviderCredentialIds(audioInputConfig.provider),
+        getProviderCredentials(audioInputConfig.provider),
       );
       if (err) {
         setErrorMessage(err);
@@ -305,7 +303,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
     const sttError = ValidateSpeechToTextIfInvalid(
       audioInputConfig.provider,
       audioInputConfig.parameters,
-      getProviderCredentialIds(audioInputConfig.provider),
+      getProviderCredentials(audioInputConfig.provider),
     );
     if (sttError) {
       setIsDeploying(false);
@@ -322,7 +320,7 @@ const ConfigureAssistantCallDeployment: FC<{ assistantId: string }> = ({
     const ttsError = ValidateTextToSpeechIfInvalid(
       audioOutputConfig.provider,
       audioOutputConfig.parameters,
-      getProviderCredentialIds(audioOutputConfig.provider),
+      getProviderCredentials(audioOutputConfig.provider),
     );
     if (ttsError) {
       setIsDeploying(false);
