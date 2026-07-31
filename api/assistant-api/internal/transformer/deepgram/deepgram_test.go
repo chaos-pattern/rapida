@@ -23,6 +23,7 @@ func TestNewDeepgramOption_ValidCredentials(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, opt)
 	assert.Equal(t, "test-api-key", opt.GetKey())
+	assert.Equal(t, deepgramDefaultEndpoint, opt.GetEndpoint())
 }
 
 func TestNewDeepgramOption_MissingKey(t *testing.T) {
@@ -38,6 +39,29 @@ func TestNewDeepgramOption_EmptyVault(t *testing.T) {
 	opt, err := NewDeepgramOption(testutil.NewTestLogger(), cred, utils.Option{})
 	assert.Error(t, err)
 	assert.Nil(t, opt)
+}
+
+func TestNewDeepgramOption_WithEndpoint(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{
+		"key":      "test-api-key",
+		"endpoint": "api.eu.deepgram.com",
+	})
+	opt, err := NewDeepgramOption(testutil.NewTestLogger(), cred, utils.Option{})
+	assert.NoError(t, err)
+	assert.NotNil(t, opt)
+	assert.Equal(t, "api.eu.deepgram.com", opt.GetEndpoint())
+	assert.Equal(t, "api.eu.deepgram.com", opt.ClientOptions().Host)
+}
+
+func TestNewDeepgramOption_NormalizesEndpointURL(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{
+		"key":      "test-api-key",
+		"endpoint": "wss://api.au.deepgram.com/v1/speak",
+	})
+	opt, err := NewDeepgramOption(testutil.NewTestLogger(), cred, utils.Option{})
+	assert.NoError(t, err)
+	assert.NotNil(t, opt)
+	assert.Equal(t, "api.au.deepgram.com", opt.GetEndpoint())
 }
 
 // --- Encoding Tests ---
@@ -160,4 +184,17 @@ func TestGetTextToSpeechConnectionString_WithVoice(t *testing.T) {
 	assert.Contains(t, connStr, "encoding=linear16")
 	assert.Contains(t, connStr, "sample_rate=16000")
 	assert.Contains(t, connStr, "model=aura-asteria-en")
+}
+
+func TestGetTextToSpeechConnectionString_WithEndpoint(t *testing.T) {
+	cred := newVaultCredential(map[string]interface{}{
+		"key":      "k",
+		"endpoint": "api.eu.deepgram.com",
+	})
+	opt, _ := NewDeepgramOption(testutil.NewTestLogger(), cred, utils.Option{})
+	connStr := opt.GetTextToSpeechConnectionString()
+
+	assert.Contains(t, connStr, "wss://api.eu.deepgram.com/v1/speak?")
+	assert.Contains(t, connStr, "encoding=linear16")
+	assert.Contains(t, connStr, "sample_rate=16000")
 }

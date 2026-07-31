@@ -19,33 +19,58 @@ import (
 	interfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/interfaces"
 )
 
+const deepgramDefaultEndpoint = "api.deepgram.com"
+
 func (dg *deepgramOption) GetEncoding() string {
 	return "linear16"
 }
 
 type deepgramOption struct {
-	key     string
-	logger  commons.Logger
-	mdlOpts utils.Option
+	key      string
+	endpoint string
+	logger   commons.Logger
+	mdlOpts  utils.Option
 }
 
 func NewDeepgramOption(
 	logger commons.Logger,
 	vaultCredential *protos.VaultCredential,
 	opts utils.Option) (*deepgramOption, error) {
-	cx, ok := vaultCredential.GetValue().AsMap()["key"]
+	raw := vaultCredential.GetValue().AsMap()
+	cx, ok := raw["key"]
 	if !ok {
 		return nil, fmt.Errorf("illegal vault config")
 	}
+	key, ok := cx.(string)
+	if !ok || strings.TrimSpace(key) == "" {
+		return nil, fmt.Errorf("illegal vault config")
+	}
+	endpoint, err := normalizeDeepgramEndpoint(raw["endpoint"])
+	if err != nil {
+		return nil, err
+	}
 	return &deepgramOption{
-		key:     cx.(string),
-		logger:  logger,
-		mdlOpts: opts,
+		key:      key,
+		endpoint: endpoint,
+		logger:   logger,
+		mdlOpts:  opts,
 	}, nil
 }
 
 func (dgOpt *deepgramOption) GetKey() string {
 	return dgOpt.key
+}
+
+func (dgOpt *deepgramOption) GetEndpoint() string {
+	return dgOpt.endpoint
+}
+
+func (dgOpt *deepgramOption) ClientOptions() *interfaces.ClientOptions {
+	return &interfaces.ClientOptions{
+		APIKey:          dgOpt.GetKey(),
+		Host:            dgOpt.GetEndpoint(),
+		EnableKeepAlive: true,
+	}
 }
 
 func (dgOpt *deepgramOption) SpeechToTextOptions() *interfaces.LiveTranscriptionOptions {
@@ -126,5 +151,36 @@ func (dgOpt *deepgramOption) GetTextToSpeechConnectionString() string {
 	if model, err := dgOpt.mdlOpts.GetString(internal_options.SpeakOptionVoiceID); err == nil {
 		params.Add("model", model)
 	}
-	return fmt.Sprintf("wss://api.deepgram.com/v1/speak?%s", params.Encode())
+	return fmt.Sprintf("wss://%s/v1/speak?%s", dgOpt.GetEndpoint(), params.Encode())
+}
+
+func normalizeDeepgramEndpoint(raw interface{}) (string, error) {
+	if raw == nil {
+		return deepgramDefaultEndpoint, nil
+	}
+	endpoint, ok := raw.(string)
+	if !ok {
+		return "", fmt.Errorf("illegal vault config endpoint must be string")
+	}
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return deepgramDefaultEndpoint, nil
+	}
+
+	if parsed, err := url.Parse(endpoint); err == nil && parsed.Host != "" {
+		endpoint = parsed.Host
+	} else if host, _, found := strings.Cut(endpoint, "/"); found {
+		endpoint = host
+	}
+	if host, _, found := strings.Cut(endpoint, "?"); found {
+		endpoint = host
+	}
+	if host, _, found := strings.Cut(endpoint, "#"); found {
+		endpoint = host
+	}
+	endpoint = strings.TrimSpace(strings.TrimSuffix(endpoint, "/"))
+	if endpoint == "" || strings.ContainsAny(endpoint, " \t\r\n") {
+		return "", fmt.Errorf("illegal vault config endpoint")
+	}
+	return endpoint, nil
 }
