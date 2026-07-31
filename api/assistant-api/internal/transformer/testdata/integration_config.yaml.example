@@ -126,6 +126,15 @@ tts:
       speak.voice: "Joanna"
       speak.engine: "neural"
 
+  smallest:
+    enabled: false
+    credential:
+      key: "YOUR_SMALLEST_API_KEY"
+    options:
+      speak.voice.id: "magnus"
+      speak.model: "lightning_v3.1"
+      speak.language: "en"
+
 stt:
   deepgram:
     enabled: false
@@ -211,3 +220,10 @@ stt:
       region: "us-east-1"
     options:
       listen.language: "en-US"
+
+  smallest:
+    enabled: false
+    credential:
+      key: "YOUR_SMALLEST_API_KEY"
+    options:
+      listen.language: "en"

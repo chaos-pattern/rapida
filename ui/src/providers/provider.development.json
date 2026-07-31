@@ -647,6 +647,25 @@
         "website": "https://www.sarvam.ai/"
     },
     {
+        "code": "smallest",
+        "name": "Smallest AI",
+        "description": "Smallest AI builds ultra-low-latency, cost-efficient speech models — Lightning text-to-speech and Pulse speech-to-text — purpose-built for real-time voice agents.",
+        "image": "/images/providers/smallest-ai.png",
+        "featureList": [
+            "stt",
+            "tts",
+            "external"
+        ],
+        "configurations": [
+            {
+                "name": "key",
+                "type": "string",
+                "label": "API Key"
+            }
+        ],
+        "website": "https://smallest.ai"
+    },
+    {
         "code": "resembleai",
         "name": "Resemble AI",
         "image": "https://cdn-01.rapida.ai/providers/resemble.png",

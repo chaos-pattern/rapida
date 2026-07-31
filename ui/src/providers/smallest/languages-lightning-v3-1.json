@@ -1,0 +1,54 @@
+[
+    {
+        "language_id": "auto",
+        "name": "Auto-detect"
+    },
+    {
+        "language_id": "en",
+        "name": "English"
+    },
+    {
+        "language_id": "hi",
+        "name": "Hindi"
+    },
+    {
+        "language_id": "mr",
+        "name": "Marathi"
+    },
+    {
+        "language_id": "kn",
+        "name": "Kannada"
+    },
+    {
+        "language_id": "ta",
+        "name": "Tamil"
+    },
+    {
+        "language_id": "bn",
+        "name": "Bengali"
+    },
+    {
+        "language_id": "gu",
+        "name": "Gujarati"
+    },
+    {
+        "language_id": "te",
+        "name": "Telugu"
+    },
+    {
+        "language_id": "ml",
+        "name": "Malayalam"
+    },
+    {
+        "language_id": "pa",
+        "name": "Punjabi"
+    },
+    {
+        "language_id": "or",
+        "name": "Odia"
+    },
+    {
+        "language_id": "es",
+        "name": "Spanish"
+    }
+]

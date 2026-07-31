@@ -26,6 +26,7 @@ import (
 	internal_transformer_revai "github.com/rapidaai/api/assistant-api/internal/transformer/revai"
 	internal_transformer_rime "github.com/rapidaai/api/assistant-api/internal/transformer/rime"
 	internal_transformer_sarvam "github.com/rapidaai/api/assistant-api/internal/transformer/sarvam"
+	internal_transformer_smallest "github.com/rapidaai/api/assistant-api/internal/transformer/smallest"
 	internal_transformer_speechmatics "github.com/rapidaai/api/assistant-api/internal/transformer/speechmatics"
 	internal_type "github.com/rapidaai/api/assistant-api/internal/type"
 	"github.com/rapidaai/pkg/commons"
@@ -54,6 +55,7 @@ const (
 	NVIDIA                AudioTransformer = "nvidia"
 	GROQ                  AudioTransformer = "groq"
 	AWS                   AudioTransformer = "aws"
+	SMALLEST              AudioTransformer = "smallest"
 )
 
 func (at AudioTransformer) String() string {
@@ -99,6 +101,8 @@ func GetTextToSpeechTransformer(ctx context.Context,
 		return internal_transformer_nvidia.NewNvidiaTextToSpeech(ctx, logger, credential, onPacket, opts)
 	case AWS:
 		return internal_transformer_aws.NewAWSTextToSpeech(ctx, logger, credential, onPacket, opts)
+	case SMALLEST:
+		return internal_transformer_smallest.NewSmallestTextToSpeech(ctx, logger, credential, onPacket, opts)
 	default:
 		return nil, fmt.Errorf("illegal text to speech idenitfier")
 	}
@@ -136,6 +140,8 @@ func GetSpeechToTextTransformer(ctx context.Context,
 		return internal_transformer_aws.NewAWSSpeechToText(ctx, logger, credential, onPacket, opts)
 	case CUSTOM_STT:
 		return internal_transformer_custom.NewSpeechToText(ctx, logger, credential, onPacket, opts)
+	case SMALLEST:
+		return internal_transformer_smallest.NewSmallestSpeechToText(ctx, logger, credential, onPacket, opts)
 	default:
 		return nil, fmt.Errorf("illegal speech to text idenitfier")
 	}

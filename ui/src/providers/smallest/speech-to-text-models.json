@@ -1,0 +1,20 @@
+[
+  {
+    "model_id": "pulse",
+    "name": "Pulse",
+    "config": {
+      "parameters": [
+        {
+          "key": "listen.language",
+          "label": "Language",
+          "type": "dropdown",
+          "required": false,
+          "default": "en",
+          "data": "languages.json",
+          "valueField": "language_id",
+          "errorMessage": "Please provide a valid Smallest AI language for speech to text."
+        }
+      ]
+    }
+  }
+]

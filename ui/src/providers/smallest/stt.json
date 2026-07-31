@@ -1,0 +1,15 @@
+{
+  "preservePrefix": "microphone.",
+  "parameters": [
+    {
+      "key": "listen.model",
+      "label": "Model",
+      "type": "dropdown",
+      "required": true,
+      "default": "pulse",
+      "data": "speech-to-text-models.json",
+      "valueField": "model_id",
+      "errorMessage": "Please provide a valid Smallest AI model for speech to text."
+    }
+  ]
+}

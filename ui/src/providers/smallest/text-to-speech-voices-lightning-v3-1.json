@@ -1,0 +1,38 @@
+[
+  {
+    "voice_id": "magnus",
+    "name": "Magnus",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  },
+  {
+    "voice_id": "devansh",
+    "name": "Devansh",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  },
+  {
+    "voice_id": "kartik",
+    "name": "Kartik",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  },
+  {
+    "voice_id": "maithili",
+    "name": "Maithili",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  },
+  {
+    "voice_id": "liam",
+    "name": "Liam",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  },
+  {
+    "voice_id": "avery",
+    "name": "Avery",
+    "model_id": "lightning_v3.1",
+    "language_id": ""
+  }
+]

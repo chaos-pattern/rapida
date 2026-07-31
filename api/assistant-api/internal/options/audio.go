@@ -29,6 +29,15 @@ const (
 )
 
 const (
+	ListenOptionWordTimestamps     = "listen.word_timestamps"
+	ListenOptionSentenceTimestamps = "listen.sentence_timestamps"
+	ListenOptionDiarize            = "listen.diarize"
+	ListenOptionRedactPII          = "listen.redact_pii"
+	ListenOptionRedactPCI          = "listen.redact_pci"
+	ListenOptionNumerals           = "listen.numerals"
+)
+
+const (
 	SpeakOptionVoiceID         = "speak.voice.id"
 	SpeakOptionLanguage        = "speak.language"
 	SpeakOptionModel           = "speak.model"

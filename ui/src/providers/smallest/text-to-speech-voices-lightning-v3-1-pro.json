@@ -1,0 +1,38 @@
+[
+  {
+    "voice_id": "meher",
+    "name": "Meher",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  },
+  {
+    "voice_id": "kaitlyn",
+    "name": "Kaitlyn",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  },
+  {
+    "voice_id": "blake",
+    "name": "Blake",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  },
+  {
+    "voice_id": "sophie",
+    "name": "Sophie",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  },
+  {
+    "voice_id": "sam",
+    "name": "Sam",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  },
+  {
+    "voice_id": "aviraj",
+    "name": "Aviraj",
+    "model_id": "lightning_v3.1_pro",
+    "language_id": ""
+  }
+]
