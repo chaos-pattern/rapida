@@ -548,6 +548,26 @@
                 "name": "key",
                 "type": "string",
                 "label": "API Key"
+            },
+            {
+                "name": "endpoint",
+                "type": "select",
+                "label": "Endpoint",
+                "required": false,
+                "choices": [
+                    {
+                        "label": "North America (Default)",
+                        "value": "api.deepgram.com"
+                    },
+                    {
+                        "label": "Europe",
+                        "value": "api.eu.deepgram.com"
+                    },
+                    {
+                        "label": "Australia",
+                        "value": "api.au.deepgram.com"
+                    }
+                ]
             }
         ],
         "website": "https://deepgram.com"

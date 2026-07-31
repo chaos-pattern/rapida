@@ -16,7 +16,6 @@ import (
 	"sync"
 	"time"
 
-	interfaces "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/interfaces/v1"
 	client "github.com/deepgram/deepgram-go-sdk/v3/pkg/client/listen"
 	"github.com/rapidaai/api/assistant-api/internal/observability"
 	deepgram_internal "github.com/rapidaai/api/assistant-api/internal/transformer/deepgram/internal"
@@ -76,7 +75,7 @@ func (dg *deepgramSTT) Initialize() error {
 	dgClient, err := client.NewWSUsingCallback(
 		dg.ctx,
 		dg.GetKey(),
-		&interfaces.ClientOptions{APIKey: dg.GetKey(), EnableKeepAlive: true},
+		dg.ClientOptions(),
 		dg.SpeechToTextOptions(), deepgram_internal.NewDeepgramSttCallback(dg.logger, dg.onPacket, dg.deepgramOption.mdlOpts, dg.getAndClearStartTime, dg.getContextID, dg.Name()))
 	if err != nil {
 		dg.onPacket(
