@@ -477,7 +477,7 @@ describe('ConfigRenderer', () => {
       ],
     };
 
-    it('renders slider with label and help text', () => {
+    it('renders slider help as a toggletip by default', () => {
       const params = [createMetadata('listen.threshold', '0.5')];
       render(
         <ConfigRenderer
@@ -490,6 +490,9 @@ describe('ConfigRenderer', () => {
       );
 
       expect(screen.getByText('Threshold')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Threshold information' }),
+      ).toBeInTheDocument();
       expect(
         screen.getByText('Set the confidence threshold.'),
       ).toBeInTheDocument();
@@ -677,7 +680,7 @@ describe('ConfigRenderer', () => {
       ],
     };
 
-    it('renders textarea with label, placeholder, and help text', () => {
+    it('renders textarea help as a toggletip by default', () => {
       render(
         <ConfigRenderer
           provider="test"
@@ -690,6 +693,9 @@ describe('ConfigRenderer', () => {
 
       expect(screen.getByText('Keywords')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Enter keywords')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Keywords information' }),
+      ).toBeInTheDocument();
       expect(
         screen.getByText('Separate keywords with spaces.'),
       ).toBeInTheDocument();
@@ -777,7 +783,7 @@ describe('ConfigRenderer', () => {
       expect(screen.getByPlaceholderText('Enter as JSON')).toBeInTheDocument();
     });
 
-    it('renders toggletip help on the field label when requested', () => {
+    it('renders toggletip help on the field label by default', () => {
       render(
         <ConfigRenderer
           provider="test"
@@ -789,7 +795,6 @@ describe('ConfigRenderer', () => {
                 label: 'Response Format',
                 type: 'json',
                 helpText: 'Runtime variables are validated before save.',
-                helpTextDisplay: 'toggletip',
               },
             ],
           }}

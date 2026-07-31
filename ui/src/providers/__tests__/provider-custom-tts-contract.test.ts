@@ -109,7 +109,7 @@ describe('Custom TTS config contract', () => {
     expect(keys).not.toContain('speak.voice.id');
   });
 
-  it('shows custom TTS runtime help in label toggletips', () => {
+  it('defines runtime help for custom TTS fields', () => {
     const params = config.tts?.parameters ?? [];
 
     for (const key of [
@@ -121,7 +121,6 @@ describe('Custom TTS config contract', () => {
     ]) {
       const param = params.find(item => item.key === key);
       expect(param?.helpText).toBeTruthy();
-      expect(param?.helpTextDisplay).toBe('toggletip');
     }
   });
 

@@ -11,6 +11,7 @@ import {
   validateFromConfig,
 } from '@/providers/config-defaults';
 import { ConfigRenderer } from '@/app/components/providers/config-renderer';
+import { HelpLabel } from '@/app/components/providers/help-label';
 import {
   preserveStorageConfigurationOptions,
   STORAGE_FILES_OPTION_KEY,
@@ -121,7 +122,12 @@ export const CloudStorageProvider: React.FC<ProviderComponentProps> = ({
     <Stack gap={6}>
       <Dropdown
         id="storage-provider"
-        titleText="Storage provider"
+        titleText={
+          <HelpLabel
+            label="Storage provider"
+            helpText="Select a storage provider for assistant recordings."
+          />
+        }
         label="Select storage provider"
         items={STORAGE_PROVIDER}
         selectedItem={selectedProvider}
@@ -136,7 +142,6 @@ export const CloudStorageProvider: React.FC<ProviderComponentProps> = ({
             ),
           );
         }}
-        helperText="Select a storage provider for assistant recordings."
       />
       {provider && (
         <CredentialDropdown

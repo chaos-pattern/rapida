@@ -6,8 +6,12 @@ import { TELEPHONY_PROVIDER } from '@/providers';
 import { Dropdown } from '@carbon/react';
 import { Stack } from '@/app/components/carbon/form';
 import { loadProviderConfig } from '@/providers/config-loader';
-import { getDefaultsFromConfig, validateFromConfig } from '@/providers/config-defaults';
+import {
+  getDefaultsFromConfig,
+  validateFromConfig,
+} from '@/providers/config-defaults';
 import { ConfigRenderer } from '@/app/components/providers/config-renderer';
+import { HelpLabel } from '@/app/components/providers/help-label';
 
 const VONAGE_PHONE_REGEX = /^\+?[1-9]\d{1,14}$/;
 
@@ -104,7 +108,12 @@ export const TelephonyProvider: React.FC<ProviderComponentProps> = props => {
     <Stack gap={6}>
       <Dropdown
         id="telephony-provider"
-        titleText="Telephony provider"
+        titleText={
+          <HelpLabel
+            label="Telephony provider"
+            helpText="Select a telephony provider for inbound and outbound phone calls."
+          />
+        }
         label="Select telephony provider"
         items={TELEPHONY_PROVIDER}
         selectedItem={selectedProvider}
@@ -116,7 +125,6 @@ export const TelephonyProvider: React.FC<ProviderComponentProps> = props => {
             GetDefaultTelephonyConfigIfInvalid(selectedItem.code, []),
           );
         }}
-        helperText="Select a telephony provider for inbound and outbound phone calls."
       />
       {provider && (
         <CredentialDropdown

@@ -1,11 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { Metadata } from '@rapidaai/react';
-import {
-  SettingsAdjust,
-  Add,
-  TrashCan,
-  Information,
-} from '@carbon/icons-react';
+import { SettingsAdjust, Add, TrashCan } from '@carbon/icons-react';
 import { PrimaryButton, SecondaryButton } from '@/app/components/carbon/button';
 import { cn } from '@/utils';
 import { TextInput, TextArea } from '@/app/components/carbon/form';
@@ -21,9 +16,6 @@ import {
   ModalHeader,
   ModalBody,
   ModalFooter,
-  Toggletip,
-  ToggletipButton,
-  ToggletipContent,
 } from '@carbon/react';
 import {
   CategoryConfig,
@@ -36,30 +28,14 @@ import {
 import { getDefaultsFromConfig } from '@/providers/config-defaults';
 import { JsonEditor } from '@/app/components/json-editor';
 import { WebsocketDslEditor } from '@/app/components/providers/websocket-dsl-editor';
+import { HelpLabel } from '@/app/components/providers/help-label';
 
-const shouldRenderInlineHelp = (param: ParameterConfig): boolean =>
-  Boolean(param.helpText) && param.helpTextDisplay !== 'toggletip';
-
-const getInlineHelpText = (param: ParameterConfig): string | undefined =>
-  shouldRenderInlineHelp(param) ? param.helpText : undefined;
-
-const FieldLabel: React.FC<{ param: ParameterConfig }> = ({ param }) => {
-  if (!param.helpText || param.helpTextDisplay !== 'toggletip') {
-    return <>{param.label}</>;
-  }
-
-  return (
-    <span className="inline-flex items-center gap-1">
-      <span>{param.label}</span>
-      <Toggletip align="right">
-        <ToggletipButton label={`${param.label} information`}>
-          <Information size={14} />
-        </ToggletipButton>
-        <ToggletipContent>{param.helpText}</ToggletipContent>
-      </Toggletip>
-    </span>
+const getFieldLabel = (param: ParameterConfig): React.ReactNode =>
+  param.helpText ? (
+    <HelpLabel label={param.label} helpText={param.helpText} />
+  ) : (
+    param.label
   );
-};
 
 export const ConfigRenderer: React.FC<{
   provider: string;
@@ -245,7 +221,7 @@ export const ConfigRenderer: React.FC<{
           <div className={cn(colSpanClass)} key={param.key}>
             <Slider
               id={`slider-${param.key}`}
-              labelText={<FieldLabel param={param} />}
+              labelText={getFieldLabel(param)}
               min={param.min ?? 0}
               max={param.max ?? 1}
               step={param.step ?? 0.1}
@@ -254,9 +230,6 @@ export const ConfigRenderer: React.FC<{
                 updateParameter(param.key, v.toString())
               }
             />
-            {shouldRenderInlineHelp(param) && (
-              <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-            )}
           </div>
         );
 
@@ -265,14 +238,13 @@ export const ConfigRenderer: React.FC<{
           <div className={cn(colSpanClass)} key={param.key}>
             <TextInput
               id={`num-${param.key}`}
-              labelText={<FieldLabel param={param} />}
+              labelText={getFieldLabel(param)}
               type="number"
               min={param.min}
               max={param.max}
               step={param.step}
               value={getParamValue(param.key)}
               placeholder={param.placeholder}
-              helperText={getInlineHelpText(param)}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
@@ -283,10 +255,9 @@ export const ConfigRenderer: React.FC<{
           <div className={cn(colSpanClass)} key={param.key}>
             <TextInput
               id={`input-${param.key}`}
-              labelText={<FieldLabel param={param} />}
+              labelText={getFieldLabel(param)}
               value={getParamValue(param.key)}
               placeholder={param.placeholder}
-              helperText={getInlineHelpText(param)}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
@@ -297,12 +268,11 @@ export const ConfigRenderer: React.FC<{
           <div className={cn(colSpanClass)} key={param.key}>
             <TextArea
               id={`textarea-${param.key}`}
-              labelText={<FieldLabel param={param} />}
+              labelText={getFieldLabel(param)}
               required={param.required !== false}
               value={getParamValue(param.key)}
               rows={param.rows ?? 2}
               placeholder={param.placeholder}
-              helperText={getInlineHelpText(param)}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
@@ -313,9 +283,8 @@ export const ConfigRenderer: React.FC<{
           <div className={cn(colSpanClass)} key={param.key}>
             <CarbonSelect
               id={`select-${param.key}`}
-              labelText={<FieldLabel param={param} />}
+              labelText={getFieldLabel(param)}
               value={getParamValue(param.key)}
-              helperText={getInlineHelpText(param)}
               onChange={e => updateParameter(param.key, e.target.value)}
             >
               <SelectItem
@@ -336,7 +305,7 @@ export const ConfigRenderer: React.FC<{
               htmlFor={`json-${param.key}`}
               className="cds--label text-gray-900 dark:text-gray-100"
             >
-              <FieldLabel param={param} />
+              {getFieldLabel(param)}
             </label>
             <div className="mt-1 w-full min-w-0 overflow-hidden bg-[var(--cds-field)] border-b-2 border-b-[var(--cds-border-strong)] p-2">
               {param.editor === 'websocket_dsl_json' ? (
@@ -361,9 +330,6 @@ export const ConfigRenderer: React.FC<{
                 />
               )}
             </div>
-            {shouldRenderInlineHelp(param) && (
-              <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-            )}
           </div>
         );
 
@@ -529,7 +495,7 @@ const DropdownField: React.FC<{
       <div className={cn(colSpanClass)} key={param.key}>
         <ComboBox
           id={`combo-${param.key}`}
-          titleText={<FieldLabel param={param} />}
+          titleText={getFieldLabel(param)}
           items={data}
           selectedItem={selectedItem}
           itemToString={(item: any) => item?.name || ''}
@@ -547,7 +513,6 @@ const DropdownField: React.FC<{
           }}
           onBlur={(e: any) => commitCustomValue(e?.target?.value || '')}
           allowCustomValue={param.customValue}
-          helperText={getInlineHelpText(param)}
         />
       </div>
     );
@@ -557,7 +522,7 @@ const DropdownField: React.FC<{
     <div className={cn(colSpanClass)} key={param.key}>
       <CarbonDropdown
         id={`dropdown-${param.key}`}
-        titleText={<FieldLabel param={param} />}
+        titleText={getFieldLabel(param)}
         label={`Select ${param.label.toLowerCase()}`}
         items={data}
         selectedItem={selectedItem}
@@ -567,7 +532,6 @@ const DropdownField: React.FC<{
             onChange(item[valueField], item);
           }
         }}
-        helperText={getInlineHelpText(param)}
       />
     </div>
   );
@@ -626,7 +590,7 @@ const KeyValueField: React.FC<{
   return (
     <div className={cn(colSpanClass, 'flex flex-col gap-4')} key={param.key}>
       <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">
-        <FieldLabel param={param} /> ({entries.length})
+        {getFieldLabel(param)} ({entries.length})
       </p>
       <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--form-item]:!m-0">
         <thead>
@@ -690,9 +654,6 @@ const KeyValueField: React.FC<{
       >
         Add {param.label.toLowerCase()}
       </TertiaryButton>
-      {shouldRenderInlineHelp(param) && (
-        <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-      )}
     </div>
   );
 };

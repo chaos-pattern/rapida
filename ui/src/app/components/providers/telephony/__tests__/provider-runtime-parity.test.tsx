@@ -12,12 +12,22 @@ import { TELEPHONY_PROVIDER } from '@/providers';
 jest.mock('@/app/components/carbon/form', () => ({
   Stack: ({ children }: any) => <div>{children}</div>,
   TextInput: ({ id, value, onChange, placeholder }: any) => (
-    <input id={id} value={value ?? ''} onChange={onChange} placeholder={placeholder} />
+    <input
+      id={id}
+      value={value ?? ''}
+      onChange={onChange}
+      placeholder={placeholder}
+    />
   ),
+}));
+
+jest.mock('@/app/components/providers/help-label', () => ({
+  HelpLabel: ({ label }: any) => <>{label}</>,
 }));
 
 jest.mock('@carbon/react', () => {
   const React = require('react');
+
   return {
     Dropdown: ({ id, label, items = [], selectedItem, onChange }: any) => (
       <select
@@ -25,7 +35,9 @@ jest.mock('@carbon/react', () => {
         aria-label={label || 'dropdown'}
         value={selectedItem?.code || ''}
         onChange={e => {
-          const selected = items.find((item: any) => item.code === e.target.value);
+          const selected = items.find(
+            (item: any) => item.code === e.target.value,
+          );
           onChange?.({ selectedItem: selected || null });
         }}
       >
@@ -38,14 +50,12 @@ jest.mock('@carbon/react', () => {
       </select>
     ),
     Select: ({ id, labelText, value, onChange, children }: any) => (
-      <select
-        id={id}
-        aria-label={labelText || 'select'}
-        value={value ?? ''}
-        onChange={onChange}
-      >
-        {children}
-      </select>
+      <div>
+        {labelText ? <label htmlFor={id}>{labelText}</label> : null}
+        <select id={id} value={value ?? ''} onChange={onChange}>
+          {children}
+        </select>
+      </div>
     ),
     SelectItem: ({ value, text }: any) => <option value={value}>{text}</option>,
   };
@@ -79,10 +89,22 @@ describe('Telephony provider runtime parity', () => {
   });
 
   it.each([
-    ['twilio', [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')]],
-    ['exotel', [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')]],
-    ['vonage', [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')]],
-    ['sip', [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')]],
+    [
+      'twilio',
+      [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')],
+    ],
+    [
+      'exotel',
+      [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')],
+    ],
+    [
+      'vonage',
+      [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')],
+    ],
+    [
+      'sip',
+      [meta('rapida.credential_id', 'cred-1'), meta('phone', '+15551234567')],
+    ],
     [
       'asterisk',
       [
@@ -143,8 +165,9 @@ describe('Telephony provider runtime parity', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Pick credential' }));
     expect(onChangeParameter).toHaveBeenCalled();
-    const params =
-      onChangeParameter.mock.calls[onChangeParameter.mock.calls.length - 1][0] as Metadata[];
+    const params = onChangeParameter.mock.calls[
+      onChangeParameter.mock.calls.length - 1
+    ][0] as Metadata[];
     expect(
       params.find(p => p.getKey() === 'rapida.credential_id')?.getValue(),
     ).toBe('cred-1');
@@ -239,7 +262,9 @@ describe('Telephony provider runtime parity', () => {
     expect(
       screen.queryByPlaceholderText('Enter exotel applet app_id'),
     ).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('e.g., +15551234567')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('e.g., +15551234567'),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText('Accept inbound calls')).toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText('Select telephony provider'), {
@@ -248,6 +273,8 @@ describe('Telephony provider runtime parity', () => {
 
     expect(screen.getByPlaceholderText('e.g., internal')).toBeInTheDocument();
     expect(screen.getByPlaceholderText('e.g., 1002')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('e.g., +15559876543')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText('e.g., +15559876543'),
+    ).toBeInTheDocument();
   });
 });

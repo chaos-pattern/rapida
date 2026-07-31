@@ -9,6 +9,7 @@ import { Metadata, VaultCredential } from '@rapidaai/react';
 import { useCallback } from 'react';
 import { Dropdown } from '@carbon/react';
 import { Stack } from '@/app/components/carbon/form';
+import { HelpLabel } from '@/app/components/providers/help-label';
 
 export const TelemetryProvider: React.FC<ProviderComponentProps> = props => {
   const { parameters, provider, onChangeParameter, onChangeProvider } = props;
@@ -40,7 +41,12 @@ export const TelemetryProvider: React.FC<ProviderComponentProps> = props => {
     <Stack gap={6}>
       <Dropdown
         id="telemetry-provider"
-        titleText="Telemetry provider"
+        titleText={
+          <HelpLabel
+            label="Telemetry provider"
+            helpText="Select a telemetry provider for assistant observability."
+          />
+        }
         label="Select telemetry provider"
         items={TELEMETRY_PROVIDER}
         selectedItem={selectedProvider}
@@ -52,7 +58,6 @@ export const TelemetryProvider: React.FC<ProviderComponentProps> = props => {
             GetDefaultTelemetryIfInvalid(selectedItem.code, parameters || []),
           );
         }}
-        helperText="Select a telemetry provider for assistant observability."
       />
       {provider && (
         <CredentialDropdown
