@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	internal_assistant_entity "github.com/rapidaai/api/assistant-api/internal/entity/assistants"
@@ -292,9 +291,6 @@ func (e *azureStorageExecutor) Execute(ctx context.Context, input internal_type.
 				artifactFileName += ".txt"
 			}
 		}
-		artifactExtension := filepath.Ext(artifactFileName)
-		artifactBaseName := strings.TrimSuffix(artifactFileName, artifactExtension)
-		artifactFileName = fmt.Sprintf("%s-%s%s", artifactBaseName, input.ContextID, artifactExtension)
 		destinationObjectKey := path.Join(fmt.Sprintf("%d", input.ConversationID), artifactFileName)
 		if validator.NotBlank(configuredPrefix) {
 			destinationObjectKey = path.Join(configuredPrefix, destinationObjectKey)

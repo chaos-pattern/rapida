@@ -2,8 +2,8 @@ import { FormLabel } from '@/app/components/form-label';
 import { FieldSet } from '@/app/components/form/fieldset';
 import { Slider } from '@/app/components/form/slider';
 import { Input } from '@/app/components/form/input';
-import { InputHelper } from '@/app/components/input-helper';
 import { memo } from 'react';
+import { HelpToggletip } from '@/app/components/providers/help-label';
 
 interface SliderFieldProps {
   label: string;
@@ -30,7 +30,10 @@ export const SliderField = memo<SliderFieldProps>(
     onChange,
   }) => (
     <FieldSet className="col-span-1">
-      <FormLabel>{label}</FormLabel>
+      <div className="inline-flex items-center gap-1">
+        <FormLabel>{label}</FormLabel>
+        <HelpToggletip label={label} helpText={hint} />
+      </div>
       <div className="flex space-x-2 justify-center items-center">
         <Slider
           min={min}
@@ -47,7 +50,6 @@ export const SliderField = memo<SliderFieldProps>(
           onChange={e => onChange(e.target.value)}
         />
       </div>
-      <InputHelper>{hint}</InputHelper>
     </FieldSet>
   ),
 );

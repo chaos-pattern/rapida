@@ -140,10 +140,8 @@ export function useDeploymentSectionEdit(
     [token, authId, projectId],
   );
 
-  const getProviderCredentialIds = (provider: string) =>
-    providerCredentials
-      .filter(c => c.getProvider() === provider)
-      .map(c => c.getId());
+  const getProviderCredentials = (provider: string) =>
+    providerCredentials.filter(c => c.getProvider() === provider);
 
   const loadConfig = useCallback(
     (type: DeploymentType) => {
@@ -284,7 +282,7 @@ export function useDeploymentSectionEdit(
       const err = ValidateSpeechToTextIfInvalid(
         audioInputConfig.provider,
         audioInputConfig.parameters,
-        getProviderCredentialIds(audioInputConfig.provider),
+        getProviderCredentials(audioInputConfig.provider),
       );
       if (err) {
         setIsSaving(false);
@@ -302,7 +300,7 @@ export function useDeploymentSectionEdit(
       const err = ValidateTextToSpeechIfInvalid(
         audioOutputConfig.provider,
         audioOutputConfig.parameters,
-        getProviderCredentialIds(audioOutputConfig.provider),
+        getProviderCredentials(audioOutputConfig.provider),
       );
       if (err) {
         setIsSaving(false);

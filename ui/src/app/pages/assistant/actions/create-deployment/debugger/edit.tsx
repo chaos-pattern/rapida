@@ -193,10 +193,8 @@ const EditAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
       });
   }, [assistantId, token, authId, projectId]);
 
-  const getProviderCredentialIds = (provider: string) =>
-    providerCredentials
-      .filter(c => c.getProvider() === provider)
-      .map(c => c.getId());
+  const getProviderCredentials = (provider: string) =>
+    providerCredentials.filter(c => c.getProvider() === provider);
 
   const activeIndex = useMemo(
     () =>
@@ -222,7 +220,7 @@ const EditAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
       const inputError = ValidateSpeechToTextIfInvalid(
         audioInputConfig.provider,
         audioInputConfig.parameters,
-        getProviderCredentialIds(audioInputConfig.provider),
+        getProviderCredentials(audioInputConfig.provider),
       );
       if (inputError) {
         setIsDeploying(false);
@@ -242,7 +240,7 @@ const EditAssistantDebuggerDeployment: FC<{ assistantId: string }> = ({
       const outputError = ValidateTextToSpeechIfInvalid(
         audioOutputConfig.provider,
         audioOutputConfig.parameters,
-        getProviderCredentialIds(audioOutputConfig.provider),
+        getProviderCredentials(audioOutputConfig.provider),
       );
       if (outputError) {
         setIsDeploying(false);

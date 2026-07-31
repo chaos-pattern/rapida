@@ -40,6 +40,7 @@ export interface ParameterConfig {
   default?: string;
   errorMessage?: string;
   helpText?: string;
+  helpTextDisplay?: 'toggletip';
   colSpan?: 1 | 2;
   advanced?: boolean;
   showWhen?: ParameterShowWhen;

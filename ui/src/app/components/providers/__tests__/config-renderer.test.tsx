@@ -99,7 +99,9 @@ jest.mock('@/app/components/carbon/form', () => {
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         React.createElement('input', {
           id,
           value: value ?? '',
@@ -109,11 +111,20 @@ jest.mock('@/app/components/carbon/form', () => {
         }),
         helperText ? React.createElement('p', null, helperText) : null,
       ),
-    TextArea: ({ id, labelText, value, onChange, placeholder, helperText }: any) =>
+    TextArea: ({
+      id,
+      labelText,
+      value,
+      onChange,
+      placeholder,
+      helperText,
+    }: any) =>
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         React.createElement('textarea', {
           id,
           value: value ?? '',
@@ -130,6 +141,7 @@ jest.mock('@carbon/icons-react', () => ({
   Close: () => null,
   Add: () => null,
   TrashCan: () => null,
+  Information: () => null,
 }));
 
 jest.mock('@carbon/react', () => {
@@ -138,7 +150,14 @@ jest.mock('@carbon/react', () => {
     item?.id ?? item?.code ?? item?.value ?? item?.name ?? '';
 
   return {
-    Dropdown: ({ id, titleText, label, items = [], selectedItem, onChange }: any) =>
+    Dropdown: ({
+      id,
+      titleText,
+      label,
+      items = [],
+      selectedItem,
+      onChange,
+    }: any) =>
       React.createElement(
         'div',
         null,
@@ -150,7 +169,9 @@ jest.mock('@carbon/react', () => {
             role: 'combobox',
             value: getValue(selectedItem),
             onChange: (e: any) => {
-              const item = items.find((i: any) => String(getValue(i)) === e.target.value);
+              const item = items.find(
+                (i: any) => String(getValue(i)) === e.target.value,
+              );
               onChange?.({ selectedItem: item || null });
             },
           },
@@ -191,7 +212,9 @@ jest.mock('@carbon/react', () => {
             role: 'combobox',
             value: getValue(selectedItem),
             onChange: (e: any) => {
-              const item = items.find((i: any) => String(getValue(i)) === e.target.value);
+              const item = items.find(
+                (i: any) => String(getValue(i)) === e.target.value,
+              );
               onChange?.({ selectedItem: item || null });
             },
           },
@@ -209,7 +232,9 @@ jest.mock('@carbon/react', () => {
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         React.createElement('input', {
           id,
           type: 'range',
@@ -222,7 +247,9 @@ jest.mock('@carbon/react', () => {
       React.createElement(
         'div',
         null,
-        labelText ? React.createElement('label', { htmlFor: id }, labelText) : null,
+        labelText
+          ? React.createElement('label', { htmlFor: id }, labelText)
+          : null,
         React.createElement('select', { id, value, onChange }, children),
       ),
     SelectItem: ({ value, text }: any) =>
@@ -239,9 +266,27 @@ jest.mock('@carbon/react', () => {
     ComposedModal: ({ children, open }: any) =>
       open ? React.createElement('div', null, children) : null,
     ModalHeader: ({ title }: any) => React.createElement('div', null, title),
-    ModalBody: ({ children }: any) => React.createElement('div', null, children),
-    ModalFooter: ({ children }: any) => React.createElement('div', null, children),
-    Button: ({ children, hasIconOnly: _, renderIcon: _r, iconDescription: _d, ...props }: any) => React.createElement('button', props, children),
+    ModalBody: ({ children }: any) =>
+      React.createElement('div', null, children),
+    ModalFooter: ({ children }: any) =>
+      React.createElement('div', null, children),
+    Button: ({
+      children,
+      hasIconOnly: _,
+      renderIcon: _r,
+      iconDescription: _d,
+      ...props
+    }: any) => React.createElement('button', props, children),
+    Toggletip: ({ children }: any) =>
+      React.createElement('span', null, children),
+    ToggletipButton: ({ children, label }: any) =>
+      React.createElement(
+        'button',
+        { type: 'button', 'aria-label': label },
+        children,
+      ),
+    ToggletipContent: ({ children }: any) =>
+      React.createElement('span', null, children),
   };
 });
 
@@ -340,7 +385,9 @@ jest.mock('@/providers/config-loader', () => {
       if (!modelParam) return config.parameters || [];
 
       const selectedId =
-        currentMetadata.find((m: any) => m.getKey() === modelParam.key)?.getValue() ||
+        currentMetadata
+          .find((m: any) => m.getKey() === modelParam.key)
+          ?.getValue() ||
         modelParam.default ||
         '';
       const models = mockedLoadProviderData(provider, modelParam.data);
@@ -430,7 +477,7 @@ describe('ConfigRenderer', () => {
       ],
     };
 
-    it('renders slider with label and help text', () => {
+    it('renders slider help as a toggletip by default', () => {
       const params = [createMetadata('listen.threshold', '0.5')];
       render(
         <ConfigRenderer
@@ -443,7 +490,12 @@ describe('ConfigRenderer', () => {
       );
 
       expect(screen.getByText('Threshold')).toBeInTheDocument();
-      expect(screen.getByText('Set the confidence threshold.')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Threshold information' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Set the confidence threshold.'),
+      ).toBeInTheDocument();
     });
 
     it('renders slider control with current value', () => {
@@ -496,7 +548,9 @@ describe('ConfigRenderer', () => {
       expect(mockOnChange).toHaveBeenCalledTimes(1);
 
       const updatedParams = mockOnChange.mock.calls[0][0] as Metadata[];
-      const threshold = updatedParams.find(m => m.getKey() === 'listen.threshold');
+      const threshold = updatedParams.find(
+        m => m.getKey() === 'listen.threshold',
+      );
       expect(threshold?.getValue()).toBe('0.7');
     });
 
@@ -585,7 +639,9 @@ describe('ConfigRenderer', () => {
       );
 
       expect(screen.getByText('Endpoint URL')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('Enter endpoint URL')).toBeInTheDocument();
+      expect(
+        screen.getByPlaceholderText('Enter endpoint URL'),
+      ).toBeInTheDocument();
     });
 
     it('calls onParameterChange when input changes', () => {
@@ -624,7 +680,7 @@ describe('ConfigRenderer', () => {
       ],
     };
 
-    it('renders textarea with label, placeholder, and help text', () => {
+    it('renders textarea help as a toggletip by default', () => {
       render(
         <ConfigRenderer
           provider="test"
@@ -637,7 +693,12 @@ describe('ConfigRenderer', () => {
 
       expect(screen.getByText('Keywords')).toBeInTheDocument();
       expect(screen.getByPlaceholderText('Enter keywords')).toBeInTheDocument();
-      expect(screen.getByText('Separate keywords with spaces.')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Keywords information' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Separate keywords with spaces.'),
+      ).toBeInTheDocument();
     });
   });
 
@@ -688,7 +749,9 @@ describe('ConfigRenderer', () => {
       expect(mockOnChange).toHaveBeenCalledTimes(1);
 
       const updatedParams = mockOnChange.mock.calls[0][0] as Metadata[];
-      const effort = updatedParams.find(m => m.getKey() === 'model.reasoning_effort');
+      const effort = updatedParams.find(
+        m => m.getKey() === 'model.reasoning_effort',
+      );
       expect(effort?.getValue()).toBe('high');
     });
   });
@@ -720,6 +783,34 @@ describe('ConfigRenderer', () => {
       expect(screen.getByPlaceholderText('Enter as JSON')).toBeInTheDocument();
     });
 
+    it('renders toggletip help on the field label by default', () => {
+      render(
+        <ConfigRenderer
+          provider="test"
+          category="text"
+          config={{
+            parameters: [
+              {
+                key: 'model.response_format',
+                label: 'Response Format',
+                type: 'json',
+                helpText: 'Runtime variables are validated before save.',
+              },
+            ],
+          }}
+          parameters={[]}
+          onParameterChange={mockOnChange}
+        />,
+      );
+
+      expect(
+        screen.getByRole('button', { name: 'Response Format information' }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Runtime variables are validated before save.'),
+      ).toBeInTheDocument();
+    });
+
     it('updates json field as raw string without parsing', () => {
       render(
         <ConfigRenderer
@@ -738,7 +829,9 @@ describe('ConfigRenderer', () => {
       const updated = mockOnChange.mock.calls[
         mockOnChange.mock.calls.length - 1
       ][0] as Metadata[];
-      const responseFormat = updated.find(m => m.getKey() === 'model.response_format');
+      const responseFormat = updated.find(
+        m => m.getKey() === 'model.response_format',
+      );
       expect(responseFormat?.getValue()).toBe('{');
     });
 
@@ -782,7 +875,9 @@ describe('ConfigRenderer', () => {
         mockOnChange.mock.calls.length - 1
       ][0] as Metadata[];
       const thinking = updated.find(m => m.getKey() === 'model.thinking');
-      const responseFormat = updated.find(m => m.getKey() === 'model.response_format');
+      const responseFormat = updated.find(
+        m => m.getKey() === 'model.response_format',
+      );
       expect(thinking?.getValue()).toBe('{"budget_tokens":250}');
       expect(responseFormat?.getValue()).toBe('{"type":"json_object"}');
     });
@@ -992,8 +1087,12 @@ describe('ConfigRenderer', () => {
       fireEvent.change(dropdown, { target: { value: 'model-b' } });
 
       expect(mockOnChange).toHaveBeenCalled();
-      const lastCall = mockOnChange.mock.calls[mockOnChange.mock.calls.length - 1][0] as Metadata[];
-      const temperature = lastCall.find(m => m.getKey() === 'model.temperature');
+      const lastCall = mockOnChange.mock.calls[
+        mockOnChange.mock.calls.length - 1
+      ][0] as Metadata[];
+      const temperature = lastCall.find(
+        m => m.getKey() === 'model.temperature',
+      );
       const modelId = lastCall.find(m => m.getKey() === 'model.id');
       expect(modelId?.getValue()).toBe('model-b');
       expect(temperature?.getValue()).toBe('0.9');
@@ -1028,7 +1127,9 @@ describe('ConfigRenderer', () => {
       expect(lastCall.find(m => m.getKey() === 'model.top_p')?.getValue()).toBe(
         '0.42',
       );
-      expect(lastCall.find(m => m.getKey() === 'model.temperature')).toBeUndefined();
+      expect(
+        lastCall.find(m => m.getKey() === 'model.temperature'),
+      ).toBeUndefined();
     });
 
     it('supports model switch followed by parameter edit', () => {

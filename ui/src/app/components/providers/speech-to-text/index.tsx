@@ -30,7 +30,8 @@ export const SpeechToTextProvider: React.FC<ProviderComponentProps> = props => {
     onChangeParameter(updatedParams);
   };
 
-  const selectedProvider = SPEECH_TO_TEXT_PROVIDER.find(x => x.code === provider) || null;
+  const selectedProvider =
+    SPEECH_TO_TEXT_PROVIDER.find(x => x.code === provider) || null;
 
   return (
     <Stack gap={6}>

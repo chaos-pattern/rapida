@@ -17,7 +17,8 @@
           "value": "MuLaw8"
         }
       ],
-      "helpText": "Available to websocket DSL bindings as \"encoding\".",
+      "helpText": "Runtime value available as query $var \"encoding\" and request $path \"config.audio.encoding\".",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please select a valid audio encoding for custom TTS."
     },
     {
@@ -56,7 +57,8 @@
           "value": "48000"
         }
       ],
-      "helpText": "Available to websocket DSL bindings as \"sample_rate\".",
+      "helpText": "Runtime value available as query $var \"sample_rate\" and request $path \"config.audio.sample_rate\".",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please select a valid sample rate for custom TTS."
     },
     {
@@ -68,7 +70,8 @@
       "editor": "websocket_dsl_json",
       "editorMode": "query_params",
       "placeholder": "Type { for DSL snippets",
-      "helpText": "Optional flat JSON object for dynamic websocket query params. Use {\"$var\":\"...\"} and optional {\"$cast\":\"number\",\"value\":...} bindings.",
+      "helpText": "Optional flat JSON object for websocket query params. Supported $var values: message_id, voice_id, model, language, encoding, sample_rate. Values must resolve to strings, numbers, or booleans. $cast supports string, number, and boolean.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid query parameters for custom TTS."
     },
     {
@@ -81,7 +84,8 @@
       "editor": "websocket_dsl_json",
       "editorMode": "request_rules",
       "placeholder": "Type [ for rule snippets",
-      "helpText": "Required ordered websocket outbound rules aligned to normalized TTS packets. Each rule defines when.packet plus send.frame/send.body using \"$path\" and optional \"$cast\" expressions over config.* and packet.*.",
+      "helpText": "Required ordered websocket outbound rules. Must include at least one text packet rule. when.packet supports text, done, interrupt. send.frame supports binary, json, text. Supported $path values include config.voice.id, config.model, config.language, config.audio.encoding, config.audio.sample_rate, packet.kind, packet.message_id, and packet.text. $cast supports string, number, and boolean.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid request rules for custom TTS."
     },
     {
@@ -93,7 +97,8 @@
       "editor": "websocket_dsl_json",
       "editorMode": "response_rules",
       "placeholder": "Type [ for rule snippets",
-      "helpText": "Required JSON rule list for websocket responses. Each rule defines a binary or JSON frame match and emit expressions for audio, message_id, done, and error.",
+      "helpText": "Required websocket response rules. when.frame supports binary and json. Emit keys: audio, message_id, done, error. Use $path for JSON payload values, $frame \"binary\" for binary audio, optional $decode \"base64\" for encoded audio, and optional $cast for primitive conversion.",
+      "helpTextDisplay": "toggletip",
       "errorMessage": "Please provide valid response rules for custom TTS."
     }
   ]

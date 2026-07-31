@@ -28,6 +28,19 @@ import {
 import { getDefaultsFromConfig } from '@/providers/config-defaults';
 import { JsonEditor } from '@/app/components/json-editor';
 import { WebsocketDslEditor } from '@/app/components/providers/websocket-dsl-editor';
+import { HelpToggletip } from '@/app/components/providers/help-label';
+import { FormLabel } from '@/app/components/form-label';
+
+const FieldLabelRow: React.FC<{
+  param: ParameterConfig;
+  htmlFor?: string;
+  className?: string;
+}> = ({ param, htmlFor, className }) => (
+  <span className={cn('inline-flex items-center gap-1', className)}>
+    <FormLabel htmlFor={htmlFor}>{param.label}</FormLabel>
+    <HelpToggletip label={param.label} helpText={param.helpText} />
+  </span>
+);
 
 export const ConfigRenderer: React.FC<{
   provider: string;
@@ -211,9 +224,10 @@ export const ConfigRenderer: React.FC<{
           : sliderParsedValue;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
+            <FieldLabelRow param={param} htmlFor={`slider-${param.key}`} />
             <Slider
               id={`slider-${param.key}`}
-              labelText={param.label}
+              labelText=""
               min={param.min ?? 0}
               max={param.max ?? 1}
               step={param.step ?? 0.1}
@@ -222,68 +236,69 @@ export const ConfigRenderer: React.FC<{
                 updateParameter(param.key, v.toString())
               }
             />
-            {param.helpText && (
-              <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-            )}
           </div>
         );
 
       case 'number':
+        const numberInputId = `num-${param.key}`;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
+            <FieldLabelRow param={param} htmlFor={numberInputId} />
             <TextInput
-              id={`num-${param.key}`}
-              labelText={param.label}
+              id={numberInputId}
+              labelText=""
               type="number"
               min={param.min}
               max={param.max}
               step={param.step}
               value={getParamValue(param.key)}
               placeholder={param.placeholder}
-              helperText={param.helpText}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
         );
 
       case 'input':
+        const inputId = `input-${param.key}`;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
+            <FieldLabelRow param={param} htmlFor={inputId} />
             <TextInput
-              id={`input-${param.key}`}
-              labelText={param.label}
+              id={inputId}
+              labelText=""
               value={getParamValue(param.key)}
               placeholder={param.placeholder}
-              helperText={param.helpText}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
         );
 
       case 'textarea':
+        const textareaId = `textarea-${param.key}`;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
+            <FieldLabelRow param={param} htmlFor={textareaId} />
             <TextArea
-              id={`textarea-${param.key}`}
-              labelText={param.label}
+              id={textareaId}
+              labelText=""
               required={param.required !== false}
               value={getParamValue(param.key)}
               rows={param.rows ?? 2}
               placeholder={param.placeholder}
-              helperText={param.helpText}
               onChange={e => updateParameter(param.key, e.target.value)}
             />
           </div>
         );
 
       case 'select':
+        const selectId = `select-${param.key}`;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
+            <FieldLabelRow param={param} htmlFor={selectId} />
             <CarbonSelect
-              id={`select-${param.key}`}
-              labelText={param.label}
+              id={selectId}
+              labelText=""
               value={getParamValue(param.key)}
-              helperText={param.helpText}
               onChange={e => updateParameter(param.key, e.target.value)}
             >
               <SelectItem
@@ -298,14 +313,10 @@ export const ConfigRenderer: React.FC<{
         );
 
       case 'json':
+        const jsonId = `json-${param.key}`;
         return (
           <div className={cn(colSpanClass)} key={param.key}>
-            <label
-              htmlFor={`json-${param.key}`}
-              className="cds--label text-gray-900 dark:text-gray-100"
-            >
-              {param.label}
-            </label>
+            <FieldLabelRow param={param} htmlFor={jsonId} />
             <div className="mt-1 w-full min-w-0 overflow-hidden bg-[var(--cds-field)] border-b-2 border-b-[var(--cds-border-strong)] p-2">
               {param.editor === 'websocket_dsl_json' ? (
                 <WebsocketDslEditor
@@ -329,9 +340,6 @@ export const ConfigRenderer: React.FC<{
                 />
               )}
             </div>
-            {param.helpText && (
-              <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-            )}
           </div>
         );
 
@@ -495,9 +503,10 @@ const DropdownField: React.FC<{
   if (param.customValue || param.searchable) {
     return (
       <div className={cn(colSpanClass)} key={param.key}>
+        <FieldLabelRow param={param} />
         <ComboBox
           id={`combo-${param.key}`}
-          titleText={param.label}
+          titleText=""
           items={data}
           selectedItem={selectedItem}
           itemToString={(item: any) => item?.name || ''}
@@ -515,7 +524,6 @@ const DropdownField: React.FC<{
           }}
           onBlur={(e: any) => commitCustomValue(e?.target?.value || '')}
           allowCustomValue={param.customValue}
-          helperText={param.helpText}
         />
       </div>
     );
@@ -523,9 +531,10 @@ const DropdownField: React.FC<{
 
   return (
     <div className={cn(colSpanClass)} key={param.key}>
+      <FieldLabelRow param={param} />
       <CarbonDropdown
         id={`dropdown-${param.key}`}
-        titleText={param.label}
+        titleText=""
         label={`Select ${param.label.toLowerCase()}`}
         items={data}
         selectedItem={selectedItem}
@@ -535,7 +544,6 @@ const DropdownField: React.FC<{
             onChange(item[valueField], item);
           }
         }}
-        helperText={param.helpText}
       />
     </div>
   );
@@ -593,9 +601,12 @@ const KeyValueField: React.FC<{
 
   return (
     <div className={cn(colSpanClass, 'flex flex-col gap-4')} key={param.key}>
-      <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">
-        {param.label} ({entries.length})
-      </p>
+      <div className="inline-flex items-center gap-1">
+        <p className="text-[10px] font-semibold tracking-[0.12em] uppercase text-gray-500 dark:text-gray-400">
+          {param.label} ({entries.length})
+        </p>
+        <HelpToggletip label={param.label} helpText={param.helpText} />
+      </div>
       <table className="w-full border-collapse border border-gray-200 dark:border-gray-700 text-sm [&_input]:!border-none [&_.cds--text-input]:!border-none [&_.cds--text-input]:!outline-none [&_.cds--form-item]:!m-0">
         <thead>
           <tr className="bg-gray-50 dark:bg-gray-900">
@@ -658,9 +669,6 @@ const KeyValueField: React.FC<{
       >
         Add {param.label.toLowerCase()}
       </TertiaryButton>
-      {param.helpText && (
-        <p className="text-xs text-gray-500 mt-1">{param.helpText}</p>
-      )}
     </div>
   );
 };

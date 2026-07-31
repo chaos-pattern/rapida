@@ -11,6 +11,8 @@ import {
   validateFromConfig,
 } from '@/providers/config-defaults';
 import { ConfigRenderer } from '@/app/components/providers/config-renderer';
+import { HelpToggletip } from '@/app/components/providers/help-label';
+import { FormLabel } from '@/app/components/form-label';
 import {
   preserveStorageConfigurationOptions,
   STORAGE_FILES_OPTION_KEY,
@@ -119,9 +121,16 @@ export const CloudStorageProvider: React.FC<ProviderComponentProps> = ({
 
   return (
     <Stack gap={6}>
+      <div className="inline-flex items-center gap-1">
+        <FormLabel htmlFor="storage-provider">Storage provider</FormLabel>
+        <HelpToggletip
+          label="Storage provider"
+          helpText="Select a storage provider for assistant recordings."
+        />
+      </div>
       <Dropdown
         id="storage-provider"
-        titleText="Storage provider"
+        titleText=""
         label="Select storage provider"
         items={STORAGE_PROVIDER}
         selectedItem={selectedProvider}
@@ -136,7 +145,6 @@ export const CloudStorageProvider: React.FC<ProviderComponentProps> = ({
             ),
           );
         }}
-        helperText="Select a storage provider for assistant recordings."
       />
       {provider && (
         <CredentialDropdown

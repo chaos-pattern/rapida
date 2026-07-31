@@ -107,6 +107,22 @@ describe('Custom STT config contract', () => {
     expect(keys).not.toContain('listen.language');
   });
 
+  it('shows custom STT runtime help in label toggletips', () => {
+    const params = config.stt?.parameters ?? [];
+
+    for (const key of [
+      'listen.audio.encoding',
+      'listen.audio.sample_rate',
+      CUSTOM_STT_QUERY_PARAMS_KEY,
+      CUSTOM_STT_REQUEST_RULES_KEY,
+      CUSTOM_STT_RESPONSE_RULES_KEY,
+    ]) {
+      const param = params.find(item => item.key === key);
+      expect(param?.helpText).toBeTruthy();
+      expect(param?.helpTextDisplay).toBe('toggletip');
+    }
+  });
+
   it('applies encoding, sample-rate, and request-rule defaults', () => {
     const defaults = getDefaultsFromConfig(
       config,
@@ -194,6 +210,18 @@ describe('Custom STT config contract', () => {
     );
   });
 
+  it('rejects unsupported query parameter runtime variables', () => {
+    const options = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_STT_QUERY_PARAMS_KEY),
+      CUSTOM_STT_QUERY_PARAMS_KEY,
+      '{"chunk":{"$var":"audio"}}',
+    );
+
+    expect(validateFromConfig(config, 'stt', 'custom-stt', options)).toContain(
+      'Unsupported custom stt variable "audio" in query parameters.',
+    );
+  });
+
   it('rejects invalid request rules JSON', () => {
     const options = upsertMetadata(
       removeMetadata(buildValidOptions(), CUSTOM_STT_REQUEST_RULES_KEY),
@@ -215,6 +243,18 @@ describe('Custom STT config contract', () => {
 
     expect(validateFromConfig(config, 'stt', 'custom-stt', options)).toBe(
       'Custom STT request rules must contain at least one rule with when.packet "audio".',
+    );
+  });
+
+  it('rejects request rule payload paths outside backend runtime scope', () => {
+    const options = upsertMetadata(
+      removeMetadata(buildValidOptions(), CUSTOM_STT_REQUEST_RULES_KEY),
+      CUSTOM_STT_REQUEST_RULES_KEY,
+      '[{"when":{"packet":"audio"},"send":{"frame":"json","body":{"audio":{"$path":"state.audio.base64"}}}}]',
+    );
+
+    expect(validateFromConfig(config, 'stt', 'custom-stt', options)).toBe(
+      'Custom STT request rules only supports "$path" roots of config, packet.',
     );
   });
 

@@ -60,6 +60,7 @@ jest.mock('@carbon/icons-react', () => ({
   SettingsAdjust: () => null,
   Add: () => null,
   TrashCan: () => null,
+  Information: () => null,
 }));
 
 jest.mock('@carbon/react', () => {
@@ -144,6 +145,13 @@ jest.mock('@carbon/react', () => {
       <button {...props}>{children}</button>
     ),
     ButtonSet: ({ children }: any) => <div>{children}</div>,
+    Toggletip: ({ children }: any) => <span>{children}</span>,
+    ToggletipButton: ({ children, label }: any) => (
+      <button type="button" aria-label={label}>
+        {children}
+      </button>
+    ),
+    ToggletipContent: ({ children }: any) => <span>{children}</span>,
     ComposedModal: ({ children, open }: any) =>
       open ? <div>{children}</div> : null,
     ModalHeader: ({ title }: any) => <div>{title}</div>,
@@ -192,10 +200,18 @@ describe('custom-stt speech-to-text flow', () => {
     expect(screen.queryByText('Model')).not.toBeInTheDocument();
     expect(screen.queryByText('Language')).not.toBeInTheDocument();
     expect(
-      (screen.getByLabelText('Audio Encoding') as HTMLSelectElement).value,
+      (
+        document.getElementById(
+          'select-listen.audio.encoding',
+        ) as HTMLSelectElement
+      ).value,
     ).toBe('LINEAR16');
     expect(
-      (screen.getByLabelText('Sample Rate') as HTMLSelectElement).value,
+      (
+        document.getElementById(
+          'select-listen.audio.sample_rate',
+        ) as HTMLSelectElement
+      ).value,
     ).toBe('16000');
     expect(screen.getByText('Query Parameters')).toBeInTheDocument();
     expect(screen.getByText('Request Rules')).toBeInTheDocument();
