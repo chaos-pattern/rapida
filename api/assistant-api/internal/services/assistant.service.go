@@ -12,6 +12,7 @@ import (
 	"github.com/rapidaai/pkg/types"
 	type_enums "github.com/rapidaai/pkg/types/enums"
 	workflow_api "github.com/rapidaai/protos"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type GetAssistantOption struct {
@@ -61,6 +62,14 @@ type AssistantService interface {
 		criterias []*workflow_api.Criteria,
 		paginate *workflow_api.Paginate,
 		opts *GetAssistantOption) (int64, []*internal_assistant_entity.Assistant, error)
+
+	GetAssistantDashboard(
+		ctx context.Context,
+		auth types.SimplePrinciple,
+		assistantId uint64,
+		fromDate *timestamppb.Timestamp,
+		toDate *timestamppb.Timestamp,
+	) (*workflow_api.AssistantDashboard, error)
 
 	GetAllAssistantProviderModel(
 		ctx context.Context,

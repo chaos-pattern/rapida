@@ -111,6 +111,20 @@ func (assistant *webAssistantGRPCApi) GetAllMessage(c context.Context, iRequest 
 		_assistant)
 }
 
+func (assistant *webAssistantGRPCApi) GetAssistantDashboard(c context.Context, iRequest *protos.GetAssistantDashboardRequest) (*protos.GetAssistantDashboardResponse, error) {
+	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
+	if !isAuthenticated {
+		assistant.logger.Errorf("unauthenticated request for get assistant dashboard")
+		return exceptions.AuthenticationError[protos.GetAssistantDashboardResponse]()
+	}
+
+	assistantDashboardResponse, err := assistant.assistantClient.GetAssistantDashboard(c, iAuth, iRequest)
+	if err != nil {
+		return exceptions.InternalServerError[protos.GetAssistantDashboardResponse](err, "Unable to get the assistant dashboard")
+	}
+	return assistantDashboardResponse, nil
+}
+
 func (assistant *webAssistantGRPCApi) GetAssistant(c context.Context, iRequest *protos.GetAssistantRequest) (*protos.GetAssistantResponse, error) {
 	iAuth, isAuthenticated := types.GetSimplePrincipleGRPC(c)
 	if !isAuthenticated {

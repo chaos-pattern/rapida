@@ -62,6 +62,7 @@ const (
 	MetricEOSConfidence               = "eos_confidence"
 	MetricDenoiseInitLatencyMs        = "denoise_init_ms"
 	MetricLLMInitLatencyMs            = "llm_init_ms"
+	MetricLLMLatencyMs                = "llm_latency_ms"
 	MetricStorageInitLatencyMs        = "storage_init_ms"
 	MetricAnalysisInitLatencyMs       = "analysis_init_ms"
 	MetricAuthenticationInitLatencyMs = "authentication_init_ms"
