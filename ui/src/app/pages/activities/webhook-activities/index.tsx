@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { DateFilter } from '@/app/components/carbon/date-filter';
 import { useCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
 import { useRapidaStore } from '@/hooks';
 import {
   formatNanoToReadableMilli,
-  toDateString,
   toHumanReadableDateTime,
 } from '@/utils/date';
 import { HttpStatusSpanIndicator } from '@/app/components/indicators/http-status';
@@ -27,7 +25,6 @@ import {
   TableCell,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Loading,
   Tag,
   Link,
@@ -38,11 +35,13 @@ import { UrlTableCell } from '@/app/components/carbon/url-table-cell';
 import { Renew, View, EventSchedule, Launch } from '@carbon/icons-react';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { ScrollableTableSection } from '@/app/components/sections/table-section';
+import { RequestLogQuerySearch } from './request-query-search';
 
 export function ListingPage() {
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [userId, token, projectId] = useCredential();
   const [currentActivityId, setCurrentActivityId] = useState('');
+  const [querySearchValue, setQuerySearchValue] = useState('');
   const [showLogModal, setShowLogModal] = useState(false);
   const { showDialog, ConfirmDialogComponent } = useConfirmDialog({
     title: 'Retry request?',
@@ -52,7 +51,7 @@ export function ListingPage() {
 
   const {
     getActivities,
-    addCriterias,
+    setCriterias,
     webhookLogs,
     onChangeActivities,
     columns,
@@ -64,13 +63,6 @@ export function ListingPage() {
     visibleColumn,
     setPageSize,
   } = useWebhookLogPage();
-
-  const onDateSelect = (to: Date, from: Date) => {
-    addCriterias([
-      { k: 'created_date', v: toDateString(to), logic: '<=' },
-      { k: 'created_date', v: toDateString(from), logic: '>=' },
-    ]);
-  };
 
   useEffect(() => {
     showLoader();
@@ -144,10 +136,10 @@ export function ListingPage() {
 
         <TableToolbar>
           <TableToolbarContent>
-            <TableToolbarSearch placeholder="Search request logs" />
-            <DateFilter
-              onApply={(from, to) => onDateSelect(to, from)}
-              onReset={() => addCriterias([])}
+            <RequestLogQuerySearch
+              value={querySearchValue}
+              onChange={setQuerySearchValue}
+              onApply={setCriterias}
             />
             <IconOnlyButton
               kind="ghost"

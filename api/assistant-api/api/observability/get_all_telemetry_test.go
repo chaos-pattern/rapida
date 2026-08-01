@@ -11,6 +11,10 @@ func telemetryCriteria(key string, value string) *protos.Criteria {
 	return &protos.Criteria{Key: key, Value: value}
 }
 
+func telemetryCriteriaWithLogic(key string, value string, logic string) *protos.Criteria {
+	return &protos.Criteria{Key: key, Value: value, Logic: logic}
+}
+
 func TestTelemetryExactStringFilterUsesKeywordFallback(t *testing.T) {
 	got := telemetryExactStringFilter("context.traceId", "trace-abc-123")
 	want := map[string]interface{}{
@@ -103,16 +107,16 @@ func TestTelemetryQueryPartsIgnoresEmptyCriteria(t *testing.T) {
 	}
 }
 
-func TestTelemetryQueryPartsSupportsQueryStyleCriteriaKeys(t *testing.T) {
+func TestTelemetryQueryPartsSupportsCanonicalCriteriaKeys(t *testing.T) {
 	parts := newTelemetryQueryParts(1, 2)
 
 	parts.applyCriteria([]*protos.Criteria{
 		telemetryCriteria("scope", "message"),
-		telemetryCriteria("message_id", "message-1"),
-		telemetryCriteria("message_role", "user"),
-		telemetryCriteria("conversation_id", "conversation-1"),
-		telemetryCriteria("assistant_id", "assistant-1"),
-		telemetryCriteria("trace_id", "trace-1"),
+		telemetryCriteria("messageId", "message-1"),
+		telemetryCriteria("messageRole", "user"),
+		telemetryCriteria("assistantConversationId", "conversation-1"),
+		telemetryCriteria("assistantId", "assistant-1"),
+		telemetryCriteria("traceId", "trace-1"),
 	})
 
 	wantFilters := []interface{}{
@@ -128,5 +132,23 @@ func TestTelemetryQueryPartsSupportsQueryStyleCriteriaKeys(t *testing.T) {
 
 	if !reflect.DeepEqual(parts.filter, wantFilters) {
 		t.Fatalf("filters = %#v, want %#v", parts.filter, wantFilters)
+	}
+}
+
+func TestTelemetryQueryPartsSupportsTimestampLogic(t *testing.T) {
+	parts := newTelemetryQueryParts(1, 2)
+
+	parts.applyCriteria([]*protos.Criteria{
+		telemetryCriteriaWithLogic("timestamp", "2026-06-04T03:10:00Z", ">="),
+		telemetryCriteriaWithLogic("timestamp", "2026-06-04T03:20:00Z", "<="),
+	})
+
+	wantRange := map[string]interface{}{
+		"gte": "2026-06-04T03:10:00Z",
+		"lte": "2026-06-04T03:20:00Z",
+	}
+
+	if !reflect.DeepEqual(parts.timeRange, wantRange) {
+		t.Fatalf("time range = %#v, want %#v", parts.timeRange, wantRange)
 	}
 }

@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { DateFilter } from '@/app/components/carbon/date-filter';
 import { useCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
 import { useRapidaStore } from '@/hooks';
 import {
   formatNanoToReadableMilli,
-  toDateString,
   toHumanReadableDateTime,
 } from '@/utils/date';
 import { PageTitleWithCount } from '@/app/components/blocks/page-title-with-count';
@@ -26,23 +24,24 @@ import {
   TableCell,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Loading,
   Link,
 } from '@carbon/react';
 import { Renew, View, Launch, ToolKit } from '@carbon/icons-react';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { ScrollableTableSection } from '@/app/components/sections/table-section';
+import { ToolLogQuerySearch } from './tool-query-search';
 
 export function ListingPage() {
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [userId, token, projectId] = useCredential();
   const [currentActivityId, setCurrentActivityId] = useState('');
+  const [querySearchValue, setQuerySearchValue] = useState('');
   const [showLogModal, setShowLogModal] = useState(false);
 
   const {
     getActivities,
-    addCriterias,
+    setCriterias,
     activities,
     columns,
     page,
@@ -52,15 +51,7 @@ export function ListingPage() {
     pageSize,
     visibleColumn,
     setPageSize,
-    setColumns,
   } = useToolActivityLogPage();
-
-  const onDateSelect = (to: Date, from: Date) => {
-    addCriterias([
-      { k: 'created_date', v: toDateString(to), logic: '<=' },
-      { k: 'created_date', v: toDateString(from), logic: '>=' },
-    ]);
-  };
 
   useEffect(() => {
     showLoader();
@@ -76,7 +67,7 @@ export function ListingPage() {
         hideLoader();
         toast.error(err);
       },
-      logs => {
+      _logs => {
         hideLoader();
       },
     );
@@ -104,10 +95,10 @@ export function ListingPage() {
 
         <TableToolbar>
           <TableToolbarContent>
-            <TableToolbarSearch placeholder="Search tool logs" />
-            <DateFilter
-              onApply={(from, to) => onDateSelect(to, from)}
-              onReset={() => addCriterias([])}
+            <ToolLogQuerySearch
+              value={querySearchValue}
+              onChange={setQuerySearchValue}
+              onApply={setCriterias}
             />
             <IconOnlyButton
               kind="ghost"
@@ -126,90 +117,92 @@ export function ListingPage() {
         ) : activities.length > 0 ? (
           <ScrollableTableSection>
             <Table className="min-w-max">
-            <TableHead>
-              <TableRow>
-                {visibleColumns.map(col => (
-                  <TableHeader key={col.key}>{col.name}</TableHeader>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activities.map((at, idx) => (
-                <TableRow key={idx}>
-                  {visibleColumn('assistant_id') && (
-                    <TableCell className="text-sm">
-                      <Link
-                        href={`/deployment/assistant/${at.getAssistantid()}`}
-                        className="!text-sm !inline-flex !items-center !gap-1"
-                      >
-                        <span>{at.getAssistantid()}</span>
-                        <Launch size={12} />
-                      </Link>
-                    </TableCell>
-                  )}
-                  {visibleColumn('assistant_conversation_id') && (
-                    <TableCell className="text-sm">
-                      <Link
-                        href={`/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`}
-                        className="!text-sm !inline-flex !items-center !gap-1"
-                      >
-                        <span>{at.getAssistantconversationid()}</span>
-                        <Launch size={12} />
-                      </Link>
-                    </TableCell>
-                  )}
-                  {visibleColumn('assistant_tool_name') && (
-                    <TableCell className="text-sm">{at.getAssistanttoolname()}</TableCell>
-                  )}
-                  {visibleColumn('tool_call_id') && (
-                    <TableCell className="text-[13px]">
-                      <span className="font-mono">{at.getToolcallid()}</span>
-                    </TableCell>
-                  )}
-                  {visibleColumn('action') && (
-                    <TableCell className="text-sm">
-                      <div className="flex items-center gap-0">
-                        <IconOnlyButton
-                          kind="ghost"
-                          size="md"
-                          renderIcon={View}
-                          iconDescription="View detail"
-                          onClick={() => {
-                            setCurrentActivityId(at.getId());
-                            setShowLogModal(true);
-                          }}
-                        />
-                        <IconOnlyButton
-                          kind="ghost"
-                          size="md"
-                          renderIcon={Launch}
-                          iconDescription="View conversation"
-                          onClick={() => {
-                            window.location.href = `/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`;
-                          }}
-                        />
-                      </div>
-                    </TableCell>
-                  )}
-                  {visibleColumn('status') && (
-                    <TableCell className="text-sm">
-                      <CarbonStatusIndicator state={at.getStatus()} />
-                    </TableCell>
-                  )}
-                  {visibleColumn('time_taken') && (
-                    <TableCell className="font-mono text-[13px]">
-                      {formatNanoToReadableMilli(at.getTimetaken())}
-                    </TableCell>
-                  )}
-                  {visibleColumn('created_date') && (
-                    <TableCell className="text-[13px] whitespace-nowrap">
-                      {at.getCreateddate() &&
-                        toHumanReadableDateTime(at.getCreateddate()!)}
-                    </TableCell>
-                  )}
+              <TableHead>
+                <TableRow>
+                  {visibleColumns.map(col => (
+                    <TableHeader key={col.key}>{col.name}</TableHeader>
+                  ))}
                 </TableRow>
-              ))}
-            </TableBody>
+              </TableHead>
+              <TableBody>
+                {activities.map((at, idx) => (
+                  <TableRow key={idx}>
+                    {visibleColumn('assistant_id') && (
+                      <TableCell className="text-sm">
+                        <Link
+                          href={`/deployment/assistant/${at.getAssistantid()}`}
+                          className="!text-sm !inline-flex !items-center !gap-1"
+                        >
+                          <span>{at.getAssistantid()}</span>
+                          <Launch size={12} />
+                        </Link>
+                      </TableCell>
+                    )}
+                    {visibleColumn('assistant_conversation_id') && (
+                      <TableCell className="text-sm">
+                        <Link
+                          href={`/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`}
+                          className="!text-sm !inline-flex !items-center !gap-1"
+                        >
+                          <span>{at.getAssistantconversationid()}</span>
+                          <Launch size={12} />
+                        </Link>
+                      </TableCell>
+                    )}
+                    {visibleColumn('assistant_tool_name') && (
+                      <TableCell className="text-sm">
+                        {at.getAssistanttoolname()}
+                      </TableCell>
+                    )}
+                    {visibleColumn('tool_call_id') && (
+                      <TableCell className="text-[13px]">
+                        <span className="font-mono">{at.getToolcallid()}</span>
+                      </TableCell>
+                    )}
+                    {visibleColumn('action') && (
+                      <TableCell className="text-sm">
+                        <div className="flex items-center gap-0">
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={View}
+                            iconDescription="View detail"
+                            onClick={() => {
+                              setCurrentActivityId(at.getId());
+                              setShowLogModal(true);
+                            }}
+                          />
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={Launch}
+                            iconDescription="View conversation"
+                            onClick={() => {
+                              window.location.href = `/deployment/assistant/${at.getAssistantid()}/sessions/${at.getAssistantconversationid()}`;
+                            }}
+                          />
+                        </div>
+                      </TableCell>
+                    )}
+                    {visibleColumn('status') && (
+                      <TableCell className="text-sm">
+                        <CarbonStatusIndicator state={at.getStatus()} />
+                      </TableCell>
+                    )}
+                    {visibleColumn('time_taken') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {formatNanoToReadableMilli(at.getTimetaken())}
+                      </TableCell>
+                    )}
+                    {visibleColumn('created_date') && (
+                      <TableCell className="text-[13px] whitespace-nowrap">
+                        {at.getCreateddate() &&
+                          toHumanReadableDateTime(at.getCreateddate()!)}
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </ScrollableTableSection>
         ) : (

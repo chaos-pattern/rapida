@@ -218,6 +218,24 @@ describe('conversation activity v2 telemetry utilities', () => {
     ]);
   });
 
+  it('parses timestamp range filters with one criteria key and different logic', () => {
+    const parsed = parseTraceFilterQuery(
+      'timestamp:2026-06-04T03:10:00.000Z timestamp~<=:2026-06-04T03:20:00.000Z',
+    );
+
+    expect(
+      parsed.filters.map(filter => [
+        filter.fieldKey,
+        filter.criteriaKey,
+        filter.logic,
+        filter.value,
+      ]),
+    ).toEqual([
+      ['timestamp', 'timestamp', '>=', '2026-06-04T03:10:00.000Z'],
+      ['timestamp', 'timestamp', '<=', '2026-06-04T03:20:00.000Z'],
+    ]);
+  });
+
   it('filters conversation attributes across message-scope records', () => {
     const document: TimelineDocument = {
       id: 'evt-tts-speaking',
@@ -265,7 +283,7 @@ describe('conversation activity v2 telemetry utilities', () => {
     const parsed = parseTraceFilterQuery('conversation:234');
     const filters = dedupeTraceFilters([
       ...parsed.filters,
-      createTraceFilter('assistantConversationId', '234', 'facet'),
+      createTraceFilter('conversation', '234', 'facet'),
     ]);
 
     expect(filters).toHaveLength(1);

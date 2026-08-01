@@ -9,8 +9,6 @@ import { useAssistantPageStore } from '@/hooks/use-assistant-page-store';
 
 jest.mock('@rapidaai/react', () => {
   class ConnectionConfig {
-    constructor(_: unknown) {}
-
     static WithDebugger(config: unknown) {
       return config;
     }
@@ -49,10 +47,86 @@ jest.mock('@rapidaai/react', () => {
     }
   }
 
+  class Paginate {
+    private page = 0;
+    private pageSize = 0;
+
+    setPage(page: number) {
+      this.page = page;
+    }
+
+    setPagesize(pageSize: number) {
+      this.pageSize = pageSize;
+    }
+
+    getPage() {
+      return this.page;
+    }
+
+    getPagesize() {
+      return this.pageSize;
+    }
+  }
+
+  class Criteria {
+    private key = '';
+    private logic = '';
+    private value = '';
+
+    setKey(key: string) {
+      this.key = key;
+    }
+
+    setLogic(logic: string) {
+      this.logic = logic;
+    }
+
+    setValue(value: string) {
+      this.value = value;
+    }
+
+    getKey() {
+      return this.key;
+    }
+
+    getLogic() {
+      return this.logic;
+    }
+
+    getValue() {
+      return this.value;
+    }
+  }
+
+  class GetAllAssistantRequest {
+    private paginate: Paginate | null = null;
+    private criterias: Criteria[] = [];
+
+    setPaginate(paginate: Paginate) {
+      this.paginate = paginate;
+    }
+
+    getPaginate() {
+      return this.paginate;
+    }
+
+    addCriterias(criteria: Criteria) {
+      this.criterias.push(criteria);
+      return criteria;
+    }
+
+    getCriteriasList() {
+      return this.criterias;
+    }
+  }
+
   return {
     ConnectionConfig,
     AssistantDefinition,
+    Criteria,
+    GetAllAssistantRequest,
     GetAssistantRequest,
+    Paginate,
     GetAllAssistant: jest.fn(),
     GetAssistant: jest.fn(),
     UpdateAssistantDetail: jest.fn(),
@@ -72,10 +146,10 @@ const resetStore = () => {
     totalCount: 0,
     criteria: [],
     columns: [],
-  } as any);
+  }) as any;
 };
 
-const makeAssistant = (id: string) => ({ getId: () => id } as any);
+const makeAssistant = (id: string) => ({ getId: () => id }) as any;
 
 describe('useAssistantPageStore', () => {
   beforeEach(() => {
@@ -102,67 +176,73 @@ describe('useAssistantPageStore', () => {
     ]);
   });
 
-  it('handles successful onGetAllAssistant response', () => {
+  it('handles successful onGetAllAssistant response', async () => {
     const assistant = makeAssistant('a-1');
     const onSuccess = jest.fn();
     const onError = jest.fn();
 
-    (GetAllAssistant as jest.Mock).mockImplementation(
-      (_cfg, _page, _pageSize, _criteria, callback) => {
-        callback(null, {
-          getSuccess: () => true,
-          getDataList: () => [assistant],
-          getPaginated: () => ({ getTotalitem: () => 7 }),
-        });
-      },
-    );
+    useAssistantPageStore.getState().setPage(2);
+    useAssistantPageStore.getState().setPageSize(50);
+    useAssistantPageStore
+      .getState()
+      .setCriterias([{ k: 'name', logic: 'contains', v: 'sales' }]);
+
+    (GetAllAssistant as jest.Mock).mockResolvedValue({
+      getSuccess: () => true,
+      getDataList: () => [assistant],
+      getPaginated: () => ({ getTotalitem: () => 7 }),
+    });
 
     useAssistantPageStore
       .getState()
       .onGetAllAssistant('project-1', 'token-1', 'user-1', onError, onSuccess);
 
+    await Promise.resolve();
+
+    const request = (GetAllAssistant as jest.Mock).mock.calls[0][1];
+    expect(request.getPaginate().getPage()).toBe(1);
+    expect(request.getPaginate().getPagesize()).toBe(50);
+    expect(request.getCriteriasList()[0].getKey()).toBe('name');
+    expect(request.getCriteriasList()[0].getLogic()).toBe('contains');
+    expect(request.getCriteriasList()[0].getValue()).toBe('sales');
     expect(onSuccess).toHaveBeenCalledWith([assistant]);
     expect(onError).not.toHaveBeenCalled();
     expect(useAssistantPageStore.getState().assistants).toEqual([assistant]);
     expect(useAssistantPageStore.getState().totalCount).toBe(7);
   });
 
-  it('uses error message from onGetAllAssistant response', () => {
+  it('uses error message from onGetAllAssistant response', async () => {
     const onSuccess = jest.fn();
     const onError = jest.fn();
 
-    (GetAllAssistant as jest.Mock).mockImplementation(
-      (_cfg, _page, _pageSize, _criteria, callback) => {
-        callback(null, {
-          getSuccess: () => false,
-          getError: () => ({ getHumanmessage: () => 'assistant list failed' }),
-        });
-      },
-    );
+    (GetAllAssistant as jest.Mock).mockResolvedValue({
+      getSuccess: () => false,
+      getError: () => ({ getHumanmessage: () => 'assistant list failed' }),
+    });
 
     useAssistantPageStore
       .getState()
       .onGetAllAssistant('project-1', 'token-1', 'user-1', onError, onSuccess);
 
+    await Promise.resolve();
+
     expect(onSuccess).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledWith('assistant list failed');
   });
 
-  it('uses fallback error when onGetAllAssistant has no error object', () => {
+  it('uses fallback error when onGetAllAssistant has no error object', async () => {
     const onError = jest.fn();
 
-    (GetAllAssistant as jest.Mock).mockImplementation(
-      (_cfg, _page, _pageSize, _criteria, callback) => {
-        callback(null, {
-          getSuccess: () => false,
-          getError: () => null,
-        });
-      },
-    );
+    (GetAllAssistant as jest.Mock).mockResolvedValue({
+      getSuccess: () => false,
+      getError: () => null,
+    });
 
     useAssistantPageStore
       .getState()
       .onGetAllAssistant('project-1', 'token-1', 'user-1', onError, jest.fn());
+
+    await Promise.resolve();
 
     expect(onError).toHaveBeenCalledWith(
       'Something went wrong while retrieving your assistants. Please refresh the page or try again later.',
@@ -364,7 +444,9 @@ describe('useAssistantPageStore', () => {
     expect(useAssistantPageStore.getState().assistants).toEqual([]);
     expect(useAssistantPageStore.getState().instructionVisible).toBe(false);
     expect(useAssistantPageStore.getState().editTagVisible).toBe(false);
-    expect(useAssistantPageStore.getState().updateDescriptionVisible).toBe(false);
+    expect(useAssistantPageStore.getState().updateDescriptionVisible).toBe(
+      false,
+    );
     expect(useAssistantPageStore.getState().page).toBe(1);
     expect(useAssistantPageStore.getState().pageSize).toBe(20);
     expect(useAssistantPageStore.getState().totalCount).toBe(0);

@@ -5,7 +5,6 @@ package internal_audit_service
 
 import (
 	"context"
-	"fmt"
 
 	"gorm.io/gorm/clause"
 
@@ -136,7 +135,101 @@ func (aS *auditService) GetAll(ctx context.Context, organizationId uint64, proje
 		Where("organization_id = ? AND project_id = ?", organizationId, projectId)
 
 	for _, ct := range ctrs {
-		qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+
+		switch ct.GetKey() {
+		case "id":
+			qry = qry.Where("external_audits.id = ?", ct.GetValue())
+		case "created_date":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("external_audits.created_date >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("external_audits.created_date <= ?", ct.GetValue())
+			case ">":
+				qry = qry.Where("external_audits.created_date > ?", ct.GetValue())
+			case "<":
+				qry = qry.Where("external_audits.created_date < ?", ct.GetValue())
+			case "=":
+				qry = qry.Where("external_audits.created_date = ?", ct.GetValue())
+			}
+		case "provider_name", "model_name", "assistant_id", "endpoint_id", "knowledge_id", "source":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM external_audit_metadata WHERE external_audit_metadata.external_audit_id = external_audits.id AND external_audit_metadata.key = ? AND external_audit_metadata.value ILIKE ?)",
+					ct.GetKey(),
+					"%"+ct.GetValue()+"%",
+				)
+			case "=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM external_audit_metadata WHERE external_audit_metadata.external_audit_id = external_audits.id AND external_audit_metadata.key = ? AND external_audit_metadata.value = ?)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			}
+		case "response_status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("external_audits.response_status = ?", ct.GetValue())
+			}
+		case "time_taken":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("external_audits.time_taken = ?", ct.GetValue())
+			case ">=":
+				qry = qry.Where("external_audits.time_taken >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("external_audits.time_taken <= ?", ct.GetValue())
+			}
+		case "time_to_first_token":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM jsonb_array_elements(external_audits.metrics::jsonb) AS metric(value) WHERE metric.value->>'name' = ? AND (metric.value->>'value')::numeric = ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			case ">=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM jsonb_array_elements(external_audits.metrics::jsonb) AS metric(value) WHERE metric.value->>'name' = ? AND (metric.value->>'value')::numeric >= ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			case "<=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM jsonb_array_elements(external_audits.metrics::jsonb) AS metric(value) WHERE metric.value->>'name' = ? AND (metric.value->>'value')::numeric <= ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			}
+		case "status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("external_audits.status = ?", ct.GetValue())
+			}
+		case "integration_name":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("external_audits.integration_name ILIKE ?", "%"+ct.GetValue()+"%")
+			case "=":
+				qry = qry.Where("external_audits.integration_name = ?", ct.GetValue())
+			}
+		case "asset_prefix":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("external_audits.asset_prefix ILIKE ?", "%"+ct.GetValue()+"%")
+			case "=":
+				qry = qry.Where("external_audits.asset_prefix = ?", ct.GetValue())
+			}
+		case "credential_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("external_audits.credential_id = ?", ct.GetValue())
+			}
+		}
 	}
 
 	tx := qry.

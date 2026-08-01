@@ -25,7 +25,6 @@ import {
   TableBody,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Button,
   ClickableTile,
   SkeletonPlaceholder,
@@ -35,6 +34,10 @@ import { PrimaryButton } from '@/app/components/carbon/button';
 import { PageHeaderBlock } from '@/app/components/blocks/page-header-block';
 import { PageTitleBlock } from '@/app/components/blocks/page-title-block';
 import { Modal, ModalBody, ModalHeader } from '@/app/components/carbon/modal';
+import {
+  AssistantQuerySearch,
+  getAssistantSearchCriteria,
+} from './assistant-query-search';
 
 const CREATE_ASSISTANT_LABEL = 'Create new assistant';
 
@@ -86,6 +89,11 @@ const assistantSkeletonCellWidth: Record<string, string> = {
   owner: '84px',
 };
 
+const formatQuerySearchValue = (key: string, value: string): string =>
+  /\s/.test(value)
+    ? `${key}:"${value.replace(/"/g, '\\"')}"`
+    : `${key}:${value}`;
+
 export function AssistantPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -94,12 +102,19 @@ export function AssistantPage() {
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [createAssistantModalOpen, setCreateAssistantModalOpen] =
     useState(false);
+  const [querySearchValue, setQuerySearchValue] = useState('');
 
   useEffect(() => {
     if (searchParams) {
       const searchParamMap = Object.fromEntries(searchParams.entries());
-      Object.entries(searchParamMap).forEach(([key, value]) =>
-        assistantAction.addCriteria(key, value, '='),
+      const nextQuerySearchValue = Object.entries(searchParamMap)
+        .filter(([, value]) => value)
+        .map(([key, value]) => formatQuerySearchValue(key, value))
+        .join(' ');
+
+      setQuerySearchValue(nextQuerySearchValue);
+      assistantAction.setCriterias(
+        getAssistantSearchCriteria(nextQuerySearchValue),
       );
     }
   }, [searchParams]);
@@ -146,7 +161,11 @@ export function AssistantPage() {
       </PageHeaderBlock>
       <TableToolbar>
         <TableToolbarContent>
-          <TableToolbarSearch placeholder="Search assistants..." />
+          <AssistantQuerySearch
+            value={querySearchValue}
+            onChange={setQuerySearchValue}
+            onApply={criteria => assistantAction.setCriterias(criteria)}
+          />
           <Button
             hasIconOnly
             renderIcon={Renew}

@@ -189,10 +189,11 @@ export const useAssistantConversationListPageStore =
      */
     addCriteria: (k: string, v: string, logic: string) => {
       let current = get().criteria.filter(
-        x => x.key !== k && x.logic !== logic,
+        x => !(x.key === k && x.logic === logic),
       );
       if (v) current.push({ key: k, value: v, logic: logic });
       set({
+        page: 1,
         criteria: current,
       });
     },
@@ -201,11 +202,41 @@ export const useAssistantConversationListPageStore =
      *
      * @param v
      */
+    addCriterias: (v: { k: string; v: string; logic: string }[]) => {
+      let current = get().criteria.filter(
+        x => !v.find(y => y.k === x.key && x.logic === y.logic),
+      );
+      v.forEach(c => {
+        if (c.v) current.push({ key: c.k, value: c.v, logic: c.logic });
+      });
+      set({
+        page: 1,
+        criteria: current,
+      });
+    },
+
     setCriterias: (v: { k: string; v: string; logic: string }[]) => {
       set({
-        criteria: v.map(c => {
-          return { key: c.k, value: c.v, logic: c.logic };
-        }),
+        page: 1,
+        criteria: v
+          .filter(c => c.v)
+          .map(c => {
+            return { key: c.k, value: c.v, logic: c.logic };
+          }),
+      });
+    },
+
+    removeCriteria: (k: string) => {
+      set(state => ({
+        page: 1,
+        criteria: state.criteria.filter(criterion => criterion.key !== k),
+      }));
+    },
+
+    clearCriteria: () => {
+      set({
+        page: 1,
+        criteria: [],
       });
     },
 

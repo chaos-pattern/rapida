@@ -111,50 +111,11 @@ const getQueryValue = (
 const getTraceFiltersFromSearchParams = (
   searchParams: URLSearchParams,
 ): TraceFilterState => {
-  const assistantId = getQueryValue(searchParams, [
-    'assistant_id',
-    'assistantId',
-  ]);
-  const conversationId = getQueryValue(searchParams, [
-    'conversation_id',
-    'conversationId',
-    'assistant_conversation_id',
-    'assistantConversationId',
-  ]);
-  const messageId = getQueryValue(searchParams, ['message_id', 'messageId']);
-  const scopeQuery = getQueryValue(searchParams, ['scope']);
   const queryText = getQueryValue(searchParams, ['query']);
-  const roleQuery = getQueryValue(searchParams, [
-    'message_role',
-    'messageRole',
-    'role',
-  ]);
-  const traceId = getQueryValue(searchParams, [
-    'trace_id',
-    'traceId',
-    'traceID',
-  ]);
-  const from = getQueryValue(searchParams, ['occurredAtFrom', 'from', 'start']);
-  const to = getQueryValue(searchParams, ['occurredAtTo', 'to', 'end']);
-  const legacySearchText = [
-    assistantId ? `assistant:${assistantId}` : '',
-    conversationId
-      ? `scopeAttributes.assistantConversationId:${conversationId}`
-      : '',
-    messageId ? `message:${messageId}` : '',
-    scopeQuery ? `scope:${scopeQuery}` : '',
-    roleQuery ? `role:${roleQuery}` : '',
-    traceId ? `trace:${traceId}` : '',
-    from ? `from:${from}` : '',
-    to ? `to:${to}` : '',
-    getQueryValue(searchParams, ['q', 'search']),
-  ]
-    .filter(Boolean)
-    .join(' ');
 
   return {
     ...DEFAULT_TRACE_FILTERS,
-    searchText: queryText || legacySearchText,
+    searchText: queryText,
   };
 };
 
@@ -787,14 +748,10 @@ export const ListingPage = () => {
       addCriteria(filter.criteriaKey, filter.value, filter.logic);
     });
     if (appliedFilters.dateRange) {
-      addCriteria(
-        'occurredAtFrom',
-        appliedFilters.dateRange[0].toISOString(),
-        '>=',
-      );
+      addCriteria('timestamp', appliedFilters.dateRange[0].toISOString(), '>=');
       const endDate = new Date(appliedFilters.dateRange[1]);
       endDate.setHours(23, 59, 59, 999);
-      addCriteria('occurredAtTo', endDate.toISOString(), '<=');
+      addCriteria('timestamp', endDate.toISOString(), '<=');
     }
 
     return next;

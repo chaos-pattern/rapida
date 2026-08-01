@@ -174,8 +174,13 @@ export const useGlobalNavigation = () => {
   };
 
   const goToMessageTelemetry = (messageId: string) => {
+    const telemetryMessageId = messageId.startsWith('assistant-')
+      ? messageId.slice('assistant-'.length)
+      : messageId.startsWith('user-')
+        ? messageId.slice('user-'.length)
+        : messageId;
     const params = new URLSearchParams({
-      query: `message:${messageId}`,
+      query: `message:${telemetryMessageId}`,
     });
     navigate(`/logs/traces?${params.toString()}`);
   };

@@ -83,6 +83,35 @@
   fill: var(--cds-icon-primary);
 }
 
+.query-search-date-calendar .query-search-date-form-row {
+  display: grid;
+  grid-template-columns: 1fr 7.5rem;
+  align-items: center;
+  column-gap: 0.75rem;
+}
+
+.query-search-date-calendar .query-search-date-form-label {
+  margin-block-end: 0;
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.query-search-date-calendar .query-search-include-time.cds--checkbox-wrapper {
+  justify-self: end;
+  min-block-size: 1rem;
+  margin-block-end: 0;
+}
+
+.query-search-date-calendar .query-search-include-time .cds--checkbox-label {
+  min-block-size: 1rem;
+}
+
+.query-search-date-calendar .query-search-time-select,
+.query-search-date-calendar .query-search-time-select .cds--select,
+.query-search-date-calendar .query-search-time-select .cds--select-input {
+  inline-size: 100%;
+}
+
 // ─── Popover width override ─────────────────────────────────────────────────
 .cds--popover-content {
   max-inline-size: none;
