@@ -73,6 +73,8 @@ type QueryFilterChip = {
   value: string;
 };
 
+export type QuerySearchFilter = QueryFilterChip;
+
 const padDatePart = (value: number): string => String(value).padStart(2, '0');
 
 const hasExplicitTimeZone = (value: string): boolean =>
@@ -293,6 +295,14 @@ const parseQueryFilterChip = (
   };
 };
 
+export const parseQuerySearchFilters = (
+  fields: QuerySearchField[],
+  query: string,
+): QuerySearchFilter[] =>
+  splitQueryParts(query)
+    .map(part => parseQueryFilterChip(fields, part.text))
+    .filter((filter): filter is QuerySearchFilter => Boolean(filter));
+
 const getSelectedLogic = (
   field: QuerySearchField,
   queryKey?: string,
@@ -312,6 +322,15 @@ const createFilterChip = (
   raw: `${queryKey}:${quoteFilterValue(value)}`,
   value,
 });
+
+const getFilterDisplayValue = (
+  field: QuerySearchField,
+  value: string,
+  dateTimeMode: QuerySearchDateTimeMode,
+): string => {
+  if (field.type === 'date') return formatDateTimeValue(value, dateTimeMode);
+  return field.items?.find(option => option.id === value)?.text || value;
+};
 
 type KeyPickerProps = {
   fields: QuerySearchField[];
@@ -748,8 +767,7 @@ const FilterPill = ({
   valueOptions,
 }: FilterPillProps) => {
   const ValueEditor = FILTER_VALUE_EDITORS[field.type];
-  const displayValue =
-    field.type === 'date' ? formatDateTimeValue(value, dateTimeMode) : value;
+  const displayValue = getFilterDisplayValue(field, value, dateTimeMode);
 
   return (
     <span className="relative inline-flex w-fit shrink-0 items-center gap-1 border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-sm dark:border-gray-800 dark:bg-gray-900">

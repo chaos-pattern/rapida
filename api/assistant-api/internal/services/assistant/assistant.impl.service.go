@@ -616,9 +616,47 @@ func (eService *assistantService) GetAll(ctx context.Context, auth types.SimpleP
 		})
 	}
 
-	qry = qry.Where("organization_id = ? AND project_id = ? AND status = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), type_enums.RECORD_ACTIVE.String())
+	qry = qry.Where("assistants.organization_id = ? AND assistants.project_id = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId())
+	hasStatusCriteria := false
 	for _, ct := range criterias {
-		qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+		switch ct.GetKey() {
+		case "id":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistants.id = ?", ct.GetValue())
+			}
+		case "name":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("assistants.name ILIKE ?", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("assistants.name = ?", ct.GetValue())
+			}
+		case "assistant_provider":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistants.assistant_provider = ?", ct.GetValue())
+			}
+		case "tags":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_tags WHERE assistant_tags.assistant_id = assistants.id AND assistant_tags.tag ILIKE ?)", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_tags WHERE assistant_tags.assistant_id = assistants.id AND assistant_tags.tag ILIKE ?)", "%\""+ct.GetValue()+"\"%")
+			}
+		case "status":
+			hasStatusCriteria = true
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistants.status = ?", ct.GetValue())
+			}
+		}
+	}
+	if !hasStatusCriteria {
+		qry = qry.Where("assistants.status = ?", type_enums.RECORD_ACTIVE.String())
 	}
 
 	tx := qry.
