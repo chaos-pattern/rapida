@@ -592,6 +592,22 @@ const TRACE_FILTER_FIELD_DEFINITIONS: TraceFilterField[] = [
     },
   },
   {
+    key: 'timestamp',
+    label: 'Timestamp',
+    criteriaKey: 'occurredAt',
+    aliases: ['occurredAt'],
+    match: (doc, value) => {
+      const docMs = getDateMs(doc.occurredAt);
+      const valueMs = getDateMs(value);
+      return (
+        docMs !== null &&
+        valueMs !== null &&
+        docMs >= valueMs &&
+        docMs < valueMs + 60 * 1000
+      );
+    },
+  },
+  {
     key: 'to',
     label: 'To',
     criteriaKey: 'occurredAtTo',
