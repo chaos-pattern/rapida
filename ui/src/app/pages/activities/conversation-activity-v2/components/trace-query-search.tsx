@@ -99,6 +99,7 @@ export const TraceQuerySearch = ({
   value,
 }: TraceQuerySearchProps) => (
   <QuerySearch
+    dateTimeMode="local-to-utc"
     fields={QUERY_FILTER_FIELDS}
     tabs={QUERY_FILTER_TABS}
     value={value}

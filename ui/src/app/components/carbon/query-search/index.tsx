@@ -30,6 +30,8 @@ export type QuerySearchLogicOption = {
   queryKey: string;
 };
 
+export type QuerySearchDateTimeMode = 'local-to-utc' | 'raw';
+
 export type QuerySearchTab = {
   id: string;
   text: string;
@@ -46,6 +48,7 @@ export type QuerySearchLabels = {
 
 export type QuerySearchProps = {
   className?: string;
+  dateTimeMode?: QuerySearchDateTimeMode;
   fields: QuerySearchField[];
   labels?: Partial<QuerySearchLabels>;
   maxOptions?: number;
@@ -72,14 +75,37 @@ type QueryFilterChip = {
 
 const padDatePart = (value: number): string => String(value).padStart(2, '0');
 
+const hasExplicitTimeZone = (value: string): boolean =>
+  /(?:z|[+-]\d{2}:?\d{2})$/i.test(value.trim());
+
+const getLocalDateParts = (
+  date: Date,
+): { dateValue: string; hasTime: boolean; timeValue: string } => ({
+  dateValue: [
+    date.getFullYear(),
+    padDatePart(date.getMonth() + 1),
+    padDatePart(date.getDate()),
+  ].join('-'),
+  hasTime: true,
+  timeValue: `${padDatePart(date.getHours())}:${padDatePart(
+    date.getMinutes(),
+  )}`,
+});
+
 const getDateInputParts = (
   value: string,
+  dateTimeMode: QuerySearchDateTimeMode,
 ): { dateValue: string; hasTime: boolean; timeValue: string } => {
   const emptyParts = { dateValue: '', hasTime: false, timeValue: '00:00' };
   if (!value) return emptyParts;
 
+  if (dateTimeMode === 'local-to-utc' && hasExplicitTimeZone(value)) {
+    const date = new Date(value);
+    if (Number.isFinite(date.getTime())) return getLocalDateParts(date);
+  }
+
   const localDateTime = value.match(
-    /^(\d{4}-\d{2}-\d{2})(?:[T\s]([0-9:]{0,5}))?/,
+    /^(\d{4}-\d{2}-\d{2})(?:[T\s](\d{2}:\d{2})(?::\d{2}(?:\.\d{1,3})?)?)?/,
   );
   if (localDateTime) {
     const hasTime = /^[0-9]{4}-[0-9]{2}-[0-9]{2}[T\s]/.test(value);
@@ -93,21 +119,14 @@ const getDateInputParts = (
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return emptyParts;
 
-  return {
-    dateValue: [
-      date.getFullYear(),
-      padDatePart(date.getMonth() + 1),
-      padDatePart(date.getDate()),
-    ].join('-'),
-    hasTime: true,
-    timeValue: `${padDatePart(date.getHours())}:${padDatePart(
-      date.getMinutes(),
-    )}`,
-  };
+  return getLocalDateParts(date);
 };
 
-const formatDateTimeValue = (value: string): string => {
-  const dateParts = getDateInputParts(value);
+const formatDateTimeValue = (
+  value: string,
+  dateTimeMode: QuerySearchDateTimeMode,
+): string => {
+  const dateParts = getDateInputParts(value, dateTimeMode);
   if (!dateParts.dateValue) return value;
   return dateParts.hasTime
     ? `${dateParts.dateValue} ${dateParts.timeValue}`
@@ -125,7 +144,20 @@ const formatDateFilterValue = (
   dateValue: string,
   timeValue: string,
   includeTime: boolean,
-): string => (includeTime ? `${dateValue}T${timeValue || '00:00'}` : dateValue);
+  dateTimeMode: QuerySearchDateTimeMode,
+): string => {
+  if (dateTimeMode === 'raw') {
+    return includeTime ? `${dateValue}T${timeValue || '00:00'}` : dateValue;
+  }
+
+  const [year, month, day] = dateValue.split('-').map(Number);
+  if (!year || !month || !day) return dateValue;
+
+  const [hour = 0, minute = 0] = includeTime
+    ? (timeValue || '00:00').split(':').map(Number)
+    : [];
+  return new Date(year, month - 1, day, hour, minute, 0, 0).toISOString();
+};
 
 const MONTH_NAMES = [
   'January',
@@ -383,6 +415,7 @@ const LogicPicker = ({ field, onSelect, selectedLogic }: LogicPickerProps) => {
 };
 
 type ValueEditorProps = {
+  dateTimeMode: QuerySearchDateTimeMode;
   field: QuerySearchField;
   inputRef: RefObject<HTMLInputElement>;
   isOpen: boolean;
@@ -402,6 +435,7 @@ const getTextInputWidth = (value: string, minWidth = 5, maxWidth = 48) =>
   `${Math.min(Math.max(value.length || minWidth, minWidth), maxWidth)}ch`;
 
 const TextFilterValueEditor = ({
+  dateTimeMode: _dateTimeMode,
   field,
   inputRef,
   isOpen,
@@ -458,6 +492,7 @@ const TextFilterValueEditor = ({
 };
 
 const DateFilterValueEditor = ({
+  dateTimeMode,
   field,
   inputRef,
   isOpen,
@@ -470,8 +505,8 @@ const DateFilterValueEditor = ({
   timeOptions,
   value,
 }: ValueEditorProps) => {
-  const dateInputParts = getDateInputParts(value);
-  const displayValue = formatDateTimeValue(value);
+  const dateInputParts = getDateInputParts(value, dateTimeMode);
+  const displayValue = formatDateTimeValue(value, dateTimeMode);
   const selectedDate = getDateFromValue(dateInputParts.dateValue);
   const [draftDateValue, setDraftDateValue] = useState(
     dateInputParts.dateValue,
@@ -646,6 +681,7 @@ const DateFilterValueEditor = ({
                       draftDateValue,
                       draftTimeValue,
                       includeTime,
+                      dateTimeMode,
                     ),
                   )
                 }
@@ -667,6 +703,7 @@ const FILTER_VALUE_EDITORS = {
 };
 
 type FilterPillProps = {
+  dateTimeMode: QuerySearchDateTimeMode;
   fields: QuerySearchField[];
   field: QuerySearchField;
   inputRef: RefObject<HTMLInputElement>;
@@ -689,6 +726,7 @@ type FilterPillProps = {
 };
 
 const FilterPill = ({
+  dateTimeMode,
   fields,
   field,
   inputRef,
@@ -711,7 +749,7 @@ const FilterPill = ({
 }: FilterPillProps) => {
   const ValueEditor = FILTER_VALUE_EDITORS[field.type];
   const displayValue =
-    field.type === 'date' ? formatDateTimeValue(value) : value;
+    field.type === 'date' ? formatDateTimeValue(value, dateTimeMode) : value;
 
   return (
     <span className="relative inline-flex w-fit shrink-0 items-center gap-1 border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-sm dark:border-gray-800 dark:bg-gray-900">
@@ -727,6 +765,7 @@ const FilterPill = ({
       />
       {isEditingValue ? (
         <ValueEditor
+          dateTimeMode={dateTimeMode}
           field={field}
           inputRef={inputRef}
           isOpen={isOpen}
@@ -764,6 +803,7 @@ const FilterPill = ({
 
 export const QuerySearch = ({
   className,
+  dateTimeMode = 'raw',
   fields,
   labels,
   maxOptions = 10,
@@ -1097,6 +1137,7 @@ export const QuerySearch = ({
           return (
             <FilterPill
               key={`chip-${index}`}
+              dateTimeMode={dateTimeMode}
               fields={fields}
               field={chipField}
               inputRef={inputRef}
@@ -1127,6 +1168,7 @@ export const QuerySearch = ({
         })}
         {isValueMode && selectedField && selectedLogic ? (
           <FilterPill
+            dateTimeMode={dateTimeMode}
             fields={fields}
             field={selectedField}
             inputRef={inputRef}
