@@ -27,24 +27,21 @@ const PROVIDER_OPTIONS: QuerySearchOption[] = TEXT_PROVIDERS.map(provider => ({
 
 const ENDPOINT_SEARCH_FIELDS: QuerySearchField[] = [
   {
-    aliases: ['endpointId', 'endpointID', 'endpoint_id'],
     queryKey: 'id',
     text: 'endpointID',
     type: 'string',
   },
   {
-    aliases: ['nameContains'],
     logicLabel: 'is',
     logicOptions: [
-      { label: 'is', queryKey: 'name' },
-      { label: 'contains', queryKey: 'nameContains' },
+      { label: 'is', logic: '=' },
+      { label: 'contains', logic: 'contains' },
     ],
     queryKey: 'name',
     text: 'name',
     type: 'string',
   },
   {
-    aliases: ['provider', 'modelProviderName', 'model_provider_name'],
     formatValue: value =>
       PROVIDER_OPTIONS.find(option => option.id === value)?.text || value,
     items: PROVIDER_OPTIONS,
@@ -53,28 +50,20 @@ const ENDPOINT_SEARCH_FIELDS: QuerySearchField[] = [
     type: 'string',
   },
   {
-    aliases: ['tag', 'endpointtag'],
+    logicLabel: 'contains',
+    logicOptions: [{ label: 'contains', logic: 'contains' }],
     queryKey: 'tags',
     text: 'tags',
     type: 'string',
   },
 ];
 
-const ENDPOINT_SEARCH_CRITERIA: Record<string, { key: string; logic: string }> =
-  {
-    endpointId: { key: 'id', logic: '=' },
-    endpointID: { key: 'id', logic: '=' },
-    endpoint_id: { key: 'id', logic: '=' },
-    endpointtag: { key: 'tags', logic: 'contains' },
-    id: { key: 'id', logic: '=' },
-    model_provider_name: { key: 'model_provider_name', logic: '=' },
-    modelProviderName: { key: 'model_provider_name', logic: '=' },
-    name: { key: 'name', logic: '=' },
-    nameContains: { key: 'name', logic: 'contains' },
-    provider: { key: 'model_provider_name', logic: '=' },
-    tag: { key: 'tags', logic: 'contains' },
-    tags: { key: 'tags', logic: 'contains' },
-  };
+const ENDPOINT_SEARCH_CRITERIA: Record<string, string> = {
+  id: 'id',
+  model_provider_name: 'model_provider_name',
+  name: 'name',
+  tags: 'tags',
+};
 
 export const getEndpointSearchCriteria = (
   value: string,
@@ -85,8 +74,8 @@ export const getEndpointSearchCriteria = (
       if (!criteria || !filter.value.trim()) return null;
 
       return {
-        k: criteria.key,
-        logic: criteria.logic,
+        k: criteria,
+        logic: filter.logic,
         v: filter.value,
       };
     })

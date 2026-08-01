@@ -175,9 +175,12 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
    * @param v
    */
   addCriteria: (k: string, v: string, logic: string) => {
-    let current = get().criteria.filter(x => x.key !== k && x.logic !== logic);
+    let current = get().criteria.filter(
+      x => !(x.key === k && x.logic === logic),
+    );
     if (v) current.push({ key: k, value: v, logic: logic });
     set({
+      page: 1,
       criteria: current,
     });
   },
@@ -187,6 +190,7 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
    */
   removeCriteria: (k: string) => {
     set(state => ({
+      page: 1,
       criteria: state.criteria.filter(criterion => criterion.key !== k),
     }));
   },
@@ -198,9 +202,11 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
   setCriterias: (v: { k: string; v: string; logic: string }[]) => {
     set({
       page: 1,
-      criteria: v.map(c => {
-        return { key: c.k, value: c.v, logic: c.logic };
-      }),
+      criteria: v
+        .filter(c => c.v)
+        .map(c => {
+          return { key: c.k, value: c.v, logic: c.logic };
+        }),
     });
   },
 
@@ -213,9 +219,10 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
       x => !v.find(y => y.k === x.key && x.logic === y.logic),
     );
     v.forEach(c => {
-      current.push({ key: c.k, value: c.v, logic: c.logic });
+      if (c.v) current.push({ key: c.k, value: c.v, logic: c.logic });
     });
     set({
+      page: 1,
       criteria: current,
     });
   },

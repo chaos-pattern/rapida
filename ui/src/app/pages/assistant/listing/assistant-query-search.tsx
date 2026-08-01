@@ -27,24 +27,21 @@ const PROVIDER_OPTIONS: QuerySearchOption[] = [
 
 const ASSISTANT_SEARCH_FIELDS: QuerySearchField[] = [
   {
-    aliases: ['assistantId', 'assistantID', 'assistant_id'],
     queryKey: 'id',
     text: 'assistantID',
     type: 'string',
   },
   {
-    aliases: ['nameContains'],
     logicLabel: 'is',
     logicOptions: [
-      { label: 'is', queryKey: 'name' },
-      { label: 'contains', queryKey: 'nameContains' },
+      { label: 'is', logic: '=' },
+      { label: 'contains', logic: 'contains' },
     ],
     queryKey: 'name',
     text: 'name',
     type: 'string',
   },
   {
-    aliases: ['provider'],
     formatValue: value =>
       PROVIDER_OPTIONS.find(option => option.id === value)?.text || value,
     items: PROVIDER_OPTIONS,
@@ -53,29 +50,19 @@ const ASSISTANT_SEARCH_FIELDS: QuerySearchField[] = [
     type: 'string',
   },
   {
-    aliases: ['tag', 'assistanttag'],
+    logicLabel: 'contains',
+    logicOptions: [{ label: 'contains', logic: 'contains' }],
     queryKey: 'tags',
     text: 'tags',
     type: 'string',
   },
 ];
 
-const ASSISTANT_SEARCH_CRITERIA: Record<
-  string,
-  { key: string; logic: string }
-> = {
-  assistantId: { key: 'id', logic: '=' },
-  assistantID: { key: 'id', logic: '=' },
-  assistant_id: { key: 'id', logic: '=' },
-  assistant_provider: { key: 'assistant_provider', logic: '=' },
-  assistantprovider: { key: 'assistant_provider', logic: '=' },
-  assistanttag: { key: 'tags', logic: 'contains' },
-  id: { key: 'id', logic: '=' },
-  name: { key: 'name', logic: '=' },
-  nameContains: { key: 'name', logic: 'contains' },
-  provider: { key: 'assistant_provider', logic: '=' },
-  tag: { key: 'tags', logic: 'contains' },
-  tags: { key: 'tags', logic: 'contains' },
+const ASSISTANT_SEARCH_CRITERIA: Record<string, string> = {
+  assistant_provider: 'assistant_provider',
+  id: 'id',
+  name: 'name',
+  tags: 'tags',
 };
 
 export const getAssistantSearchCriteria = (
@@ -87,8 +74,8 @@ export const getAssistantSearchCriteria = (
       if (!criteria || !filter.value.trim()) return null;
 
       return {
-        k: criteria.key,
-        logic: criteria.logic,
+        k: criteria,
+        logic: filter.logic,
         v: filter.value,
       };
     })

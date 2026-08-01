@@ -15,7 +15,6 @@ export type QuerySearchOption = {
 };
 
 export type QuerySearchField = {
-  aliases?: string[];
   category?: string;
   formatValue?: (value: string) => string;
   items?: QuerySearchOption[];
@@ -28,7 +27,7 @@ export type QuerySearchField = {
 
 export type QuerySearchLogicOption = {
   label: string;
-  queryKey: string;
+  logic: string;
 };
 
 export type QuerySearchDateTimeMode = 'local-to-utc' | 'raw';
@@ -70,6 +69,7 @@ type QueryTokenPart = {
 type QueryFilterChip = {
   key: string;
   label: string;
+  logic: string;
   raw: string;
   value: string;
 };
@@ -246,12 +246,15 @@ const unquoteFilterValue = (value: string): string => {
 
 const splitFilterToken = (
   token: string,
-): { key: string; value: string } | null => {
+): { key: string; logic?: string; value: string } | null => {
   const separatorIndex = token.indexOf(':');
   if (separatorIndex <= 0) return null;
+  const keyToken = token.slice(0, separatorIndex);
+  const logicIndex = keyToken.indexOf('~');
 
   return {
-    key: token.slice(0, separatorIndex),
+    key: logicIndex > 0 ? keyToken.slice(0, logicIndex) : keyToken,
+    logic: logicIndex > 0 ? keyToken.slice(logicIndex + 1) : undefined,
     value: token.slice(separatorIndex + 1),
   };
 };
@@ -273,9 +276,25 @@ const getFieldByKey = (
   fields: QuerySearchField[],
   queryKey: string,
 ): QuerySearchField | undefined =>
-  fields.find(
-    field => field.queryKey === queryKey || field.aliases?.includes(queryKey),
-  );
+  fields.find(field => field.queryKey === queryKey);
+
+const getSelectedLogic = (
+  field: QuerySearchField,
+  logic?: string,
+): QuerySearchLogicOption =>
+  field.logicOptions?.find(option => option.logic === logic) || {
+    label: field.logicLabel || 'is',
+    logic: field.logicOptions?.[0]?.logic || '=',
+  };
+
+const getFilterRawKey = (field: QuerySearchField, logic: string): string => {
+  const defaultLogic = getSelectedLogic(field).logic;
+  return logic === defaultLogic ? field.queryKey : `${field.queryKey}~${logic}`;
+};
+
+const matchesOptionSearch = (option: QuerySearchOption, search: string) =>
+  option.id.toLowerCase().includes(search) ||
+  option.text.toLowerCase().includes(search);
 
 const parseQueryFilterChip = (
   fields: QuerySearchField[],
@@ -287,10 +306,12 @@ const parseQueryFilterChip = (
   const { key, value: rawValue } = filterToken;
   const field = getFieldByKey(fields, key);
   if (!field) return null;
+  const logic = getSelectedLogic(field, filterToken.logic).logic;
 
   return {
     key,
     label: field.text,
+    logic,
     raw: token,
     value: unquoteFilterValue(rawValue),
   };
@@ -304,23 +325,15 @@ export const parseQuerySearchFilters = (
     .map(part => parseQueryFilterChip(fields, part.text))
     .filter((filter): filter is QuerySearchFilter => Boolean(filter));
 
-const getSelectedLogic = (
-  field: QuerySearchField,
-  queryKey?: string,
-): QuerySearchLogicOption =>
-  field.logicOptions?.find(option => option.queryKey === queryKey) || {
-    label: field.logicLabel || 'is',
-    queryKey: field.queryKey,
-  };
-
 const createFilterChip = (
   field: QuerySearchField,
-  queryKey: string,
+  logic: string,
   value: string,
 ): QueryFilterChip => ({
-  key: queryKey,
+  key: field.queryKey,
   label: field.text,
-  raw: `${queryKey}:${quoteFilterValue(value)}`,
+  logic,
+  raw: `${getFilterRawKey(field, logic)}:${quoteFilterValue(value)}`,
   value,
 });
 
@@ -374,7 +387,7 @@ const KeyPicker = ({ fields, onSelect, selectedField }: KeyPickerProps) => {
 
 type LogicPickerProps = {
   field: QuerySearchField;
-  onSelect: (queryKey: string) => void;
+  onSelect: (logic: string) => void;
   selectedLogic?: QuerySearchLogicOption;
 };
 
@@ -383,7 +396,7 @@ const LogicPicker = ({ field, onSelect, selectedLogic }: LogicPickerProps) => {
   const options = field.logicOptions || [
     {
       label: field.logicLabel || 'is',
-      queryKey: field.queryKey,
+      logic: '=',
     },
   ];
 
@@ -403,16 +416,16 @@ const LogicPicker = ({ field, onSelect, selectedLogic }: LogicPickerProps) => {
         >
           {options.map(option => (
             <button
-              key={option.queryKey}
+              key={option.logic}
               type="button"
               className={[
                 'block w-full whitespace-nowrap px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-900',
-                option.queryKey === selectedLogic?.queryKey
+                option.logic === selectedLogic?.logic
                   ? 'text-[var(--cds-link-primary)]'
                   : 'text-[var(--cds-text-primary)]',
               ].join(' ')}
               onClick={() => {
-                onSelect(option.queryKey);
+                onSelect(option.logic);
                 setIsOpen(false);
               }}
             >
@@ -729,7 +742,7 @@ type FilterPillProps = {
   onKeyDown: KeyboardEventHandler<HTMLInputElement>;
   onRemove: () => void;
   onSelectField: (field: QuerySearchField) => void;
-  onSelectLogic: (queryKey: string) => void;
+  onSelectLogic: (logic: string) => void;
   onSelectValue: (field: QuerySearchField, option: QuerySearchOption) => void;
   timeOptions: string[];
   value: string;
@@ -867,12 +880,7 @@ export const QuerySearch = ({
   const isValueMode = Boolean(selectedField);
   const currentDisplayValue = unquoteFilterValue(currentValue);
   const selectedLogic = selectedField
-    ? selectedField.logicOptions?.find(
-        option => option.queryKey === currentFilterToken?.key,
-      ) || {
-        label: selectedField.logicLabel || 'is',
-        queryKey: selectedField.queryKey,
-      }
+    ? getSelectedLogic(selectedField, currentFilterToken?.logic)
     : undefined;
   const allTabId = resolvedTabs[0]?.id || 'all';
 
@@ -900,7 +908,7 @@ export const QuerySearch = ({
     if (!selectedField?.items) return [];
     const search = currentValue.toLowerCase();
     return selectedField.items
-      .filter(option => option.id.toLowerCase().includes(search))
+      .filter(option => matchesOptionSearch(option, search))
       .slice(0, maxOptions);
   }, [currentValue, maxOptions, selectedField]);
 
@@ -908,7 +916,7 @@ export const QuerySearch = ({
     if (!field.items) return [];
     const search = fieldValue.toLowerCase();
     return field.items
-      .filter(option => option.id.toLowerCase().includes(search))
+      .filter(option => matchesOptionSearch(option, search))
       .slice(0, maxOptions);
   };
 
@@ -961,19 +969,15 @@ export const QuerySearch = ({
 
   const updateChipField = (index: number, field: QuerySearchField) => {
     const chip = chipTokens[index];
-    const logic = getSelectedLogic(field);
-    updateChip(
-      index,
-      createFilterChip(field, logic.queryKey, chip.value),
-      true,
-    );
+    const logic = getSelectedLogic(field, chip.logic);
+    updateChip(index, createFilterChip(field, logic.logic, chip.value), true);
   };
 
-  const updateChipLogic = (index: number, queryKey: string) => {
+  const updateChipLogic = (index: number, logic: string) => {
     const chip = chipTokens[index];
     const field = getFieldByKey(fields, chip.key);
     if (!field) return;
-    updateChip(index, createFilterChip(field, queryKey, chip.value), true);
+    updateChip(index, createFilterChip(field, logic, chip.value), true);
   };
 
   const updateChipValue = (
@@ -986,7 +990,7 @@ export const QuerySearch = ({
     if (!field) return;
     updateChip(
       index,
-      createFilterChip(field, chip.key, nextValue),
+      createFilterChip(field, chip.logic, nextValue),
       shouldApply,
     );
     setIsOpen(true);
@@ -998,7 +1002,7 @@ export const QuerySearch = ({
     option: QuerySearchOption,
   ) => {
     const chip = chipTokens[index];
-    updateChip(index, createFilterChip(field, chip.key, option.id), true);
+    updateChip(index, createFilterChip(field, chip.logic, option.id), true);
     setEditingChipIndex(null);
     setIsOpen(false);
   };
@@ -1008,9 +1012,10 @@ export const QuerySearch = ({
     setDraftValue(
       replaceCurrentToken(
         draftValue,
-        `${selectedLogic?.queryKey || selectedField.queryKey}:${quoteFilterValue(
-          nextValue,
-        )}`,
+        `${getFilterRawKey(
+          selectedField,
+          selectedLogic.logic,
+        )}:${quoteFilterValue(nextValue)}`,
       ),
     );
     setIsOpen(true);
@@ -1020,9 +1025,10 @@ export const QuerySearch = ({
     if (!selectedField) return;
     const nextDraft = completeCurrentToken(
       draftValue,
-      `${selectedLogic?.queryKey || selectedField.queryKey}:${quoteFilterValue(
-        nextValue,
-      )}`,
+      `${getFilterRawKey(
+        selectedField,
+        selectedLogic.logic,
+      )}:${quoteFilterValue(nextValue)}`,
     );
     applyNextValue(`${joinQueryParts(chipTokens, nextDraft)} `);
     setIsOpen(false);
@@ -1039,17 +1045,21 @@ export const QuerySearch = ({
     const logic = getSelectedLogic(field);
     const nextDraft = replaceCurrentToken(
       draftValue,
-      `${logic.queryKey}:${quoteFilterValue(currentDisplayValue)}`,
+      `${getFilterRawKey(field, logic.logic)}:${quoteFilterValue(
+        currentDisplayValue,
+      )}`,
     );
     setDraftValue(nextDraft);
     setIsOpen(true);
     window.requestAnimationFrame(() => inputRef.current?.focus());
   };
 
-  const selectLogic = (field: QuerySearchField, queryKey: string) => {
+  const selectLogic = (field: QuerySearchField, logic: string) => {
     const nextDraft = replaceCurrentToken(
       draftValue,
-      `${queryKey}:${quoteFilterValue(currentDisplayValue)}`,
+      `${getFilterRawKey(field, logic)}:${quoteFilterValue(
+        currentDisplayValue,
+      )}`,
     );
     setDraftValue(nextDraft);
     setIsOpen(true);
@@ -1057,11 +1067,10 @@ export const QuerySearch = ({
   };
 
   const selectValue = (field: QuerySearchField, option: QuerySearchOption) => {
+    const logic = selectedLogic?.logic || getSelectedLogic(field).logic;
     const nextDraft = completeCurrentToken(
       draftValue,
-      `${selectedLogic?.queryKey || field.queryKey}:${quoteFilterValue(
-        option.id,
-      )}`,
+      `${getFilterRawKey(field, logic)}:${quoteFilterValue(option.id)}`,
     );
     applyNextValue(`${joinQueryParts(chipTokens, nextDraft)} `);
     setIsOpen(false);
@@ -1145,7 +1154,7 @@ export const QuerySearch = ({
         {chipTokens.map((chip, index) => {
           const chipField = getFieldByKey(fields, chip.key);
           if (!chipField) return null;
-          const chipLogic = getSelectedLogic(chipField, chip.key);
+          const chipLogic = getSelectedLogic(chipField, chip.logic);
 
           return (
             <FilterPill

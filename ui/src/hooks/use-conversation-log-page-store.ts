@@ -145,8 +145,18 @@ export const useConversationLogPageStore = create<ConversationLog>(
       { name: 'Created Date', key: 'created_date', visible: true },
       { name: 'Action ', key: 'action', visible: true },
       { name: 'Status', key: 'status', visible: true },
+      { name: 'STT', key: 'stt_latency_ms', visible: true },
+      { name: 'LLM', key: 'llm_latency_ms', visible: true },
+      {
+        name: 'TTFT',
+        key: 'agent_time_to_first_token',
+        visible: true,
+      },
+      { name: 'TTS', key: 'tts_latency_ms', visible: true },
+      { name: 'EOS', key: 'eos_latency_ms', visible: true },
       { name: 'Time Taken', key: 'time_taken', visible: false },
-      { name: 'Total Token', key: 'total_token', visible: false },
+      { name: 'Tokens', key: 'total_token', visible: true },
+      { name: 'Language', key: 'language', visible: true },
       { name: 'Feedback', key: 'user_feedback', visible: false },
       { name: 'User Feedback', key: 'user_text_feedback', visible: false },
     ],
@@ -188,10 +198,11 @@ export const useConversationLogPageStore = create<ConversationLog>(
      */
     addCriteria: (k: string, v: string, logic: string) => {
       let current = get().criteria.filter(
-        x => x.key !== k && x.logic !== logic,
+        x => !(x.key === k && x.logic === logic),
       );
       if (v) current.push({ key: k, value: v, logic: logic });
       set({
+        page: 1,
         criteria: current,
       });
     },
@@ -202,9 +213,12 @@ export const useConversationLogPageStore = create<ConversationLog>(
      */
     setCriterias: (v: { k: string; v: string; logic: string }[]) => {
       set({
-        criteria: v.map(c => {
-          return { key: c.k, value: c.v, logic: c.logic };
-        }),
+        page: 1,
+        criteria: v
+          .filter(c => c.v)
+          .map(c => {
+            return { key: c.k, value: c.v, logic: c.logic };
+          }),
       });
     },
 
@@ -217,10 +231,32 @@ export const useConversationLogPageStore = create<ConversationLog>(
         x => !v.find(y => y.k === x.key && x.logic === y.logic),
       );
       v.forEach(c => {
-        current.push({ key: c.k, value: c.v, logic: c.logic });
+        if (c.v) current.push({ key: c.k, value: c.v, logic: c.logic });
       });
       set({
+        page: 1,
         criteria: current,
+      });
+    },
+
+    /**
+     *
+     * @param key
+     */
+    removeCriteria: (key: string) => {
+      set({
+        page: 1,
+        criteria: get().criteria.filter(x => x.key !== key),
+      });
+    },
+
+    /**
+     *
+     */
+    clearCriteria: () => {
+      set({
+        page: 1,
+        criteria: [],
       });
     },
   }),

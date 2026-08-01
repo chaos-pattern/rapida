@@ -6,6 +6,7 @@ import { RetryHTTPLog } from '@rapidaai/react';
 
 const mockGetActivities = jest.fn();
 const mockAddCriterias = jest.fn();
+const mockSetCriterias = jest.fn();
 const mockOnChangeActivities = jest.fn();
 const mockSetPage = jest.fn();
 const mockSetPageSize = jest.fn();
@@ -28,9 +29,7 @@ const makeLog = () =>
   }) as any;
 
 jest.mock('@rapidaai/react', () => {
-  class ConnectionConfig {
-    constructor(_config: any) {}
-  }
+  class ConnectionConfig {}
 
   class RetryAssistantHTTPLogRequest {
     projectId = '';
@@ -72,6 +71,7 @@ jest.mock('@/hooks/use-webhook-log-page-store', () => ({
   useWebhookLogPage: () => ({
     getActivities: mockGetActivities,
     addCriterias: mockAddCriterias,
+    setCriterias: mockSetCriterias,
     webhookLogs: [makeLog()],
     onChangeActivities: mockOnChangeActivities,
     columns: [
@@ -145,8 +145,9 @@ jest.mock('@/app/components/helmet', () => ({
   Helmet: () => null,
 }));
 
-jest.mock('@/app/components/carbon/date-filter', () => ({
-  DateFilter: () => <div>date-filter</div>,
+jest.mock('@/app/components/carbon/query-search', () => ({
+  QuerySearch: ({ placeholder }: any) => <input placeholder={placeholder} />,
+  parseQuerySearchFilters: () => [],
 }));
 
 jest.mock('@/app/components/blocks/page-title-with-count', () => ({
@@ -170,7 +171,12 @@ jest.mock('@/app/components/carbon/empty-state', () => ({
 }));
 
 jest.mock('@/app/components/carbon/button', () => ({
-  IconOnlyButton: ({ iconDescription, children, ...props }: any) => (
+  IconOnlyButton: ({
+    iconDescription,
+    children,
+    renderIcon: _renderIcon,
+    ...props
+  }: any) => (
     <button aria-label={iconDescription} {...props}>
       {children || iconDescription}
     </button>
@@ -231,7 +237,11 @@ describe('Request logs listing', () => {
 
     await waitFor(() => expect(mockGetActivities).toHaveBeenCalledTimes(1));
     expect(screen.getByText('Request Logs')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Search request logs')).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(
+        'Search for logID, requestID, endpoint, status and more',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('req-123')).toBeInTheDocument();
     expect(screen.getByText('conversation.begin')).toBeInTheDocument();
   });

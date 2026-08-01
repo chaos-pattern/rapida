@@ -162,7 +162,92 @@ func (s *assistantHTTPLogService) GetAllLog(
 	qry := db.Model(internal_assistant_entity.AssistantHTTPLog{})
 	qry = qry.Where("organization_id = ? AND project_id = ? ", *auth.GetCurrentOrganizationId(), projectId)
 	for _, ct := range criterias {
-		qry = qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+
+		switch ct.GetKey() {
+		case "id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.id = ?", ct.GetValue())
+			}
+		case "created_date":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("assistant_http_logs.created_date >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_http_logs.created_date <= ?", ct.GetValue())
+			case "=":
+				qry = qry.Where("assistant_http_logs.created_date = ?", ct.GetValue())
+			}
+		case "source_ref_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.source_ref_id = ?", ct.GetValue())
+			}
+		case "assistant_conversation_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.assistant_conversation_id = ?", ct.GetValue())
+			}
+		case "assistant_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.assistant_id = ?", ct.GetValue())
+			}
+		case "source_event":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.source_event = ?", ct.GetValue())
+			case "contains":
+				qry = qry.Where("assistant_http_logs.source_event ILIKE ?", "%"+ct.GetValue()+"%")
+			}
+		case "http_method":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.http_method = ?", ct.GetValue())
+			}
+		case "http_url":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.http_url = ?", ct.GetValue())
+			case "contains":
+				qry = qry.Where("assistant_http_logs.http_url ILIKE ?", "%"+ct.GetValue()+"%")
+			}
+		case "response_status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.response_status = ?", ct.GetValue())
+			case ">=":
+				qry = qry.Where("assistant_http_logs.response_status >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_http_logs.response_status <= ?", ct.GetValue())
+			}
+		case "time_taken":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.time_taken = ?", ct.GetValue())
+			case ">=":
+				qry = qry.Where("assistant_http_logs.time_taken >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_http_logs.time_taken <= ?", ct.GetValue())
+			}
+		case "retry_count":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.retry_count = ?", ct.GetValue())
+			case ">=":
+				qry = qry.Where("assistant_http_logs.retry_count >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_http_logs.retry_count <= ?", ct.GetValue())
+			}
+		case "status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_http_logs.status = ?", ct.GetValue())
+			}
+		}
 	}
 	tx := qry.
 		Scopes(gorm_models.

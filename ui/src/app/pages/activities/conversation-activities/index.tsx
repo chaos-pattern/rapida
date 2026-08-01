@@ -6,12 +6,11 @@ import { AssistantConversationMessage } from '@rapidaai/react';
 import {
   formatNanoToReadableMilli,
   toDate,
-  toDateString,
   toHumanReadableDateTime,
 } from '@/utils/date';
-import { DateFilter } from '@/app/components/carbon/date-filter';
 import {
   getMetricValueOrDefault,
+  getMetadataValueOrDefault,
   getTimeTakenMetric,
   getTotalTokenMetric,
 } from '@/utils/metadata';
@@ -34,7 +33,6 @@ import {
   TableCell,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Loading,
   Tag,
   Link,
@@ -53,6 +51,7 @@ import {
 } from '@carbon/icons-react';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { ScrollableTableSection } from '@/app/components/sections/table-section';
+import { ConversationLogQuerySearch } from './conversation-query-search';
 
 export const ListingPage: FC<{}> = () => {
   const [userId, token, projectId] = useCredential();
@@ -65,55 +64,7 @@ export const ListingPage: FC<{}> = () => {
     useState<AssistantConversationMessage | null>(null);
   const [showLogModal, setShowLogModal] = useState(false);
 
-  const [searchValue, setSearchValue] = useState('');
-
-  const onDateSelect = (to: Date, from: Date) => {
-    conversationLogAction.setCriterias([
-      {
-        k: 'assistant_conversation_messages.created_date',
-        v: toDateString(from),
-        logic: '>=',
-      },
-      {
-        k: 'assistant_conversation_messages.created_date',
-        v: toDateString(to),
-        logic: '<=',
-      },
-    ]);
-  };
-
-  const applySearch = (value: string) => {
-    setSearchValue(value);
-    if (value === '') {
-      conversationLogAction.setCriterias([]);
-      return;
-    }
-    const criterias: { k: string; v: string; logic: string }[] = [];
-    const filterRegex = /(id|session):(\S+)/g;
-    let match;
-    while ((match = filterRegex.exec(value)) !== null) {
-      const [, filterType, filterValue] = match;
-      switch (filterType) {
-        case 'id':
-          criterias.push({
-            k: 'assistant_conversation_messages.id',
-            v: filterValue,
-            logic: '=',
-          });
-          break;
-        case 'session':
-          criterias.push({
-            k: 'assistant_conversation_messages.assistant_conversation_id',
-            v: filterValue,
-            logic: '=',
-          });
-          break;
-      }
-    }
-    if (criterias.length > 0) {
-      conversationLogAction.setCriterias(criterias);
-    }
-  };
+  const [querySearchValue, setQuerySearchValue] = useState('');
 
   useEffect(() => {
     conversationLogAction.clear();
@@ -148,6 +99,32 @@ export const ListingPage: FC<{}> = () => {
     return `"${str.replace(/"/g, '""')}"`;
   };
 
+  const formatMetricMilliseconds = (value: string): string => {
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return value;
+    return `${Number.isInteger(numericValue) ? numericValue : numericValue.toFixed(2)} ms`;
+  };
+
+  const getMetricDisplayValue = (
+    row: AssistantConversationMessage,
+    metricName: string,
+    formatter: (value: string) => string = value => value,
+  ): string => {
+    const value = getMetricValueOrDefault(row.getMetricsList(), metricName, '');
+    return value ? formatter(value) : '--';
+  };
+
+  const getLanguageDisplayValue = (
+    row: AssistantConversationMessage,
+  ): string => {
+    const language = getMetadataValueOrDefault(
+      row.getMetadataList(),
+      'language',
+      '',
+    );
+    return language || '--';
+  };
+
   const onDownloadAllTraces = () => {
     setDownloading(true);
     const csvContent = [
@@ -164,6 +141,7 @@ export const ListingPage: FC<{}> = () => {
                 case 'id':
                   return row.getId();
                 case 'session_id':
+                case 'assistant_conversation_id':
                   return row.getAssistantconversationid();
                 case 'assistant_id':
                   return row.getAssistantid();
@@ -179,8 +157,42 @@ export const ListingPage: FC<{}> = () => {
                     : '';
                 case 'status':
                   return row.getStatus();
+                case 'stt_latency_ms':
+                  return getMetricDisplayValue(
+                    row,
+                    'stt_latency_ms',
+                    formatMetricMilliseconds,
+                  );
+                case 'llm_latency_ms':
+                  return getMetricDisplayValue(
+                    row,
+                    'llm_latency_ms',
+                    formatMetricMilliseconds,
+                  );
+                case 'agent_time_to_first_token':
+                  return getMetricDisplayValue(
+                    row,
+                    'agent_time_to_first_token',
+                    formatNanoToReadableMilli,
+                  );
+                case 'tts_latency_ms':
+                  return getMetricDisplayValue(
+                    row,
+                    'tts_latency_ms',
+                    formatMetricMilliseconds,
+                  );
+                case 'eos_latency_ms':
+                  return getMetricDisplayValue(
+                    row,
+                    'eos_latency_ms',
+                    formatMetricMilliseconds,
+                  );
                 case 'time_taken':
                   return `${getTimeTakenMetric(row.getMetricsList()) / 1000000}ms`;
+                case 'total_token':
+                  return getTotalTokenMetric(row.getMetricsList());
+                case 'language':
+                  return getLanguageDisplayValue(row);
                 default:
                   return '';
               }
@@ -228,14 +240,10 @@ export const ListingPage: FC<{}> = () => {
         {/* ── Carbon Toolbar ── */}
         <TableToolbar>
           <TableToolbarContent>
-            <TableToolbarSearch
-              placeholder="Search by id:trace-id, session:session-id"
-              value={searchValue}
-              onChange={(e: any) => applySearch(e.target?.value || '')}
-            />
-            <DateFilter
-              onApply={(from, to) => onDateSelect(to, from)}
-              onReset={() => conversationLogAction.setCriterias([])}
+            <ConversationLogQuerySearch
+              value={querySearchValue}
+              onChange={setQuerySearchValue}
+              onApply={conversationLogAction.setCriterias}
             />
             <IconOnlyButton
               kind="ghost"
@@ -425,9 +433,61 @@ export const ListingPage: FC<{}> = () => {
                         )}
                       </TableCell>
                     )}
+                    {conversationLogAction.visibleColumn('stt_latency_ms') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {getMetricDisplayValue(
+                          row,
+                          'stt_latency_ms',
+                          formatMetricMilliseconds,
+                        )}
+                      </TableCell>
+                    )}
+                    {conversationLogAction.visibleColumn('llm_latency_ms') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {getMetricDisplayValue(
+                          row,
+                          'llm_latency_ms',
+                          formatMetricMilliseconds,
+                        )}
+                      </TableCell>
+                    )}
+                    {conversationLogAction.visibleColumn(
+                      'agent_time_to_first_token',
+                    ) && (
+                      <TableCell className="font-mono text-[13px]">
+                        {getMetricDisplayValue(
+                          row,
+                          'agent_time_to_first_token',
+                          formatNanoToReadableMilli,
+                        )}
+                      </TableCell>
+                    )}
+                    {conversationLogAction.visibleColumn('tts_latency_ms') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {getMetricDisplayValue(
+                          row,
+                          'tts_latency_ms',
+                          formatMetricMilliseconds,
+                        )}
+                      </TableCell>
+                    )}
+                    {conversationLogAction.visibleColumn('eos_latency_ms') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {getMetricDisplayValue(
+                          row,
+                          'eos_latency_ms',
+                          formatMetricMilliseconds,
+                        )}
+                      </TableCell>
+                    )}
                     {conversationLogAction.visibleColumn('total_token') && (
                       <TableCell className="text-sm tabular-nums">
                         {getTotalTokenMetric(row.getMetricsList())}
+                      </TableCell>
+                    )}
+                    {conversationLogAction.visibleColumn('language') && (
+                      <TableCell className="text-sm">
+                        {getLanguageDisplayValue(row)}
                       </TableCell>
                     )}
                     {conversationLogAction.visibleColumn('user_feedback') && (

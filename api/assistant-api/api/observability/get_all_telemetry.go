@@ -131,21 +131,35 @@ func (parts *telemetryQueryParts) applyCriteria(criteriaList []*protos.Criteria)
 			}
 		case "id", "scope", "event", "component", "name", "level":
 			parts.filter = append(parts.filter, telemetryExactStringFilter(key, value))
-		case "assistantId", "assistant_id":
+		case "assistantId":
 			parts.filter = append(parts.filter, telemetryExactStringFilter("scopeAttributes.assistantId", value))
-		case "assistantConversationId", "assistant_conversation_id", "conversationId", "conversation_id":
+		case "assistantConversationId":
 			parts.filter = append(parts.filter, telemetryExactStringFilter("scopeAttributes.assistantConversationId", value))
-		case "messageId", "message_id":
+		case "messageId":
 			parts.filter = append(parts.filter, telemetryExactStringFilter("scopeAttributes.messageId", value))
-		case "messageRole", "message_role":
+		case "messageRole":
 			parts.filter = append(parts.filter, telemetryExactStringFilter("scopeAttributes.messageRole", value))
-		case "traceId", "traceID", "trace_id":
+		case "traceId":
 			parts.filter = append(parts.filter, telemetryTraceIDFilter(value))
-		case "occurredAtFrom", "from", "start":
-			parts.timeRange["gte"] = value
-		case "occurredAtTo", "to", "end":
-			parts.timeRange["lte"] = value
-		case "search", "q":
+		case "timestamp":
+			switch strings.TrimSpace(criteria.GetLogic()) {
+			case ">=":
+				parts.timeRange["gte"] = value
+			case ">":
+				parts.timeRange["gt"] = value
+			case "<=":
+				parts.timeRange["lte"] = value
+			case "<":
+				parts.timeRange["lt"] = value
+			case "=":
+				parts.timeRange["gte"] = value
+				if timestamp, err := time.Parse(time.RFC3339Nano, value); err == nil {
+					parts.timeRange["lt"] = timestamp.Add(time.Minute).Format(time.RFC3339Nano)
+				} else {
+					parts.timeRange["lte"] = value
+				}
+			}
+		case "search":
 			parts.must = append(parts.must, telemetrySearchFilter(value))
 		default:
 			if strings.HasPrefix(key, "attributes.") || strings.HasPrefix(key, "scopeAttributes.") || strings.HasPrefix(key, "context.") {

@@ -35,11 +35,9 @@ const field = (
   text: string,
   type: QuerySearchField['type'],
   items?: QuerySearchOption[],
-  aliases?: string[],
   logicLabel?: string,
   logicOptions?: QuerySearchField['logicOptions'],
 ): QuerySearchField => ({
-  aliases,
   category,
   items: items?.filter(option => option.id !== 'all'),
   logicLabel,
@@ -50,20 +48,7 @@ const field = (
 });
 
 const QUERY_FILTER_FIELDS: QuerySearchField[] = [
-  field(
-    'scope',
-    'scopeAttributes.assistantConversationId',
-    'conversation',
-    'number',
-    undefined,
-    [
-      'assistantConversationId',
-      'assistant_conversation_id',
-      'conversation',
-      'conversation_id',
-      'conversationId',
-    ],
-  ),
+  field('scope', 'conversation', 'conversation', 'number'),
   field('attributes', 'component', 'component', 'string', COMPONENT_OPTIONS),
   field('event', 'event', 'event', 'string', ALL_EVENT_OPTIONS),
   field('scope', 'scope', 'scope', 'string', SCOPE_OPTIONS),
@@ -77,20 +62,11 @@ const QUERY_FILTER_FIELDS: QuerySearchField[] = [
   field('attributes', 'attributes.component', 'attributes.component', 'string'),
   field('attributes', 'attributes.provider', 'attributes.provider', 'string'),
   field('attributes', 'context.traceId', 'context.traceId', 'string'),
-  field(
-    'record',
-    'from',
-    'timestamp',
-    'date',
-    undefined,
-    ['to', 'timestamp', 'occurredAt', 'occurredAtFrom', 'occurredAtTo'],
-    'is after',
-    [
-      { label: 'is after', queryKey: 'from' },
-      { label: 'is before', queryKey: 'to' },
-      { label: 'is', queryKey: 'timestamp' },
-    ],
-  ),
+  field('record', 'timestamp', 'timestamp', 'date', undefined, 'is after', [
+    { label: 'is after', logic: '>=' },
+    { label: 'is before', logic: '<=' },
+    { label: 'is', logic: '=' },
+  ]),
 ];
 
 export const TraceQuerySearch = ({

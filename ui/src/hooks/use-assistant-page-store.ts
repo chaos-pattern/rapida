@@ -146,9 +146,12 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
    * @param v
    */
   addCriteria: (k: string, v: string, logic: string) => {
-    let current = get().criteria.filter(x => x.key !== k && x.logic !== logic);
+    let current = get().criteria.filter(
+      x => !(x.key === k && x.logic === logic),
+    );
     if (v) current.push({ key: k, value: v, logic: logic });
     set({
+      page: 1,
       criteria: current,
     });
   },
@@ -162,15 +165,17 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
       x => !v.find(y => y.k === x.key && x.logic === y.logic),
     );
     v.forEach(c => {
-      current.push({ key: c.k, value: c.v, logic: c.logic });
+      if (c.v) current.push({ key: c.k, value: c.v, logic: c.logic });
     });
     set({
+      page: 1,
       criteria: current,
     });
   },
 
   removeCriteria: (k: string) => {
     set(state => ({
+      page: 1,
       criteria: state.criteria.filter(criterion => criterion.key !== k),
     }));
   },
@@ -178,11 +183,13 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
   setCriterias: (v: { k: string; v: string; logic: string }[]) => {
     set({
       page: 1,
-      criteria: v.map(c => ({
-        key: c.k,
-        logic: c.logic,
-        value: c.v,
-      })),
+      criteria: v
+        .filter(c => c.v)
+        .map(c => ({
+          key: c.k,
+          logic: c.logic,
+          value: c.v,
+        })),
     });
   },
 

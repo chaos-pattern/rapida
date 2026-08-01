@@ -440,19 +440,23 @@ export type TraceFilterToken = {
   criteriaKey: string;
   fieldKey: string;
   label: string;
-  logic: '=';
+  logic: '=' | '>=' | '<=';
   rawText?: string;
   source: TraceFilterSource;
   value: string;
 };
 
 type TraceFilterField = {
-  aliases?: string[];
   criteriaKey: string;
   getDocumentValue?: (doc: TimelineDocument) => string | number | undefined;
   key: string;
   label: string;
-  match?: (doc: TimelineDocument, value: string) => boolean;
+  logic?: TraceFilterToken['logic'];
+  match?: (
+    doc: TimelineDocument,
+    value: string,
+    logic: TraceFilterToken['logic'],
+  ) => boolean;
 };
 
 export type ParsedTraceFilterQuery = {
@@ -501,7 +505,6 @@ const TRACE_FILTER_FIELD_DEFINITIONS: TraceFilterField[] = [
     key: 'trace',
     label: 'traceID',
     criteriaKey: 'traceId',
-    aliases: ['traceId', 'traceID', 'trace_id'],
     getDocumentValue: doc => doc.traceId,
   },
   {
@@ -526,33 +529,24 @@ const TRACE_FILTER_FIELD_DEFINITIONS: TraceFilterField[] = [
     key: 'assistant',
     label: 'Assistant ID',
     criteriaKey: 'assistantId',
-    aliases: ['assistantId', 'assistant_id'],
     getDocumentValue: doc => doc.assistantId,
   },
   {
     key: 'conversation',
     label: 'Conversation ID',
     criteriaKey: 'assistantConversationId',
-    aliases: [
-      'assistantConversationId',
-      'assistant_conversation_id',
-      'conversationId',
-      'conversation_id',
-    ],
     getDocumentValue: doc => doc.assistantConversationId,
   },
   {
     key: 'message',
     label: 'Message ID',
     criteriaKey: 'messageId',
-    aliases: ['messageId', 'message_id'],
     getDocumentValue: doc => doc.messageId,
   },
   {
     key: 'role',
     label: 'Message role',
     criteriaKey: 'messageRole',
-    aliases: ['messageRole', 'message_role'],
     getDocumentValue: doc => doc.messageRole,
   },
   {
@@ -577,54 +571,27 @@ const TRACE_FILTER_FIELD_DEFINITIONS: TraceFilterField[] = [
     key: 'metric',
     label: 'Metric name',
     criteriaKey: 'name',
-    aliases: ['metricName', 'metric_name'],
     match: (doc, value) => getMetricNames(doc).includes(value),
-  },
-  {
-    key: 'from',
-    label: 'From',
-    criteriaKey: 'occurredAtFrom',
-    aliases: ['start', 'occurredAtFrom'],
-    match: (doc, value) => {
-      const docMs = getDateMs(doc.occurredAt);
-      const valueMs = getDateMs(value);
-      return docMs !== null && valueMs !== null && docMs >= valueMs;
-    },
   },
   {
     key: 'timestamp',
     label: 'Timestamp',
-    criteriaKey: 'occurredAt',
-    aliases: ['occurredAt'],
-    match: (doc, value) => {
+    criteriaKey: 'timestamp',
+    logic: '>=',
+    match: (doc, value, logic) => {
       const docMs = getDateMs(doc.occurredAt);
       const valueMs = getDateMs(value);
-      return (
-        docMs !== null &&
-        valueMs !== null &&
-        docMs >= valueMs &&
-        docMs < valueMs + 60 * 1000
-      );
-    },
-  },
-  {
-    key: 'to',
-    label: 'To',
-    criteriaKey: 'occurredAtTo',
-    aliases: ['end', 'occurredAtTo'],
-    match: (doc, value) => {
-      const docMs = getDateMs(doc.occurredAt);
-      const valueMs = getDateMs(value);
-      return docMs !== null && valueMs !== null && docMs <= valueMs;
+      if (docMs === null || valueMs === null) return false;
+      if (logic === '<=') return docMs <= valueMs;
+      if (logic === '=') return docMs >= valueMs && docMs < valueMs + 60 * 1000;
+      return docMs >= valueMs;
     },
   },
 ];
 
 const TRACE_FILTER_FIELD_LOOKUP = TRACE_FILTER_FIELD_DEFINITIONS.reduce(
   (lookup, field) => {
-    [field.key, ...(field.aliases || [])].forEach(key => {
-      lookup.set(key.toLowerCase(), field);
-    });
+    lookup.set(field.key.toLowerCase(), field);
     return lookup;
   },
   new Map<string, TraceFilterField>(),
@@ -677,6 +644,7 @@ export const createTraceFilter = (
   key: string,
   value: string | number | undefined,
   source: TraceFilterSource,
+  logic?: TraceFilterToken['logic'],
 ): TraceFilterToken | null => {
   const normalizedValue = String(value ?? '').trim();
   if (!normalizedValue) return null;
@@ -688,7 +656,7 @@ export const createTraceFilter = (
     criteriaKey: field.criteriaKey,
     fieldKey: field.key,
     label: field.label,
-    logic: '=',
+    logic: logic || field.logic || '=',
     source,
     value: normalizedValue,
   };
@@ -706,7 +674,7 @@ const unquoteTraceFilterValue = (value: string): string => {
 };
 
 const TRACE_FILTER_PATTERN =
-  /(^|\s)([A-Za-z][\w.]*)(:|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)/g;
+  /(^|\s)([A-Za-z][\w.]*)(?:~(>=|<=|=))?(:|=)("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^\s]+)/g;
 
 export const parseTraceFilterQuery = (
   query: string,
@@ -717,7 +685,7 @@ export const parseTraceFilterQuery = (
   let match: RegExpExecArray | null;
 
   while ((match = TRACE_FILTER_PATTERN.exec(query)) !== null) {
-    const [rawMatch, prefix, key, , rawValue] = match;
+    const [rawMatch, prefix, key, logic, , rawValue] = match;
     const matchStart = match.index + prefix.length;
     const before = query.slice(lastIndex, matchStart).trim();
     if (before) freeTextParts.push(before);
@@ -726,6 +694,7 @@ export const parseTraceFilterQuery = (
       key,
       unquoteTraceFilterValue(rawValue),
       'query',
+      logic as TraceFilterToken['logic'] | undefined,
     );
 
     if (filter) {
@@ -758,8 +727,15 @@ export const dedupeTraceFilters = (
   });
 };
 
-export const formatTraceFilterToken = (filter: TraceFilterToken): string =>
-  `${filter.fieldKey}:${filter.value}`;
+export const formatTraceFilterToken = (filter: TraceFilterToken): string => {
+  const field = getTraceFilterField(filter.fieldKey);
+  const defaultLogic = field?.logic || '=';
+  const key =
+    filter.logic === defaultLogic
+      ? filter.fieldKey
+      : `${filter.fieldKey}~${filter.logic}`;
+  return `${key}:${filter.value}`;
+};
 
 export const matchesTraceFilters = (
   doc: TimelineDocument,
@@ -768,7 +744,7 @@ export const matchesTraceFilters = (
   filters.every(filter => {
     const field = getTraceFilterField(filter.fieldKey);
     if (!field) return true;
-    if (field.match) return field.match(doc, filter.value);
+    if (field.match) return field.match(doc, filter.value, filter.logic);
     const value = field.getDocumentValue?.(doc);
     return String(value ?? '') === filter.value;
   });
