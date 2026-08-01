@@ -25,8 +25,6 @@ type GetAssistantOption struct {
 	InjectPhoneDeployment        bool
 	InjectWhatsappDeployment     bool
 	InjectTool                   bool
-	//
-	InjectConversations bool
 
 	InjectAnalysis       bool
 	InjectAuthentication bool
@@ -44,7 +42,6 @@ func NewDefaultGetAssistantOption() *GetAssistantOption {
 		InjectPhoneDeployment:        true,
 		InjectWhatsappDeployment:     true,
 		InjectTool:                   true,
-		InjectConversations:          true,
 		InjectAuthentication:         true,
 		InjectStorage:                true,
 	}

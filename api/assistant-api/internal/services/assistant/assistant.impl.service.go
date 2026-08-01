@@ -609,13 +609,6 @@ func (eService *assistantService) GetAll(ctx context.Context, auth types.SimpleP
 		})
 	}
 
-	if opts.InjectConversations {
-		qry = qry.Preload("AssistantConversations", func(db *gorm.DB) *gorm.DB {
-			thirtyDaysAgo := time.Now().AddDate(0, 0, -31)
-			return db.Where("created_date >= ?", thirtyDaysAgo).Order("updated_date DESC")
-		})
-	}
-
 	qry = qry.Where("assistants.organization_id = ? AND assistants.project_id = ? AND assistants.status = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), type_enums.RECORD_ACTIVE.String())
 	for _, ct := range criterias {
 		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {

@@ -290,7 +290,7 @@ describe('listing page create CTAs', () => {
       'min-w-28',
       'whitespace-nowrap',
     );
-    expect(screen.getAllByTestId('skeleton-text')).toHaveLength(100);
+    expect(screen.getAllByTestId('skeleton-text')).toHaveLength(70);
     expect(screen.getAllByTestId('skeleton-placeholder')).toHaveLength(100);
     expect(
       screen.getByRole('button', { name: 'Create new assistant' }),
@@ -353,13 +353,15 @@ describe('listing page create CTAs', () => {
     expect(
       screen.getByRole('columnheader', { name: 'Deployments' }),
     ).toHaveClass('min-w-48', 'whitespace-nowrap');
-    expect(screen.getByRole('columnheader', { name: 'Sessions' })).toHaveClass(
-      'min-w-28',
-      'whitespace-nowrap',
-    );
     expect(
-      screen.getByRole('columnheader', { name: 'Last activity' }),
-    ).toHaveClass('min-w-36', 'whitespace-nowrap');
+      screen.queryByRole('columnheader', { name: 'Sessions' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: 'Users' }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('columnheader', { name: 'Last activity' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('columnheader', { name: 'Actions' })).toHaveClass(
       'min-w-28',
       'whitespace-nowrap',
