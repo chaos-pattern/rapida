@@ -616,8 +616,7 @@ func (eService *assistantService) GetAll(ctx context.Context, auth types.SimpleP
 		})
 	}
 
-	qry = qry.Where("assistants.organization_id = ? AND assistants.project_id = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId())
-	hasStatusCriteria := false
+	qry = qry.Where("assistants.organization_id = ? AND assistants.project_id = ? AND assistants.status = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), type_enums.RECORD_ACTIVE.String())
 	for _, ct := range criterias {
 		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
 			continue
@@ -647,16 +646,7 @@ func (eService *assistantService) GetAll(ctx context.Context, auth types.SimpleP
 			default:
 				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_tags WHERE assistant_tags.assistant_id = assistants.id AND assistant_tags.tag ILIKE ?)", "%\""+ct.GetValue()+"\"%")
 			}
-		case "status":
-			hasStatusCriteria = true
-			switch ct.GetLogic() {
-			default:
-				qry = qry.Where("assistants.status = ?", ct.GetValue())
-			}
 		}
-	}
-	if !hasStatusCriteria {
-		qry = qry.Where("assistants.status = ?", type_enums.RECORD_ACTIVE.String())
 	}
 
 	tx := qry.
