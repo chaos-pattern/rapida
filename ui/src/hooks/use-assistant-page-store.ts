@@ -2,17 +2,15 @@ import {
   AssistantDefinition,
   ConnectionConfig,
   CreateAssistantTag,
+  Criteria,
   GetAllAssistant,
+  GetAllAssistantRequest,
   GetAssistant,
   GetAssistantRequest,
+  Paginate,
   UpdateAssistantDetail,
 } from '@rapidaai/react';
-import { ServiceError } from '@rapidaai/react';
-import {
-  Assistant,
-  GetAllAssistantResponse,
-  GetAssistantResponse,
-} from '@rapidaai/react';
+import { Assistant, GetAssistantResponse } from '@rapidaai/react';
 
 import { create } from 'zustand';
 import { AssistantType, AssistantTypeProperty } from '@/types';
@@ -148,9 +146,12 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
    * @param v
    */
   addCriteria: (k: string, v: string, logic: string) => {
-    let current = get().criteria.filter(x => x.key !== k && x.logic !== logic);
+    let current = get().criteria.filter(
+      x => !(x.key === k && x.logic === logic),
+    );
     if (v) current.push({ key: k, value: v, logic: logic });
     set({
+      page: 1,
       criteria: current,
     });
   },
@@ -164,10 +165,38 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
       x => !v.find(y => y.k === x.key && x.logic === y.logic),
     );
     v.forEach(c => {
-      current.push({ key: c.k, value: c.v, logic: c.logic });
+      if (c.v) current.push({ key: c.k, value: c.v, logic: c.logic });
     });
     set({
+      page: 1,
       criteria: current,
+    });
+  },
+
+  removeCriteria: (k: string) => {
+    set(state => ({
+      page: 1,
+      criteria: state.criteria.filter(criterion => criterion.key !== k),
+    }));
+  },
+
+  setCriterias: (v: { k: string; v: string; logic: string }[]) => {
+    set({
+      page: 1,
+      criteria: v
+        .filter(c => c.v)
+        .map(c => ({
+          key: c.k,
+          logic: c.logic,
+          value: c.v,
+        })),
+    });
+  },
+
+  clearCriteria: () => {
+    set({
+      page: 1,
+      criteria: [],
     });
   },
 
@@ -184,18 +213,40 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
     onError: (err: string) => void,
     onSuccess: (e: Assistant[]) => void,
   ) => {
-    const afterGetAllAssistant = (
-      err: ServiceError | null,
-      gur: GetAllAssistantResponse | null,
-    ) => {
-      if (gur?.getSuccess()) {
-        get().onChangeAssistants(gur.getDataList());
-        let paginated = gur.getPaginated();
-        if (paginated) {
-          get().setTotalCount(paginated.getTotalitem());
+    const request = new GetAllAssistantRequest();
+    const paginate = new Paginate();
+    paginate.setPage(get().page);
+    paginate.setPagesize(get().pageSize);
+    request.setPaginate(paginate);
+
+    get().criteria.forEach(criterion => {
+      const criteria = new Criteria();
+      criteria.setKey(criterion.key);
+      criteria.setLogic(criterion.logic);
+      criteria.setValue(criterion.value);
+      request.addCriterias(criteria);
+    });
+
+    GetAllAssistant(
+      connectionConfig,
+      request,
+      ConnectionConfig.WithDebugger({
+        authorization: token,
+        projectId: projectId,
+        userId: userId,
+      }),
+    )
+      .then(gur => {
+        if (gur?.getSuccess()) {
+          get().onChangeAssistants(gur.getDataList());
+          let paginated = gur.getPaginated();
+          if (paginated) {
+            get().setTotalCount(paginated.getTotalitem());
+          }
+          onSuccess(gur.getDataList());
+          return;
         }
-        onSuccess(gur.getDataList());
-      } else {
+
         let errorMessage = gur?.getError();
         if (errorMessage) {
           onError(errorMessage.getHumanmessage());
@@ -204,21 +255,12 @@ export const useAssistantPageStore = create<AssistantType>((set, get) => ({
         onError(
           'Something went wrong while retrieving your assistants. Please refresh the page or try again later.',
         );
-      }
-    };
-
-    GetAllAssistant(
-      connectionConfig,
-      get().page,
-      get().pageSize,
-      get().criteria,
-      afterGetAllAssistant,
-      {
-        authorization: token,
-        'x-project-id': projectId,
-        'x-auth-id': userId,
-      },
-    );
+      })
+      .catch(() => {
+        onError(
+          'Something went wrong while retrieving your assistants. Please refresh the page or try again later.',
+        );
+      });
   },
 
   /**

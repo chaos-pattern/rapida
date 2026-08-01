@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { SingleEndpoint } from './single-endpoint';
 import { useCredential } from '@/hooks/use-credential';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -22,9 +22,12 @@ import {
   TableBody,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Button,
 } from '@carbon/react';
+import {
+  EndpointQuerySearch,
+  getEndpointSearchCriteria,
+} from './endpoint-query-search';
 
 const CREATE_ENDPOINT_LABEL = 'Create new endpoint';
 
@@ -45,18 +48,30 @@ const endpointColumnClassName: Record<string, string> = {
   action: 'w-16 min-w-16 whitespace-nowrap',
 };
 
+const formatQuerySearchValue = (key: string, value: string): string =>
+  /\s/.test(value)
+    ? `${key}:"${value.replace(/"/g, '\\"')}"`
+    : `${key}:${value}`;
+
 export function EndpointPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [userId, token, projectId] = useCredential();
   const endpointActions = useEndpointPageStore();
   const { loading, showLoader, hideLoader } = useRapidaStore();
+  const [querySearchValue, setQuerySearchValue] = useState('');
 
   useEffect(() => {
     if (searchParams) {
       const searchParamMap = Object.fromEntries(searchParams.entries());
-      Object.entries(searchParamMap).forEach(([key, value]) =>
-        endpointActions.addCriteria(key, value, '='),
+      const nextQuerySearchValue = Object.entries(searchParamMap)
+        .filter(([, value]) => value)
+        .map(([key, value]) => formatQuerySearchValue(key, value))
+        .join(' ');
+
+      setQuerySearchValue(nextQuerySearchValue);
+      endpointActions.setCriterias(
+        getEndpointSearchCriteria(nextQuerySearchValue),
       );
     }
   }, [searchParams]);
@@ -107,7 +122,11 @@ export function EndpointPage() {
 
       <TableToolbar>
         <TableToolbarContent>
-          <TableToolbarSearch placeholder="Search endpoints..." />
+          <EndpointQuerySearch
+            value={querySearchValue}
+            onChange={setQuerySearchValue}
+            onApply={criteria => endpointActions.setCriterias(criteria)}
+          />
           <Button
             hasIconOnly
             renderIcon={Renew}

@@ -400,11 +400,66 @@ func (eService *assistantToolService) GetAllLog(
 		toolLogs []*internal_assistant_entity.AssistantToolLog
 		cnt      int64
 	)
-	qry := db.Model(internal_assistant_entity.AssistantToolLog{})
-	qry.
+	qry := db.Model(internal_assistant_entity.AssistantToolLog{}).
 		Where("organization_id = ? AND project_id = ? ", *auth.GetCurrentOrganizationId(), projectId)
 	for _, ct := range criterias {
-		qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		switch ct.GetKey() {
+		case "id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.id = ?", ct.GetValue())
+			}
+		case "created_date":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("assistant_tool_logs.created_date >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_tool_logs.created_date <= ?", ct.GetValue())
+			case "=":
+				qry = qry.Where("assistant_tool_logs.created_date = ?", ct.GetValue())
+			}
+		case "assistant_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.assistant_id = ?", ct.GetValue())
+			}
+		case "assistant_conversation_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.assistant_conversation_id = ?", ct.GetValue())
+			}
+		case "assistant_conversation_message_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.assistant_conversation_message_id = ?", ct.GetValue())
+			}
+		case "assistant_tool_name":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.assistant_tool_name = ?", ct.GetValue())
+			case "contains":
+				qry = qry.Where("assistant_tool_logs.assistant_tool_name ILIKE ?", "%"+ct.GetValue()+"%")
+			}
+		case "tool_call_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.tool_call_id = ?", ct.GetValue())
+			}
+		case "status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.status = ?", ct.GetValue())
+			}
+		case "time_taken":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_tool_logs.time_taken = ?", ct.GetValue())
+			case ">":
+				qry = qry.Where("assistant_tool_logs.time_taken > ?", ct.GetValue())
+			case "<":
+				qry = qry.Where("assistant_tool_logs.time_taken < ?", ct.GetValue())
+			}
+		}
 	}
 	tx := qry.
 		Scopes(gorm_models.

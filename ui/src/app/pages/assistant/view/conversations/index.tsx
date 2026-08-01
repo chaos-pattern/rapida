@@ -7,7 +7,7 @@ import {
 import { useCredential } from '@/hooks/use-credential';
 import { useRapidaStore } from '@/hooks/use-rapida-store';
 import toast from 'react-hot-toast/headless';
-import { toDate, toDateString, toHumanReadableDateTime } from '@/utils/date';
+import { toDate, toHumanReadableDateTime } from '@/utils/date';
 import { useAssistantConversationListPageStore } from '@/hooks/use-assistant-conversation-list-page-store';
 import { CarbonStatusIndicator } from '@/app/components/carbon/status-indicator';
 import SourceIndicator from '@/app/components/indicators/source';
@@ -33,13 +33,11 @@ import {
   TableCell,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Loading,
   Link,
 } from '@carbon/react';
 import { Pagination } from '@/app/components/carbon/pagination';
 import { IconOnlyButton } from '@/app/components/carbon/button';
-import { DateFilter } from '@/app/components/carbon/date-filter';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import {
   Renew,
@@ -49,6 +47,7 @@ import {
   Phone,
   Chat,
 } from '@carbon/icons-react';
+import { SessionQuerySearch } from './session-query-search';
 
 interface ConversationProps {
   currentAssistant: Assistant;
@@ -65,63 +64,8 @@ export function Conversations({ currentAssistant }: ConversationProps) {
   const assistantConversationListAction =
     useAssistantConversationListPageStore();
 
-  const [searchValue, setSearchValue] = useState('');
+  const [querySearchValue, setQuerySearchValue] = useState('');
   const [downloading, setDownloading] = useState(false);
-
-  const onDateSelect = (to: Date, from: Date) => {
-    assistantConversationListAction.setCriterias([
-      {
-        k: 'assistant_conversations.created_date',
-        v: toDateString(from),
-        logic: '>=',
-      },
-      {
-        k: 'assistant_conversations.created_date',
-        v: toDateString(to),
-        logic: '<=',
-      },
-    ]);
-  };
-
-  const applySearch = (value: string) => {
-    setSearchValue(value);
-    if (value === '') {
-      assistantConversationListAction.setCriterias([]);
-      return;
-    }
-    const criterias: { k: string; v: string; logic: string }[] = [];
-    const filterRegex = /(id|source|status):(\S+)/g;
-    let match;
-    while ((match = filterRegex.exec(value)) !== null) {
-      const [, filterType, filterValue] = match;
-      switch (filterType) {
-        case 'id':
-          criterias.push({
-            k: 'assistant_conversations.id',
-            v: filterValue,
-            logic: '=',
-          });
-          break;
-        case 'source':
-          criterias.push({
-            k: 'assistant_conversations.source',
-            v: filterValue,
-            logic: '=',
-          });
-          break;
-        case 'status':
-          criterias.push({
-            k: 'assistant_conversations.status',
-            v: filterValue,
-            logic: '=',
-          });
-          break;
-      }
-    }
-    if (criterias.length > 0) {
-      assistantConversationListAction.setCriterias(criterias);
-    }
-  };
 
   useEffect(() => {
     assistantConversationListAction.clear();
@@ -225,14 +169,10 @@ export function Conversations({ currentAssistant }: ConversationProps) {
 
       <TableToolbar>
         <TableToolbarContent>
-          <TableToolbarSearch
-            placeholder="Search by id:session-id, source:web, status:completed"
-            value={searchValue}
-            onChange={(e: any) => applySearch(e.target?.value || '')}
-          />
-          <DateFilter
-            onApply={(from, to) => onDateSelect(to, from)}
-            onReset={() => assistantConversationListAction.setCriterias([])}
+          <SessionQuerySearch
+            value={querySearchValue}
+            onChange={setQuerySearchValue}
+            onApply={assistantConversationListAction.setCriterias}
           />
           <IconOnlyButton
             kind="ghost"

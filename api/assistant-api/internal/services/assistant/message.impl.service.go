@@ -228,7 +228,96 @@ func (conversationService *assistantConversationService) GetAllMessage(
 	// 	qry = qry.Preload("Stages")
 	// }
 	for _, ct := range criterias {
-		qry = qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+
+		switch ct.GetKey() {
+		case "message_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.message_id = ?", ct.GetValue())
+			}
+		case "created_date":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("assistant_conversation_messages.created_date >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_conversation_messages.created_date <= ?", ct.GetValue())
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.created_date = ?", ct.GetValue())
+			}
+		case "assistant_conversation_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.assistant_conversation_id = ?", ct.GetValue())
+			}
+		case "assistant_id":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.assistant_id = ?", ct.GetValue())
+			}
+		case "source":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.source = ?", ct.GetValue())
+			case "contains":
+				qry = qry.Where("assistant_conversation_messages.source ILIKE ?", "%"+ct.GetValue()+"%")
+			}
+		case "role":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.role = ?", ct.GetValue())
+			}
+		case "body":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.body = ?", ct.GetValue())
+			case "contains":
+				qry = qry.Where("assistant_conversation_messages.body ILIKE ?", "%"+ct.GetValue()+"%")
+			}
+		case "status":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where("assistant_conversation_messages.status = ?", ct.GetValue())
+			}
+		case "stt_latency_ms", "llm_latency_ms", "agent_time_to_first_token", "tts_latency_ms", "eos_latency_ms", "agent_total_token":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM assistant_conversation_message_metrics WHERE assistant_conversation_message_metrics.assistant_conversation_message_id = assistant_conversation_messages.message_id AND assistant_conversation_message_metrics.name = ? AND assistant_conversation_message_metrics.value::numeric = ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			case ">=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM assistant_conversation_message_metrics WHERE assistant_conversation_message_metrics.assistant_conversation_message_id = assistant_conversation_messages.message_id AND assistant_conversation_message_metrics.name = ? AND assistant_conversation_message_metrics.value::numeric >= ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			case "<=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM assistant_conversation_message_metrics WHERE assistant_conversation_message_metrics.assistant_conversation_message_id = assistant_conversation_messages.message_id AND assistant_conversation_message_metrics.name = ? AND assistant_conversation_message_metrics.value::numeric <= ?::numeric)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			}
+		case "language":
+			switch ct.GetLogic() {
+			case "=":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM assistant_conversation_message_metadata WHERE assistant_conversation_message_metadata.assistant_conversation_message_id = assistant_conversation_messages.message_id AND assistant_conversation_message_metadata.key = ? AND assistant_conversation_message_metadata.value = ?)",
+					ct.GetKey(),
+					ct.GetValue(),
+				)
+			case "contains":
+				qry = qry.Where(
+					"EXISTS (SELECT 1 FROM assistant_conversation_message_metadata WHERE assistant_conversation_message_metadata.assistant_conversation_message_id = assistant_conversation_messages.message_id AND assistant_conversation_message_metadata.key = ? AND assistant_conversation_message_metadata.value ILIKE ?)",
+					ct.GetKey(),
+					"%"+ct.GetValue()+"%",
+				)
+			}
+		}
 	}
 
 	tx := qry.Debug().Select(cols).

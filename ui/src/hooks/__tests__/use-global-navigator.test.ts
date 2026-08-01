@@ -145,7 +145,9 @@ describe('useGlobalNavigation', () => {
     const { result } = renderHook(() => useGlobalNavigation());
 
     result.current.goToConversationTelemetry('2340105440068632576');
-    result.current.goToMessageTelemetry('a49f2845-68ec-4a59-a30d-5e2b30df87bf');
+    result.current.goToMessageTelemetry(
+      'assistant-a49f2845-68ec-4a59-a30d-5e2b30df87bf',
+    );
 
     expect(mockNavigate).toHaveBeenNthCalledWith(
       1,

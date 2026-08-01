@@ -1,15 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Helmet } from '@/app/components/helmet';
-import { DateFilter } from '@/app/components/carbon/date-filter';
 import { useCredential } from '@/hooks/use-credential';
 import toast from 'react-hot-toast/headless';
 import { useRapidaStore } from '@/hooks';
 import { Metadata } from '@rapidaai/react';
-import { TableLink } from '@/app/components/carbon/table-link';
 import { useActivityLogPage } from '@/hooks/use-activity-log-page-store';
 import {
   formatNanoToReadableMilli,
-  toDateString,
   toHumanReadableDateTime,
 } from '@/utils/date';
 import { getMetadataValue, getMetricValueOrDefault } from '@/utils/metadata';
@@ -24,6 +21,7 @@ import { Renew, View, Launch, Ai } from '@carbon/icons-react';
 import { ProviderTag } from '@/app/components/carbon/provider-tag';
 import { EmptyState } from '@/app/components/carbon/empty-state';
 import { ScrollableTableSection } from '@/app/components/sections/table-section';
+import { LLMLogQuerySearch } from './llm-query-search';
 import {
   Table,
   TableHead,
@@ -33,7 +31,6 @@ import {
   TableCell,
   TableToolbar,
   TableToolbarContent,
-  TableToolbarSearch,
   Loading,
   Link,
 } from '@carbon/react';
@@ -42,11 +39,12 @@ export function ListingPage() {
   const { loading, showLoader, hideLoader } = useRapidaStore();
   const [userId, token, projectId] = useCredential();
   const [currentActivityId, setCurrentActivityId] = useState('');
+  const [querySearchValue, setQuerySearchValue] = useState('');
   const [showLogModal, setShowLogModal] = useState(false);
 
   const {
     getActivities,
-    addCriterias,
+    setCriterias,
     activities,
     columns,
     page,
@@ -57,13 +55,6 @@ export function ListingPage() {
     visibleColumn,
     setPageSize,
   } = useActivityLogPage();
-
-  const onDateSelect = (to: Date, from: Date) => {
-    addCriterias([
-      { k: 'created_date', v: toDateString(to), logic: '<=' },
-      { k: 'created_date', v: toDateString(from), logic: '>=' },
-    ]);
-  };
 
   useEffect(() => {
     showLoader();
@@ -107,10 +98,10 @@ export function ListingPage() {
 
         <TableToolbar>
           <TableToolbarContent>
-            <TableToolbarSearch placeholder="Search LLM logs" />
-            <DateFilter
-              onApply={(from, to) => onDateSelect(to, from)}
-              onReset={() => addCriterias([])}
+            <LLMLogQuerySearch
+              value={querySearchValue}
+              onChange={setQuerySearchValue}
+              onApply={setCriterias}
             />
             <IconOnlyButton
               kind="ghost"
@@ -129,106 +120,107 @@ export function ListingPage() {
         ) : activities.length > 0 ? (
           <ScrollableTableSection>
             <Table className="min-w-max">
-            <TableHead>
-              <TableRow>
-                {visibleColumns.map(col => (
-                  <TableHeader key={col.key}>{col.name}</TableHeader>
-                ))}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {activities.map((at, idx) => (
-                <TableRow key={idx}>
-                  {visibleColumn('Source') && (
-                    <TableCell>
-                      <ActivitySource
-                        metadatas={at.getExternalauditmetadatasList()}
-                      />
-                    </TableCell>
-                  )}
-                  {visibleColumn('Provider Name') && (
-                    <TableCell>
-                      <ProviderTag
-                        provider={getMetadataValue(
-                          at.getExternalauditmetadatasList(),
-                          'provider_name',
-                        )}
-                      />
-                    </TableCell>
-                  )}
-                  {visibleColumn('Model Name') && (
-                    <TableCell>
-                      {getMetadataValue(
-                        at.getExternalauditmetadatasList(),
-                        'model_name',
-                      )}
-                    </TableCell>
-                  )}
-                  {visibleColumn('Created Date') && (
-                    <TableCell className="text-[13px] whitespace-nowrap">
-                      {at.getCreateddate() &&
-                        toHumanReadableDateTime(at.getCreateddate()!)}
-                    </TableCell>
-                  )}
-                  {visibleColumn('Action') && (
-                    <TableCell>
-                      <div className="flex items-center gap-0">
-                        <IconOnlyButton
-                          kind="ghost"
-                          size="md"
-                          renderIcon={View}
-                          iconDescription="View detail"
-                          onClick={() => {
-                            setCurrentActivityId(at.getId());
-                            setShowLogModal(true);
-                          }}
-                        />
-                        <IconOnlyButton
-                          kind="ghost"
-                          size="md"
-                          renderIcon={Launch}
-                          iconDescription="View conversation"
-                          onClick={() => {
-                            const link = getActivityLink(
-                              at.getExternalauditmetadatasList(),
-                            ).link;
-                            if (link) window.location.href = link;
-                          }}
-                        />
-                      </div>
-                    </TableCell>
-                  )}
-                  {visibleColumn('Status') && (
-                    <TableCell>
-                      <CarbonStatusIndicator state={at.getStatus()} />
-                    </TableCell>
-                  )}
-                  {visibleColumn('TTFT') && (
-                    <TableCell className="font-mono text-[13px]">
-                      {formatNanoToReadableMilli(
-                        getMetricValueOrDefault(
-                        at.getMetricsList(),
-                        'time_to_first_token',
-                        "0",
-                      )) }
-                    </TableCell>
-                  )}
-                  {visibleColumn('TRT') && (
-                    <TableCell className="font-mono text-[13px]">
-                      {formatNanoToReadableMilli(at.getTimetaken())}
-                    </TableCell>
-                  )}
-
-                  {visibleColumn('Http_status') && (
-                    <TableCell>
-                      <HttpStatusSpanIndicator
-                        status={at.getResponsestatus()}
-                      />
-                    </TableCell>
-                  )}
+              <TableHead>
+                <TableRow>
+                  {visibleColumns.map(col => (
+                    <TableHeader key={col.key}>{col.name}</TableHeader>
+                  ))}
                 </TableRow>
-              ))}
-            </TableBody>
+              </TableHead>
+              <TableBody>
+                {activities.map((at, idx) => (
+                  <TableRow key={idx}>
+                    {visibleColumn('Source') && (
+                      <TableCell>
+                        <ActivitySource
+                          metadatas={at.getExternalauditmetadatasList()}
+                        />
+                      </TableCell>
+                    )}
+                    {visibleColumn('Provider Name') && (
+                      <TableCell>
+                        <ProviderTag
+                          provider={getMetadataValue(
+                            at.getExternalauditmetadatasList(),
+                            'provider_name',
+                          )}
+                        />
+                      </TableCell>
+                    )}
+                    {visibleColumn('Model Name') && (
+                      <TableCell>
+                        {getMetadataValue(
+                          at.getExternalauditmetadatasList(),
+                          'model_name',
+                        )}
+                      </TableCell>
+                    )}
+                    {visibleColumn('Created Date') && (
+                      <TableCell className="text-[13px] whitespace-nowrap">
+                        {at.getCreateddate() &&
+                          toHumanReadableDateTime(at.getCreateddate()!)}
+                      </TableCell>
+                    )}
+                    {visibleColumn('Action') && (
+                      <TableCell>
+                        <div className="flex items-center gap-0">
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={View}
+                            iconDescription="View detail"
+                            onClick={() => {
+                              setCurrentActivityId(at.getId());
+                              setShowLogModal(true);
+                            }}
+                          />
+                          <IconOnlyButton
+                            kind="ghost"
+                            size="md"
+                            renderIcon={Launch}
+                            iconDescription="View conversation"
+                            onClick={() => {
+                              const link = getActivityLink(
+                                at.getExternalauditmetadatasList(),
+                              ).link;
+                              if (link) window.location.href = link;
+                            }}
+                          />
+                        </div>
+                      </TableCell>
+                    )}
+                    {visibleColumn('Status') && (
+                      <TableCell>
+                        <CarbonStatusIndicator state={at.getStatus()} />
+                      </TableCell>
+                    )}
+                    {visibleColumn('TTFT') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {formatNanoToReadableMilli(
+                          getMetricValueOrDefault(
+                            at.getMetricsList(),
+                            'time_to_first_token',
+                            '0',
+                          ),
+                        )}
+                      </TableCell>
+                    )}
+                    {visibleColumn('TRT') && (
+                      <TableCell className="font-mono text-[13px]">
+                        {formatNanoToReadableMilli(at.getTimetaken())}
+                      </TableCell>
+                    )}
+
+                    {visibleColumn('Http_status') && (
+                      <TableCell>
+                        <HttpStatusSpanIndicator
+                          status={at.getResponsestatus()}
+                        />
+                      </TableCell>
+                    )}
+                  </TableRow>
+                ))}
+              </TableBody>
             </Table>
           </ScrollableTableSection>
         ) : (

@@ -73,7 +73,128 @@ func (conversationService *assistantConversationService) GetAll(ctx context.Cont
 	}
 
 	for _, ct := range criterias {
-		qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+		switch ct.GetKey() {
+		case "id":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistant_conversations.id = ?", ct.GetValue())
+			}
+		case "created_date":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("assistant_conversations.created_date >= ?", ct.GetValue())
+			case "<=":
+				qry = qry.Where("assistant_conversations.created_date <= ?", ct.GetValue())
+			default:
+				qry = qry.Where("assistant_conversations.created_date = ?", ct.GetValue())
+			}
+		case "identifier":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("assistant_conversations.identifier ILIKE ?", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("assistant_conversations.identifier = ?", ct.GetValue())
+			}
+		case "source":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistant_conversations.source = ?", ct.GetValue())
+			}
+		case "direction":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistant_conversations.direction = ?", ct.GetValue())
+			}
+		case "assistant_provider_model_id":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("assistant_conversations.assistant_provider_model_id = ?", ct.GetValue())
+			}
+		case "status":
+			switch ct.GetLogic() {
+			default:
+				if ct.GetValue() == "ACTIVE" {
+					qry = qry.Where(
+						"(EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value = ?) OR NOT EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ?))",
+						"status",
+						ct.GetValue(),
+						"status",
+					)
+				} else {
+					qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value = ?)", "status", ct.GetValue())
+				}
+			}
+		case "call.status":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value = ?)", "call.status", ct.GetValue())
+			}
+		case "client.direction":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.direction", ct.GetValue())
+			}
+		case "client.channel":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.channel", ct.GetValue())
+			}
+		case "client.provider_call_id":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value ILIKE ?)", "client.provider_call_id", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.provider_call_id", ct.GetValue())
+			}
+		case "client.codec":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.codec", ct.GetValue())
+			}
+		case "client.sample_rate":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.sample_rate", ct.GetValue())
+			}
+		case "client.context_id":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value ILIKE ?)", "client.context_id", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.context_id", ct.GetValue())
+			}
+		case "client.phone":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value ILIKE ?)", "client.phone", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.phone", ct.GetValue())
+			}
+		case "client.assistant_phone":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value ILIKE ?)", "client.assistant_phone", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "client.assistant_phone", ct.GetValue())
+			}
+		case "disconnect_reason":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metadata WHERE assistant_conversation_metadata.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metadata.key = ? AND assistant_conversation_metadata.value = ?)", "disconnect_reason", ct.GetValue())
+			}
+		case "recording_init_ms", "stt_init_ms", "tts_init_ms", "llm_init_ms", "denoise_init_ms", "eos_init_ms", "vad_init_ms", "duration", "call.duration_ms", "tts_duration", "stt_duration":
+			switch ct.GetLogic() {
+			case ">=":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value ~ '^[0-9]+(\\.[0-9]+)?$' AND assistant_conversation_metrics.value::numeric >= ?::numeric)", ct.GetKey(), ct.GetValue())
+			case "<=":
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value ~ '^[0-9]+(\\.[0-9]+)?$' AND assistant_conversation_metrics.value::numeric <= ?::numeric)", ct.GetKey(), ct.GetValue())
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM assistant_conversation_metrics WHERE assistant_conversation_metrics.assistant_conversation_id = assistant_conversations.id AND assistant_conversation_metrics.name = ? AND assistant_conversation_metrics.value ~ '^[0-9]+(\\.[0-9]+)?$' AND assistant_conversation_metrics.value::numeric = ?::numeric)", ct.GetKey(), ct.GetValue())
+			}
+		}
 	}
 
 	tx := qry.
