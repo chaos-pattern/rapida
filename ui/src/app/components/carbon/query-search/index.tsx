@@ -17,6 +17,7 @@ export type QuerySearchOption = {
 export type QuerySearchField = {
   aliases?: string[];
   category?: string;
+  formatValue?: (value: string) => string;
   items?: QuerySearchOption[];
   logicLabel?: string;
   logicOptions?: QuerySearchLogicOption[];
@@ -322,15 +323,6 @@ const createFilterChip = (
   raw: `${queryKey}:${quoteFilterValue(value)}`,
   value,
 });
-
-const getFilterDisplayValue = (
-  field: QuerySearchField,
-  value: string,
-  dateTimeMode: QuerySearchDateTimeMode,
-): string => {
-  if (field.type === 'date') return formatDateTimeValue(value, dateTimeMode);
-  return field.items?.find(option => option.id === value)?.text || value;
-};
 
 type KeyPickerProps = {
   fields: QuerySearchField[];
@@ -767,7 +759,10 @@ const FilterPill = ({
   valueOptions,
 }: FilterPillProps) => {
   const ValueEditor = FILTER_VALUE_EDITORS[field.type];
-  const displayValue = getFilterDisplayValue(field, value, dateTimeMode);
+  const displayValue =
+    field.type === 'date'
+      ? formatDateTimeValue(value, dateTimeMode)
+      : field.formatValue?.(value) || value;
 
   return (
     <span className="relative inline-flex w-fit shrink-0 items-center gap-1 border border-gray-200 bg-gray-50 px-2 py-1 font-mono text-sm dark:border-gray-800 dark:bg-gray-900">

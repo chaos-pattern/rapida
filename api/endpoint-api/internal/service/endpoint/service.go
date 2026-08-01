@@ -111,20 +111,41 @@ func (eService *endpointService) GetAll(ctx context.Context, auth types.SimplePr
 		cnt       int64
 	)
 	qry := db.Debug().Model(internal_gorm.Endpoint{})
-	qry.
+	qry = qry.
 		Preload("EndpointTag").
 		Preload("EndpointRetry").
 		Preload("EndpointCaching").
 		Preload("EndpointProviderModel").
-		Where("organization_id = ? AND project_id = ? AND status = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), type_enums.RECORD_ACTIVE.String())
+		Where("endpoints.organization_id = ? AND endpoints.project_id = ? AND endpoints.status = ?", *auth.GetCurrentOrganizationId(), *auth.GetCurrentProjectId(), type_enums.RECORD_ACTIVE.String())
 	for _, ct := range criteria {
-		switch ct.GetLogic() {
-		case "or":
-			qry.Or(fmt.Sprintf("%s = ?", ct.GetKey()), ct.GetValue())
-		case "like":
-			qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), fmt.Sprintf("%%%s%%", ct.GetValue()))
-		default:
-			qry.Where(fmt.Sprintf("%s %s ?", ct.GetKey(), ct.GetLogic()), ct.GetValue())
+		if ct == nil || ct.GetKey() == "" || ct.GetValue() == "" {
+			continue
+		}
+		switch ct.GetKey() {
+		case "id":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("endpoints.id = ?", ct.GetValue())
+			}
+		case "name":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("endpoints.name ILIKE ?", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("endpoints.name = ?", ct.GetValue())
+			}
+		case "model_provider_name":
+			switch ct.GetLogic() {
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM endpoint_provider_models WHERE endpoint_provider_models.id = endpoints.endpoint_provider_model_id AND endpoint_provider_models.model_provider_name = ?)", ct.GetValue())
+			}
+		case "tags":
+			switch ct.GetLogic() {
+			case "contains":
+				qry = qry.Where("EXISTS (SELECT 1 FROM endpoint_tags WHERE endpoint_tags.endpoint_id = endpoints.id AND endpoint_tags.tag ILIKE ?)", "%"+ct.GetValue()+"%")
+			default:
+				qry = qry.Where("EXISTS (SELECT 1 FROM endpoint_tags WHERE endpoint_tags.endpoint_id = endpoints.id AND endpoint_tags.tag ILIKE ?)", "%\""+ct.GetValue()+"\"%")
+			}
 		}
 	}
 

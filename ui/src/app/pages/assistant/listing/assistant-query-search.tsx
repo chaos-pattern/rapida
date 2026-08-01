@@ -25,12 +25,6 @@ const PROVIDER_OPTIONS: QuerySearchOption[] = [
   { id: 'AGENTFLOW', text: 'agentflow' },
 ];
 
-const STATUS_OPTIONS: QuerySearchOption[] = [
-  { id: 'ACTIVE', text: 'active' },
-  { id: 'INACTIVE', text: 'inactive' },
-  { id: 'ARCHIEVE', text: 'archived' },
-];
-
 const ASSISTANT_SEARCH_FIELDS: QuerySearchField[] = [
   {
     aliases: ['assistantId', 'assistantID', 'assistant_id'],
@@ -51,6 +45,8 @@ const ASSISTANT_SEARCH_FIELDS: QuerySearchField[] = [
   },
   {
     aliases: ['provider'],
+    formatValue: value =>
+      PROVIDER_OPTIONS.find(option => option.id === value)?.text || value,
     items: PROVIDER_OPTIONS,
     queryKey: 'assistant_provider',
     text: 'provider',
@@ -60,12 +56,6 @@ const ASSISTANT_SEARCH_FIELDS: QuerySearchField[] = [
     aliases: ['tag', 'assistanttag'],
     queryKey: 'tags',
     text: 'tags',
-    type: 'string',
-  },
-  {
-    items: STATUS_OPTIONS,
-    queryKey: 'status',
-    text: 'status',
     type: 'string',
   },
 ];
@@ -84,7 +74,6 @@ const ASSISTANT_SEARCH_CRITERIA: Record<
   name: { key: 'name', logic: '=' },
   nameContains: { key: 'name', logic: 'contains' },
   provider: { key: 'assistant_provider', logic: '=' },
-  status: { key: 'status', logic: '=' },
   tag: { key: 'tags', logic: 'contains' },
   tags: { key: 'tags', logic: 'contains' },
 };
@@ -116,7 +105,7 @@ export const AssistantQuerySearch = ({
     fields={ASSISTANT_SEARCH_FIELDS}
     value={value}
     maxOptions={ASSISTANT_SEARCH_FIELDS.length}
-    placeholder="Search for assistantID, name, provider, tags, status"
+    placeholder="Search for assistantID, name, provider, tags"
     onChange={onChange}
     onApply={nextValue => onApply(getAssistantSearchCriteria(nextValue))}
   />

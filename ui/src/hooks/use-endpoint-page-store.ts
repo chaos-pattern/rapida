@@ -197,6 +197,7 @@ export const useEndpointPageStore = create<EndpointType>((set, get) => ({
    */
   setCriterias: (v: { k: string; v: string; logic: string }[]) => {
     set({
+      page: 1,
       criteria: v.map(c => {
         return { key: c.k, value: c.v, logic: c.logic };
       }),
