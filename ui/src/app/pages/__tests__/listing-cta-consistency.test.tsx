@@ -12,6 +12,8 @@ const mockAssistantGetAll = jest.fn();
 const mockEndpointGetAll = jest.fn();
 const mockAssistantAddCriteria = jest.fn();
 const mockEndpointAddCriteria = jest.fn();
+const mockAssistantSetCriterias = jest.fn();
+const mockEndpointSetCriterias = jest.fn();
 const mockAssistantSetPage = jest.fn();
 const mockAssistantSetPageSize = jest.fn();
 const mockEndpointSetPage = jest.fn();
@@ -179,6 +181,7 @@ function resetState() {
     pageSize: 20,
     totalCount: 0,
     addCriteria: mockAssistantAddCriteria,
+    setCriterias: mockAssistantSetCriterias,
     onGetAllAssistant: mockAssistantGetAll,
     setPage: mockAssistantSetPage,
     setPageSize: mockAssistantSetPageSize,
@@ -191,6 +194,7 @@ function resetState() {
     pageSize: 20,
     totalCount: 0,
     addCriteria: mockEndpointAddCriteria,
+    setCriterias: mockEndpointSetCriterias,
     onGetAllEndpoint: mockEndpointGetAll,
     setPage: mockEndpointSetPage,
     setPageSize: mockEndpointSetPageSize,
