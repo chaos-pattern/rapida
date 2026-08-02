@@ -1,16 +1,12 @@
 import {
   Assistant,
-  AssistantConversation,
-  AssistantConversationMessage,
-  GetAllAssistantConversation,
+  AssistantDashboard,
+  GetAssistantDashboard,
+  GetAssistantDashboardRequest,
 } from '@rapidaai/react';
 import { connectionConfig } from '@/configs';
 import { toDate, toDateString } from '@/utils/date';
-import {
-  getTotalTokenMetric,
-  findMetricByName,
-  isConversationCompleted,
-} from '@/utils/metadata';
+import { Timestamp } from 'google-protobuf/google/protobuf/timestamp_pb';
 import {
   XAxis,
   Tooltip,
@@ -29,13 +25,21 @@ import {
   ValueType,
 } from 'recharts/types/component/DefaultTooltipContent';
 import { ContentType } from 'recharts/types/component/Tooltip';
-import { useAssistantTracePageStore } from '@/hooks/use-assistant-trace-page-store';
-import { FC, ReactNode, useEffect, useState } from 'react';
+import {
+  FC,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { cn } from '@/utils';
 import { useCurrentCredential } from '@/hooks/use-credential';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { Dropdown } from '@/app/components/carbon/dropdown';
 import { Tile } from '@/app/components/carbon/tile';
+import toast from 'react-hot-toast/headless';
 import {
   Button,
   Toggletip,
@@ -67,7 +71,43 @@ const AUTO_REFRESH_OPTIONS = [
   { id: '30', text: 'Every 30 min' },
 ];
 
-const getStartDate = (range: string): Date => {
+type DateRangeId =
+  | 'last_24_hours'
+  | 'last_3_days'
+  | 'last_7_days'
+  | 'last_30_days';
+
+type DropdownItem = { id: string; text: string };
+
+type DistributionData = {
+  name: string;
+  count: number;
+  percentage: string;
+};
+
+type BucketData = {
+  dateHour: string;
+  total: number;
+  sttLatency: number;
+  eosLatency: number;
+  ttsLatency: number;
+  llmLatency: number;
+  label: string;
+};
+
+type ChartTooltipPayload = {
+  color?: string;
+  dataKey?: string;
+  name?: string;
+  payload?: { label?: string };
+  stroke?: string;
+  value?: ReactNode;
+};
+
+const DASHBOARD_UNAVAILABLE_VALUE = '--';
+const DASHBOARD_LOAD_ERROR = 'Dashboard data is unavailable. Please try again.';
+
+const getStartDate = (range: DateRangeId): Date => {
   const now = new Date();
   switch (range) {
     case 'last_24_hours':
@@ -81,354 +121,182 @@ const getStartDate = (range: string): Date => {
   }
 };
 
+const toTimestamp = (date: Date): Timestamp => {
+  const timestamp = new Timestamp();
+  timestamp.setSeconds(Math.floor(date.getTime() / 1000));
+  timestamp.setNanos((date.getTime() % 1000) * 1_000_000);
+  return timestamp;
+};
+
+const getBucketLabel = (date: Date, range: DateRangeId): string => {
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+
+  switch (range) {
+    case 'last_24_hours':
+      return `${hours}:${minutes}`;
+    case 'last_3_days':
+    case 'last_7_days':
+      return `${toDateString(date)} ${hours}:00`;
+    default:
+      return toDateString(date);
+  }
+};
+
 export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
-  const assistantTraceAction = useAssistantTracePageStore();
   const navigation = useGlobalNavigation();
+  const assistantId = props.assistant.getId();
+  const dashboardRequestId = useRef(0);
+  const dashboardContextKey = useRef('');
   const [autoRefreshInterval, setAutoRefreshInterval] = useState<null | number>(
     null,
   );
-  const [selectedRange, setSelectedRange] = useState<string>('last_30_days');
-  const [convList, setConvList] = useState<AssistantConversation[]>([]);
+  const [selectedRange, setSelectedRange] =
+    useState<DateRangeId>('last_30_days');
+  const [dashboard, setDashboard] = useState<AssistantDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const { authId, token, projectId } = useCurrentCredential();
 
-  const getDateRangeCriteria = (range: string) => ({
-    k: 'assistant_conversation_messages.created_date',
-    v: toDateString(getStartDate(range)),
-    logic: '>=',
-  });
+  const fetchDashboard = useCallback(() => {
+    dashboardRequestId.current += 1;
+    const requestId = dashboardRequestId.current;
 
-  const getConversationDateCriteria = (range: string) => [
-    {
-      key: 'assistant_conversations.created_date',
-      value: toDateString(getStartDate(range)),
-      logic: '>=',
-    },
-  ];
+    if (!assistantId || !authId || !token || !projectId) {
+      dashboardContextKey.current = '';
+      setDashboard(null);
+      setLoading(false);
+      return;
+    }
 
-  useEffect(() => {
-    assistantTraceAction.clear();
-    assistantTraceAction.addCriterias([getDateRangeCriteria(selectedRange)]);
-  }, []);
+    const requestContextKey = `${assistantId}:${projectId}:${selectedRange}`;
+    if (dashboardContextKey.current !== requestContextKey) {
+      dashboardContextKey.current = requestContextKey;
+      setDashboard(null);
+    }
 
-  useEffect(() => {
     setLoading(true);
-    fetchAssistantMessages();
-    fetchConversations();
-  }, [
-    props.assistant.getId(),
-    projectId,
-    selectedRange,
-    JSON.stringify(assistantTraceAction.criteria),
-    token,
-    authId,
-  ]);
+    const fromDate = getStartDate(selectedRange);
+    const toDate = new Date();
+    const request = new GetAssistantDashboardRequest();
+    request.setAssistantid(assistantId);
+    request.setFromdate(toTimestamp(fromDate));
+    request.setTodate(toTimestamp(toDate));
 
-  const fetchAssistantMessages = () => {
-    assistantTraceAction.setPageSize(0);
-    assistantTraceAction.setFields(['metadata', 'metric']);
-    assistantTraceAction.addCriterias([getDateRangeCriteria(selectedRange)]);
-    assistantTraceAction.getAssistantMessages(
-      props.assistant.getId(),
-      projectId,
-      token,
-      authId,
-      () => {
-        setLoading(false);
-      },
-      () => {
-        setLoading(false);
-      },
-    );
-  };
+    GetAssistantDashboard(connectionConfig, request, {
+      authorization: token,
+      'x-auth-id': authId,
+      'x-project-id': projectId,
+    })
+      .then(response => {
+        if (requestId !== dashboardRequestId.current) return;
 
-  const fetchConversations = () => {
-    GetAllAssistantConversation(
-      connectionConfig,
-      props.assistant.getId(),
-      1,
-      0,
-      getConversationDateCriteria(selectedRange),
-      (err, res) => {
-        if (res?.getSuccess()) setConvList(res.getDataList());
-      },
-      { authorization: token, 'x-auth-id': authId, 'x-project-id': projectId },
-    );
-  };
+        const dashboardData = response.getData();
+        if (response.getSuccess() && dashboardData) {
+          setDashboard(dashboardData);
+          return;
+        }
+
+        toast.error(DASHBOARD_LOAD_ERROR);
+      })
+      .catch(() => {
+        if (requestId !== dashboardRequestId.current) return;
+        toast.error(DASHBOARD_LOAD_ERROR);
+      })
+      .finally(() => {
+        if (requestId !== dashboardRequestId.current) return;
+        setLoading(false);
+      });
+  }, [assistantId, authId, projectId, selectedRange, token]);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  useEffect(
+    () => () => {
+      dashboardRequestId.current += 1;
+    },
+    [],
+  );
 
   useEffect(() => {
     let id: NodeJS.Timeout | null = null;
     if (autoRefreshInterval && autoRefreshInterval > 0)
       id = setInterval(
         () => {
-          fetchAssistantMessages();
-          fetchConversations();
+          fetchDashboard();
         },
         autoRefreshInterval * 60 * 1000,
       );
     return () => {
       if (id) clearInterval(id);
     };
-  }, [autoRefreshInterval]);
+  }, [autoRefreshInterval, fetchDashboard]);
 
-  // ── Derive conversation groups ──
-  const conversationsMap = assistantTraceAction.assistantMessages.reduce(
-    (acc, message) => {
-      const id = message.getAssistantconversationid();
-      if (!acc.has(id)) acc.set(id, []);
-      acc.get(id)!.push(message);
-      return acc;
-    },
-    new Map<string, AssistantConversationMessage[]>(),
+  const hasDashboard = dashboard !== null;
+  const summary = dashboard?.getSummary();
+  const latency = dashboard?.getLatency();
+  const usage = dashboard?.getUsage();
+
+  const totalSessions = summary?.getTotalsessions() || 0;
+  const activeConversations = summary?.getActivesessions() || 0;
+  const completedConversations = summary?.getCompletedsessions() || 0;
+  const failedConversations = summary?.getFailedsessions() || 0;
+  const totalMessages = summary?.getTotalmessages() || 0;
+  const failureRate = summary?.getFailurerate() || 0;
+  const avgSessionDuration = summary?.getAveragesessiondurationseconds() || 0;
+
+  const avgLatency = latency?.getAveragems() || 0;
+  const avgSttLatency = latency?.getSttms() || 0;
+  const avgEosLatency = latency?.getEosms() || 0;
+  const avgLlmLatency = latency?.getLlmms() || 0;
+
+  const totalTokens = usage?.getTotaltokens() || 0;
+  const totalSttDurationSec = usage?.getSttdurationseconds() || 0;
+  const totalTtsDurationSec = usage?.getTtsdurationseconds() || 0;
+  const totalDuration = usage?.getTotaldurationseconds() || 0;
+
+  const sourceData = useMemo<DistributionData[]>(
+    () =>
+      (dashboard?.getSourcesList() || []).map(source => ({
+        name: source.getName() || 'unknown',
+        count: source.getCount(),
+        percentage: source.getPercentage().toFixed(1),
+      })),
+    [dashboard],
   );
 
-  const conversations = Array.from(conversationsMap.values());
-  const totalMessages = assistantTraceAction.assistantMessages.length;
-
-  // ── All counts from conversations API for consistency ──
-  const totalSessions = convList.length;
-  const completedConversations = convList.filter(c =>
-    isConversationCompleted(c.getMetricsList?.() || []),
-  ).length;
-  const failedConversations = convList.filter(c => {
-    const s = findMetricByName(
-      c.getMetricsList?.() || [],
-      'status',
-    ).toUpperCase();
-    return s === 'FAILED' || s === 'ERROR';
-  }).length;
-  const activeConversations =
-    totalSessions - completedConversations - failedConversations;
-
-  // ── Duration: from message-grouped conversations (message-level data) ──
-  const durations = conversations.map(conv => {
-    const sorted = [...conv].sort(
-      (a, b) =>
-        toDate(a.getCreateddate()!).getTime() -
-        toDate(b.getCreateddate()!).getTime(),
-    );
-    return (
-      (toDate(sorted[sorted.length - 1].getCreateddate()!).getTime() -
-        toDate(sorted[0].getCreateddate()!).getTime()) /
-      1000
-    );
-  });
-  const totalDuration = durations.reduce((sum, d) => sum + d, 0);
-  const avgSessionDuration =
-    durations.length > 0 ? totalDuration / durations.length : 0;
-
-  // ── Message-level metrics: STT, EOS, TTS & LLM latency ──
-  const sttLatencies: number[] = [];
-  const eosLatencies: number[] = [];
-  const ttsLatencies: number[] = [];
-  const llmLatencies: number[] = [];
-  assistantTraceAction.assistantMessages.forEach(m => {
-    const metrics = m.getMetricsList();
-    const stt = findMetricByName(metrics, 'stt_latency_ms');
-    if (stt) sttLatencies.push(Number(stt));
-    const eos = findMetricByName(metrics, 'eos_latency_ms');
-    if (eos) eosLatencies.push(Number(eos));
-    const tts = findMetricByName(metrics, 'tts_latency_ms');
-    if (tts) ttsLatencies.push(Number(tts));
-    const llm = findMetricByName(metrics, 'llm_latency_ms');
-    if (llm) llmLatencies.push(Number(llm));
-  });
-  const avgSttLatency =
-    sttLatencies.length > 0
-      ? sttLatencies.reduce((a, b) => a + b, 0) / sttLatencies.length
-      : 0;
-  const avgEosLatency =
-    eosLatencies.length > 0
-      ? eosLatencies.reduce((a, b) => a + b, 0) / eosLatencies.length
-      : 0;
-  const avgTtsLatency =
-    ttsLatencies.length > 0
-      ? ttsLatencies.reduce((a, b) => a + b, 0) / ttsLatencies.length
-      : 0;
-  const avgLlmLatency =
-    llmLatencies.length > 0
-      ? llmLatencies.reduce((a, b) => a + b, 0) / llmLatencies.length
-      : 0;
-  const totalSttDurationSec = convList.reduce((sum, conv) => {
-    const ns = Number(
-      findMetricByName(conv.getMetricsList?.() || [], 'stt_duration'),
-    );
-    return sum + (isNaN(ns) ? 0 : ns / 1e9);
-  }, 0);
-  const totalTtsDurationSec = convList.reduce((sum, conv) => {
-    const ns = Number(
-      findMetricByName(conv.getMetricsList?.() || [], 'tts_duration'),
-    );
-    return sum + (isNaN(ns) ? 0 : ns / 1e9);
-  }, 0);
-  const failureRate =
-    totalSessions > 0 ? (failedConversations / totalSessions) * 100 : 0;
-  const latencyValues = [
-    avgSttLatency,
-    avgEosLatency,
-    avgTtsLatency,
-    avgLlmLatency,
-  ].filter(value => value > 0);
-  const avgLatency =
-    latencyValues.length > 0
-      ? latencyValues.reduce((sum, value) => sum + value, 0) /
-        latencyValues.length
-      : 0;
-
-  // ── Token metrics ──
-  const totalTokens = assistantTraceAction.assistantMessages.reduce(
-    (sum, m) => sum + getTotalTokenMetric(m.getMetricsList()),
-    0,
+  const languageData = useMemo<DistributionData[]>(
+    () =>
+      (dashboard?.getLanguagesList() || []).map(language => ({
+        name: language.getName() || 'unknown',
+        count: language.getCount(),
+        percentage: language.getPercentage().toFixed(1),
+      })),
+    [dashboard],
   );
 
-  // ── Language from user messages only ──
-  const languageCounts: Record<string, number> = {};
-  let userMessageCount = 0;
-  assistantTraceAction.assistantMessages.forEach(item => {
-    const msgId = item.getMessageid?.() || '';
-    const role = item.getRole?.()?.toLowerCase() || '';
-    const isUser = msgId.startsWith('user-') || role === 'user';
-    if (!isUser) return;
-    userMessageCount++;
-    const lang = item
-      .getMetadataList()
-      .find(m => m.getKey() === 'language')
-      ?.getValue();
-    if (lang) languageCounts[lang] = (languageCounts[lang] || 0) + 1;
-  });
-  const languageData = Object.entries(languageCounts).map(
-    ([language, count]) => ({
-      language,
-      count,
-      percentage: ((count / Math.max(userMessageCount, 1)) * 100).toFixed(1),
-    }),
+  const activeSessionsData = useMemo<BucketData[]>(
+    () =>
+      (dashboard?.getBucketsList() || []).map(bucket => {
+        const startDate = bucket.getStartdate()
+          ? toDate(bucket.getStartdate()!)
+          : new Date();
+
+        return {
+          dateHour: getBucketLabel(startDate, selectedRange),
+          total: bucket.getMessagecount(),
+          sttLatency: Math.round(bucket.getSttlatencyms()),
+          eosLatency: Math.round(bucket.getEoslatencyms()),
+          ttsLatency: Math.round(bucket.getTtslatencyms()),
+          llmLatency: Math.round(bucket.getLlmlatencyms()),
+          label: `From: ${startDate.toISOString().split('.')[0].replace('T', ' ')}`,
+        };
+      }),
+    [dashboard, selectedRange],
   );
 
-  // ── Source distribution ──
-  const sourceData = Object.entries(
-    assistantTraceAction.assistantMessages.reduce(
-      (acc, item) => {
-        const source = item.getSource();
-        acc[source] = (acc[source] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    ),
-  ).map(([source, count]) => ({
-    source,
-    count,
-    percentage: ((count / Math.max(totalMessages, 1)) * 100).toFixed(1),
-  }));
-
-  // ── Time-series buckets ──
-  const activeSessionsData = (() => {
-    const now = new Date();
-    let interval: number;
-    let formatLabel: (d: Date) => string;
-    switch (selectedRange) {
-      case 'last_24_hours':
-        interval = 30;
-        formatLabel = d =>
-          `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-        break;
-      case 'last_3_days':
-        interval = 120;
-        formatLabel = d =>
-          `${toDateString(d)} ${d.getHours().toString().padStart(2, '0')}:00`;
-        break;
-      case 'last_7_days':
-        interval = 240;
-        formatLabel = d =>
-          `${toDateString(d)} ${d.getHours().toString().padStart(2, '0')}:00`;
-        break;
-      default:
-        interval = 1440;
-        formatLabel = d => toDateString(d);
-    }
-    const startTime = new Date();
-    startTime.setMinutes(0, 0, 0);
-    switch (selectedRange) {
-      case 'last_24_hours':
-        startTime.setTime(startTime.getTime() - 24 * 60 * 60 * 1000);
-        break;
-      case 'last_3_days':
-        startTime.setTime(startTime.getTime() - 3 * 24 * 60 * 60 * 1000);
-        break;
-      case 'last_7_days':
-        startTime.setTime(startTime.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      default:
-        startTime.setTime(startTime.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
-    const buckets: Array<{
-      date: Date;
-      total: number;
-      sttMs: number;
-      eosMs: number;
-      ttsMs: number;
-      llmMs: number;
-      sttCount: number;
-      eosCount: number;
-      ttsCount: number;
-      llmCount: number;
-    }> = [];
-    for (
-      let t = startTime.getTime();
-      t < now.getTime();
-      t += interval * 60 * 1000
-    )
-      buckets.push({
-        date: new Date(t),
-        total: 0,
-        sttMs: 0,
-        eosMs: 0,
-        ttsMs: 0,
-        llmMs: 0,
-        sttCount: 0,
-        eosCount: 0,
-        ttsCount: 0,
-        llmCount: 0,
-      });
-
-    assistantTraceAction.assistantMessages.forEach(m => {
-      const idx = Math.floor(
-        (toDate(m.getCreateddate()!).getTime() - startTime.getTime()) /
-          (interval * 60 * 1000),
-      );
-      if (idx >= 0 && idx < buckets.length) {
-        buckets[idx].total += 1;
-        const stt = findMetricByName(m.getMetricsList(), 'stt_latency_ms');
-        if (stt) {
-          buckets[idx].sttMs += Number(stt);
-          buckets[idx].sttCount += 1;
-        }
-        const eos = findMetricByName(m.getMetricsList(), 'eos_latency_ms');
-        if (eos) {
-          buckets[idx].eosMs += Number(eos);
-          buckets[idx].eosCount += 1;
-        }
-        const tts = findMetricByName(m.getMetricsList(), 'tts_latency_ms');
-        if (tts) {
-          buckets[idx].ttsMs += Number(tts);
-          buckets[idx].ttsCount += 1;
-        }
-        const llm = findMetricByName(m.getMetricsList(), 'llm_latency_ms');
-        if (llm) {
-          buckets[idx].llmMs += Number(llm);
-          buckets[idx].llmCount += 1;
-        }
-      }
-    });
-    return buckets.map(b => ({
-      dateHour: formatLabel(b.date),
-      total: b.total,
-      sttLatency: b.sttCount > 0 ? Math.round(b.sttMs / b.sttCount) : 0,
-      eosLatency: b.eosCount > 0 ? Math.round(b.eosMs / b.eosCount) : 0,
-      ttsLatency: b.ttsCount > 0 ? Math.round(b.ttsMs / b.ttsCount) : 0,
-      llmLatency: b.llmCount > 0 ? Math.round(b.llmMs / b.llmCount) : 0,
-      label: `From: ${b.date.toISOString().split('.')[0].replace('T', ' ')}`,
-    }));
-  })();
+  const emptyDashboardCaption = 'Dashboard data not loaded';
 
   const sessionsAction = (
     <Toggletip align="bottom-left">
@@ -443,9 +311,7 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
           <Button
             kind="primary"
             size="sm"
-            onClick={() =>
-              navigation.goToAssistantSessionList(props.assistant.getId())
-            }
+            onClick={() => navigation.goToAssistantSessionList(assistantId)}
           >
             Go to sessions
           </Button>
@@ -472,9 +338,10 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
             size="sm"
             items={DATE_RANGES}
             selectedItem={DATE_RANGES.find(r => r.id === selectedRange)}
-            itemToString={(item: any) => item?.text || ''}
+            itemToString={(item: DropdownItem) => item?.text || ''}
             onChange={({ selectedItem }) => {
-              if (selectedItem) setSelectedRange(selectedItem.id);
+              if (selectedItem)
+                setSelectedRange(selectedItem.id as DateRangeId);
             }}
             className="min-w-[160px]"
           />
@@ -488,7 +355,7 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
             selectedItem={AUTO_REFRESH_OPTIONS.find(
               o => o.id === String(autoRefreshInterval || 0),
             )}
-            itemToString={(item: any) => item?.text || ''}
+            itemToString={(item: DropdownItem) => item?.text || ''}
             onChange={({ selectedItem }) => {
               if (selectedItem)
                 setAutoRefreshInterval(
@@ -504,32 +371,52 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
         <KpiTile
           title="Sessions"
           label="Total sessions"
-          value={totalSessions}
-          caption={`${activeConversations.toLocaleString()} active, ${completedConversations.toLocaleString()} completed`}
+          value={hasDashboard ? totalSessions : DASHBOARD_UNAVAILABLE_VALUE}
+          caption={
+            hasDashboard
+              ? `${activeConversations.toLocaleString()} active, ${completedConversations.toLocaleString()} completed`
+              : emptyDashboardCaption
+          }
           action={sessionsAction}
           isLoading={loading}
         />
         <KpiTile
           title="Messages"
           label="Total messages"
-          value={totalMessages}
-          caption={`${totalTokens.toLocaleString()} tokens used`}
+          value={hasDashboard ? totalMessages : DASHBOARD_UNAVAILABLE_VALUE}
+          caption={
+            hasDashboard
+              ? `${totalTokens.toLocaleString()} tokens used`
+              : emptyDashboardCaption
+          }
           isLoading={loading}
         />
         <KpiTile
           title="Avg latency"
           label="Average response latency"
-          value={Math.round(avgLatency)}
-          unit="ms"
-          caption={`STT ${Math.round(avgSttLatency).toLocaleString()} ms, LLM ${Math.round(avgLlmLatency).toLocaleString()} ms`}
+          value={
+            hasDashboard ? Math.round(avgLatency) : DASHBOARD_UNAVAILABLE_VALUE
+          }
+          unit={hasDashboard ? 'ms' : undefined}
+          caption={
+            hasDashboard
+              ? `STT ${Math.round(avgSttLatency).toLocaleString()} ms, LLM ${Math.round(avgLlmLatency).toLocaleString()} ms`
+              : emptyDashboardCaption
+          }
           isLoading={loading}
         />
         <KpiTile
           title="Failure rate"
           label="Failed sessions"
-          value={failureRate.toFixed(1)}
-          unit="%"
-          caption={`${failedConversations.toLocaleString()} failed of ${totalSessions.toLocaleString()} sessions`}
+          value={
+            hasDashboard ? failureRate.toFixed(1) : DASHBOARD_UNAVAILABLE_VALUE
+          }
+          unit={hasDashboard ? '%' : undefined}
+          caption={
+            hasDashboard
+              ? `${failedConversations.toLocaleString()} failed of ${totalSessions.toLocaleString()} sessions`
+              : emptyDashboardCaption
+          }
           isLoading={loading}
         />
       </div>
@@ -538,23 +425,37 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
         <DashboardWidget title="Session details" isLoading={loading}>
           <WidgetHeroMetric
             label="Avg session duration"
-            value={Math.round(avgSessionDuration)}
-            unit="s"
-            caption="Average duration from message activity"
+            value={
+              hasDashboard
+                ? Math.round(avgSessionDuration)
+                : DASHBOARD_UNAVAILABLE_VALUE
+            }
+            unit={hasDashboard ? 's' : undefined}
+            caption={
+              hasDashboard
+                ? 'Average duration across sessions'
+                : emptyDashboardCaption
+            }
           />
           <WidgetList
             rows={[
               {
                 label: 'Active',
-                value: activeConversations.toLocaleString(),
+                value: hasDashboard
+                  ? activeConversations.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'Completed',
-                value: completedConversations.toLocaleString(),
+                value: hasDashboard
+                  ? completedConversations.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'Failed',
-                value: failedConversations.toLocaleString(),
+                value: hasDashboard
+                  ? failedConversations.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
             ]}
           />
@@ -564,23 +465,39 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
           <div className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
             <InlineMetric
               label="Avg latency"
-              value={Math.round(avgLatency)}
-              unit="ms"
+              value={
+                hasDashboard
+                  ? Math.round(avgLatency)
+                  : DASHBOARD_UNAVAILABLE_VALUE
+              }
+              unit={hasDashboard ? 'ms' : undefined}
             />
             <InlineMetric
               label="STT"
-              value={Math.round(avgSttLatency)}
-              unit="ms"
+              value={
+                hasDashboard
+                  ? Math.round(avgSttLatency)
+                  : DASHBOARD_UNAVAILABLE_VALUE
+              }
+              unit={hasDashboard ? 'ms' : undefined}
             />
             <InlineMetric
               label="EOS"
-              value={Math.round(avgEosLatency)}
-              unit="ms"
+              value={
+                hasDashboard
+                  ? Math.round(avgEosLatency)
+                  : DASHBOARD_UNAVAILABLE_VALUE
+              }
+              unit={hasDashboard ? 'ms' : undefined}
             />
             <InlineMetric
               label="LLM"
-              value={Math.round(avgLlmLatency)}
-              unit="ms"
+              value={
+                hasDashboard
+                  ? Math.round(avgLlmLatency)
+                  : DASHBOARD_UNAVAILABLE_VALUE
+              }
+              unit={hasDashboard ? 'ms' : undefined}
             />
           </div>
           <div className="h-[166px] pt-4">
@@ -678,7 +595,7 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
                           <p className="text-gray-400 text-xs mb-1.5">
                             {payload[0]?.payload?.label}
                           </p>
-                          {payload.map((p: any) => (
+                          {(payload as ChartTooltipPayload[]).map(p => (
                             <div
                               key={p.dataKey}
                               className="flex items-center gap-2"
@@ -714,22 +631,32 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
         <DashboardWidget title="Usage totals" isLoading={loading}>
           <WidgetHeroMetric
             label="Tokens"
-            value={totalTokens}
-            caption={`${totalMessages.toLocaleString()} messages processed`}
+            value={hasDashboard ? totalTokens : DASHBOARD_UNAVAILABLE_VALUE}
+            caption={
+              hasDashboard
+                ? `${totalMessages.toLocaleString()} messages processed`
+                : emptyDashboardCaption
+            }
           />
           <WidgetList
             rows={[
               {
                 label: 'STT duration',
-                value: `${Math.round(totalSttDurationSec).toLocaleString()} s`,
+                value: hasDashboard
+                  ? `${Math.round(totalSttDurationSec).toLocaleString()} s`
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'TTS duration',
-                value: `${Math.round(totalTtsDurationSec).toLocaleString()} s`,
+                value: hasDashboard
+                  ? `${Math.round(totalTtsDurationSec).toLocaleString()} s`
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'Total duration',
-                value: `${Math.round(totalDuration).toLocaleString()} s`,
+                value: hasDashboard
+                  ? `${Math.round(totalDuration).toLocaleString()} s`
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
             ]}
           />
@@ -739,7 +666,7 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
           <DonutContent
             data={sourceData}
             dataKey="count"
-            nameKey="source"
+            nameKey="name"
             total={totalMessages}
           />
         </DashboardWidget>
@@ -751,22 +678,36 @@ export const AssistantAnalytics: FC<{ assistant: Assistant }> = props => {
         <DashboardWidget title="Reliability" isLoading={loading}>
           <WidgetHeroMetric
             label="Completed sessions"
-            value={completedConversations}
-            caption={`${failedConversations.toLocaleString()} failed sessions`}
+            value={
+              hasDashboard
+                ? completedConversations
+                : DASHBOARD_UNAVAILABLE_VALUE
+            }
+            caption={
+              hasDashboard
+                ? `${failedConversations.toLocaleString()} failed sessions`
+                : emptyDashboardCaption
+            }
           />
           <WidgetList
             rows={[
               {
                 label: 'Completed',
-                value: completedConversations.toLocaleString(),
+                value: hasDashboard
+                  ? completedConversations.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'Active',
-                value: activeConversations.toLocaleString(),
+                value: hasDashboard
+                  ? activeConversations.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
               {
                 label: 'Sessions tracked',
-                value: totalSessions.toLocaleString(),
+                value: hasDashboard
+                  ? totalSessions.toLocaleString()
+                  : DASHBOARD_UNAVAILABLE_VALUE,
               },
             ]}
           />
@@ -1000,9 +941,9 @@ const LegendItem: FC<{ color: string; label: string }> = ({ color, label }) => (
 // ─── Donut chart content ────────────────────────────────────────────────────
 
 const DonutContent: FC<{
-  data: any[];
+  data: DistributionData[];
   dataKey: string;
-  nameKey: string;
+  nameKey: keyof DistributionData;
   total: number;
 }> = ({ data, dataKey, nameKey, total }) => {
   if (data.length === 0)
@@ -1088,7 +1029,7 @@ const DonutContent: FC<{
 };
 
 const LanguageContent: FC<{
-  data: Array<{ language: string; count: number; percentage: string }>;
+  data: DistributionData[];
 }> = ({ data }) => {
   if (data.length === 0)
     return (
@@ -1100,10 +1041,10 @@ const LanguageContent: FC<{
   return (
     <div className="space-y-4">
       {data.slice(0, 5).map((item, i) => (
-        <div key={item.language || i}>
+        <div key={item.name || i}>
           <div className="mb-1.5 flex items-center justify-between gap-4 text-sm">
             <span className="truncate capitalize text-gray-700 dark:text-gray-200">
-              {item.language || 'Unknown'}
+              {item.name || 'Unknown'}
             </span>
             <span className="shrink-0 font-semibold tabular-nums text-gray-900 dark:text-gray-100">
               {item.percentage}%

@@ -31,6 +31,7 @@ const (
 	AssistantService_GetAllAssistantMessage_FullMethodName       = "/assistant_api.AssistantService/GetAllAssistantMessage"
 	AssistantService_GetAllConversationMessage_FullMethodName    = "/assistant_api.AssistantService/GetAllConversationMessage"
 	AssistantService_GetAllMessage_FullMethodName                = "/assistant_api.AssistantService/GetAllMessage"
+	AssistantService_GetAssistantDashboard_FullMethodName        = "/assistant_api.AssistantService/GetAssistantDashboard"
 	AssistantService_GetAssistantConfiguration_FullMethodName    = "/assistant_api.AssistantService/GetAssistantConfiguration"
 	AssistantService_GetAllAssistantConfiguration_FullMethodName = "/assistant_api.AssistantService/GetAllAssistantConfiguration"
 	AssistantService_CreateAssistantConfiguration_FullMethodName = "/assistant_api.AssistantService/CreateAssistantConfiguration"
@@ -71,6 +72,7 @@ type AssistantServiceClient interface {
 	GetAllAssistantMessage(ctx context.Context, in *GetAllAssistantMessageRequest, opts ...grpc.CallOption) (*GetAllAssistantMessageResponse, error)
 	GetAllConversationMessage(ctx context.Context, in *GetAllConversationMessageRequest, opts ...grpc.CallOption) (*GetAllConversationMessageResponse, error)
 	GetAllMessage(ctx context.Context, in *GetAllMessageRequest, opts ...grpc.CallOption) (*GetAllMessageResponse, error)
+	GetAssistantDashboard(ctx context.Context, in *GetAssistantDashboardRequest, opts ...grpc.CallOption) (*GetAssistantDashboardResponse, error)
 	GetAssistantConfiguration(ctx context.Context, in *GetAssistantConfigurationRequest, opts ...grpc.CallOption) (*GetAssistantConfigurationResponse, error)
 	GetAllAssistantConfiguration(ctx context.Context, in *GetAllAssistantConfigurationRequest, opts ...grpc.CallOption) (*GetAllAssistantConfigurationResponse, error)
 	CreateAssistantConfiguration(ctx context.Context, in *CreateAssistantConfigurationRequest, opts ...grpc.CallOption) (*GetAssistantConfigurationResponse, error)
@@ -221,6 +223,16 @@ func (c *assistantServiceClient) GetAllMessage(ctx context.Context, in *GetAllMe
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetAllMessageResponse)
 	err := c.cc.Invoke(ctx, AssistantService_GetAllMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *assistantServiceClient) GetAssistantDashboard(ctx context.Context, in *GetAssistantDashboardRequest, opts ...grpc.CallOption) (*GetAssistantDashboardResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetAssistantDashboardResponse)
+	err := c.cc.Invoke(ctx, AssistantService_GetAssistantDashboard_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -463,6 +475,7 @@ type AssistantServiceServer interface {
 	GetAllAssistantMessage(context.Context, *GetAllAssistantMessageRequest) (*GetAllAssistantMessageResponse, error)
 	GetAllConversationMessage(context.Context, *GetAllConversationMessageRequest) (*GetAllConversationMessageResponse, error)
 	GetAllMessage(context.Context, *GetAllMessageRequest) (*GetAllMessageResponse, error)
+	GetAssistantDashboard(context.Context, *GetAssistantDashboardRequest) (*GetAssistantDashboardResponse, error)
 	GetAssistantConfiguration(context.Context, *GetAssistantConfigurationRequest) (*GetAssistantConfigurationResponse, error)
 	GetAllAssistantConfiguration(context.Context, *GetAllAssistantConfigurationRequest) (*GetAllAssistantConfigurationResponse, error)
 	CreateAssistantConfiguration(context.Context, *CreateAssistantConfigurationRequest) (*GetAssistantConfigurationResponse, error)
@@ -533,6 +546,9 @@ func (UnimplementedAssistantServiceServer) GetAllConversationMessage(context.Con
 }
 func (UnimplementedAssistantServiceServer) GetAllMessage(context.Context, *GetAllMessageRequest) (*GetAllMessageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAllMessage not implemented")
+}
+func (UnimplementedAssistantServiceServer) GetAssistantDashboard(context.Context, *GetAssistantDashboardRequest) (*GetAssistantDashboardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetAssistantDashboard not implemented")
 }
 func (UnimplementedAssistantServiceServer) GetAssistantConfiguration(context.Context, *GetAssistantConfigurationRequest) (*GetAssistantConfigurationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetAssistantConfiguration not implemented")
@@ -832,6 +848,24 @@ func _AssistantService_GetAllMessage_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AssistantServiceServer).GetAllMessage(ctx, req.(*GetAllMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AssistantService_GetAssistantDashboard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAssistantDashboardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssistantServiceServer).GetAssistantDashboard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AssistantService_GetAssistantDashboard_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssistantServiceServer).GetAssistantDashboard(ctx, req.(*GetAssistantDashboardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1286,6 +1320,10 @@ var AssistantService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAllMessage",
 			Handler:    _AssistantService_GetAllMessage_Handler,
+		},
+		{
+			MethodName: "GetAssistantDashboard",
+			Handler:    _AssistantService_GetAssistantDashboard_Handler,
 		},
 		{
 			MethodName: "GetAssistantConfiguration",

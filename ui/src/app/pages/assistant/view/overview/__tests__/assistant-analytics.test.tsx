@@ -3,8 +3,69 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 
 const mockGoToAssistantSessionList = jest.fn();
-const mockGetAssistantMessages = jest.fn();
-const mockFindMetricByName = jest.fn();
+const mockGetAssistantDashboard = jest.fn();
+const mockToastError = jest.fn();
+const mockDashboardRequestInstances: any[] = [];
+let mockCredential = {
+  authId: 'auth-1',
+  token: 'token-1',
+  projectId: 'project-1',
+};
+
+const createTimestamp = (seconds: number) => ({
+  getSeconds: () => seconds,
+  getNanos: () => 0,
+});
+
+const mockDashboard = {
+  getSummary: () => ({
+    getTotalsessions: () => 3,
+    getActivesessions: () => 1,
+    getCompletedsessions: () => 1,
+    getFailedsessions: () => 1,
+    getTotalmessages: () => 12,
+    getUsermessages: () => 6,
+    getFailurerate: () => 33.3,
+    getAveragesessiondurationseconds: () => 45,
+  }),
+  getLatency: () => ({
+    getAveragems: () => 150,
+    getSttms: () => 25,
+    getEosms: () => 42,
+    getTtsms: () => 60,
+    getLlmms: () => 120,
+  }),
+  getUsage: () => ({
+    getTotaltokens: () => 500,
+    getSttdurationseconds: () => 10,
+    getTtsdurationseconds: () => 20,
+    getTotaldurationseconds: () => 90,
+  }),
+  getSourcesList: () => [
+    {
+      getName: () => 'web',
+      getCount: () => 8,
+      getPercentage: () => 66.7,
+    },
+  ],
+  getLanguagesList: () => [
+    {
+      getName: () => 'en',
+      getCount: () => 6,
+      getPercentage: () => 50,
+    },
+  ],
+  getBucketsList: () => [
+    {
+      getStartdate: () => createTimestamp(1710000000),
+      getMessagecount: () => 4,
+      getSttlatencyms: () => 25,
+      getEoslatencyms: () => 42,
+      getTtslatencyms: () => 60,
+      getLlmlatencyms: () => 120,
+    },
+  ],
+};
 
 jest.mock('@/hooks/use-global-navigator', () => ({
   useGlobalNavigation: () => ({
@@ -13,47 +74,11 @@ jest.mock('@/hooks/use-global-navigator', () => ({
 }));
 
 jest.mock('@/hooks/use-credential', () => ({
-  useCurrentCredential: () => ({
-    authId: 'auth-1',
-    token: 'token-1',
-    projectId: 'project-1',
-  }),
+  useCurrentCredential: () => mockCredential,
 }));
 
 jest.mock('@/configs', () => ({
   connectionConfig: {},
-}));
-
-jest.mock('@/hooks/use-assistant-trace-page-store', () => ({
-  useAssistantTracePageStore: () => ({
-    assistantMessages: [
-      {
-        getAssistantconversationid: () => 'conv-1',
-        getMetricsList: () => [],
-        getMetadataList: () => [],
-        getSource: () => 'web',
-        getMessageid: () => 'user-1',
-        getRole: () => 'user',
-        getCreateddate: () => ({
-          getSeconds: () => 1710000000,
-          getNanos: () => 0,
-        }),
-      },
-    ],
-    criteria: [],
-    clear: jest.fn(),
-    addCriterias: jest.fn(),
-    setPageSize: jest.fn(),
-    setFields: jest.fn(),
-    getAssistantMessages: mockGetAssistantMessages,
-  }),
-}));
-
-jest.mock('@/utils/metadata', () => ({
-  getStatusMetric: jest.fn(),
-  getTotalTokenMetric: () => 0,
-  findMetricByName: (...args: any[]) => mockFindMetricByName(...args),
-  isConversationCompleted: () => false,
 }));
 
 jest.mock('recharts', () => {
@@ -82,6 +107,11 @@ jest.mock('@/app/components/carbon/tile', () => ({
   Tile: ({ children }: any) => <div>{children}</div>,
 }));
 
+jest.mock('react-hot-toast/headless', () => ({
+  success: jest.fn(),
+  error: (...args: unknown[]) => mockToastError(...args),
+}));
+
 jest.mock('@carbon/react', () => ({
   Button: ({ children, ...props }: any) => (
     <button {...props}>{children}</button>
@@ -96,14 +126,28 @@ jest.mock('@carbon/react', () => ({
 }));
 
 jest.mock('@rapidaai/react', () => ({
-  GetAllAssistantConversation: jest.fn(
-    (_config, _assistantId, _page, _pageSize, _criteria, callback) => {
-      callback(null, {
-        getSuccess: () => true,
-        getDataList: () => [{ getMetricsList: () => [] }],
-      });
-    },
-  ),
+  GetAssistantDashboard: (...args: any[]) => mockGetAssistantDashboard(...args),
+  GetAssistantDashboardRequest: class {
+    assistantid = '';
+    fromdate: unknown;
+    todate: unknown;
+
+    constructor() {
+      mockDashboardRequestInstances.push(this);
+    }
+
+    setAssistantid(value: string) {
+      this.assistantid = value;
+    }
+
+    setFromdate(value: unknown) {
+      this.fromdate = value;
+    }
+
+    setTodate(value: unknown) {
+      this.todate = value;
+    }
+  },
 }));
 
 const {
@@ -113,16 +157,16 @@ const {
 describe('AssistantAnalytics sessions toggletip', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockFindMetricByName.mockReturnValue('');
-    mockGetAssistantMessages.mockImplementation(
-      (
-        _assistantId: string,
-        _projectId: string,
-        _token: string,
-        _authId: string,
-        onSuccess: () => void,
-      ) => onSuccess(),
-    );
+    mockDashboardRequestInstances.length = 0;
+    mockCredential = {
+      authId: 'auth-1',
+      token: 'token-1',
+      projectId: 'project-1',
+    };
+    mockGetAssistantDashboard.mockResolvedValue({
+      getSuccess: () => true,
+      getData: () => mockDashboard,
+    });
   });
 
   it('shows sessions toggletip action and navigates to sessions page', async () => {
@@ -130,6 +174,7 @@ describe('AssistantAnalytics sessions toggletip', () => {
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
+      expect(screen.getByText('500 tokens used')).toBeInTheDocument();
       expect(
         screen.getByRole('button', { name: 'Go to sessions' }),
       ).toBeInTheDocument();
@@ -145,6 +190,7 @@ describe('AssistantAnalytics sessions toggletip', () => {
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
+      expect(screen.getByText('500 tokens used')).toBeInTheDocument();
       expect(screen.getByText('Failure rate')).toBeInTheDocument();
     });
 
@@ -154,21 +200,66 @@ describe('AssistantAnalytics sessions toggletip', () => {
   });
 
   it('includes eos latency in the latency summary', async () => {
-    mockFindMetricByName.mockImplementation(
-      (_metrics: unknown, name: string) => {
-        if (name === 'eos_latency_ms') return '42';
-        return '';
+    const assistant = { getId: () => 'assistant-1' } as any;
+    render(<AssistantAnalytics assistant={assistant} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('42')).toBeInTheDocument();
+      expect(screen.getAllByText('EOS')).toHaveLength(2);
+    });
+  });
+
+  it('loads dashboard using assistant id, date range, and auth headers', async () => {
+    const assistant = { getId: () => 'assistant-1' } as any;
+    render(<AssistantAnalytics assistant={assistant} />);
+
+    await waitFor(() => {
+      expect(mockGetAssistantDashboard).toHaveBeenCalled();
+      expect(screen.getByText('500 tokens used')).toBeInTheDocument();
+    });
+
+    expect(mockDashboardRequestInstances[0].assistantid).toBe('assistant-1');
+    expect(mockDashboardRequestInstances[0].fromdate).toBeDefined();
+    expect(mockDashboardRequestInstances[0].todate).toBeDefined();
+    expect(mockGetAssistantDashboard).toHaveBeenCalledWith(
+      {},
+      mockDashboardRequestInstances[0],
+      {
+        authorization: 'token-1',
+        'x-auth-id': 'auth-1',
+        'x-project-id': 'project-1',
       },
     );
+  });
+
+  it('does not load dashboard until credential context is ready', () => {
+    mockCredential = {
+      authId: '',
+      token: '',
+      projectId: '',
+    };
+
+    const assistant = { getId: () => 'assistant-1' } as any;
+    render(<AssistantAnalytics assistant={assistant} />);
+
+    expect(mockGetAssistantDashboard).not.toHaveBeenCalled();
+  });
+
+  it('toasts and shows unavailable state instead of zero metrics when dashboard load fails', async () => {
+    mockGetAssistantDashboard.mockRejectedValue(new Error('network failure'));
 
     const assistant = { getId: () => 'assistant-1' } as any;
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('EOS')).toHaveLength(2);
+      expect(mockToastError).toHaveBeenCalledWith(
+        'Dashboard data is unavailable. Please try again.',
+      );
     });
 
-    expect(screen.getAllByText('42')).toHaveLength(3);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getAllByText('--').length).toBeGreaterThan(0);
+    expect(screen.queryByText('0 tokens used')).not.toBeInTheDocument();
   });
 
   it('puts important KPIs before dashboard detail widgets', async () => {
@@ -176,6 +267,7 @@ describe('AssistantAnalytics sessions toggletip', () => {
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
+      expect(screen.getByText('500 tokens used')).toBeInTheDocument();
       expect(screen.getByText('Assistant activity')).toBeInTheDocument();
     });
 
@@ -197,6 +289,7 @@ describe('AssistantAnalytics sessions toggletip', () => {
     render(<AssistantAnalytics assistant={assistant} />);
 
     await waitFor(() => {
+      expect(screen.getByText('500 tokens used')).toBeInTheDocument();
       expect(screen.getByText('Message activity')).toBeInTheDocument();
     });
 

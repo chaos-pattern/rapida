@@ -1780,7 +1780,6 @@ func (h requestorDispatchHandler) HandleInitializeAssistant(ctx context.Context,
 		InjectAnalysis:               true,
 		InjectAuthentication:         true,
 		InjectStorage:                true,
-		InjectConversations:          false,
 		InjectTag:                    false,
 	}
 	switch h.r.source {

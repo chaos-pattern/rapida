@@ -1,10 +1,6 @@
 import React, { FC } from 'react';
-import { Assistant, AssistantConversation } from '@rapidaai/react';
-import {
-  toDate,
-  toHumanReadableRelativeTime,
-  toHumanReadableDateTime,
-} from '@/utils/date';
+import { Assistant } from '@rapidaai/react';
+import { toHumanReadableDateTime } from '@/utils/date';
 import SourceIndicator from '@/app/components/indicators/source';
 import { useGlobalNavigation } from '@/hooks/use-global-navigator';
 import { Launch, Rocket, SourceControl, View } from '@carbon/icons-react';
@@ -17,12 +13,10 @@ import { VersionIndicator } from '@/app/components/indicators/version';
 const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
   const gn = useGlobalNavigation();
   const assistantId = assistant.getId();
-  const conversations = assistant.getAssistantconversationsList();
   const status = assistant.getStatus();
   const tags = assistant.getAssistanttag()?.getTagList() ?? [];
   const visibleTags = tags.slice(0, 2);
   const overflowTagCount = Math.max(tags.length - visibleTags.length, 0);
-  const lastActivity = getLastActivity(conversations);
   const owner = assistant.getCreateduser()?.getName();
   const hasDeployment = hasAssistantDeployment(assistant);
 
@@ -145,22 +139,6 @@ const SingleAssistant: FC<{ assistant: Assistant }> = ({ assistant }) => {
         )}
       </TableCell>
 
-      <TableCell className="min-w-28 whitespace-nowrap text-sm tabular-nums">
-        {formatInteger(conversations.length)}
-      </TableCell>
-
-      <TableCell className="min-w-28 whitespace-nowrap text-sm tabular-nums">
-        {formatInteger(getUniqueUserCount(conversations))}
-      </TableCell>
-
-      <TableCell className="min-w-36 whitespace-nowrap text-[13px]">
-        {lastActivity ? (
-          toHumanReadableRelativeTime(lastActivity)
-        ) : (
-          <span className="text-gray-400">Not yet run</span>
-        )}
-      </TableCell>
-
       <TableCell className="min-w-36 whitespace-nowrap text-[13px]">
         {assistant.getUpdateddate()
           ? toHumanReadableDateTime(assistant.getUpdateddate()!)
@@ -191,32 +169,5 @@ const formatProvider = (assistant: Assistant): string => {
   if (assistant.getAssistantprovideragentflow()) return 'agentflow';
   return '-';
 };
-
-const getUniqueUserCount = (
-  conversations: Array<AssistantConversation>,
-): number =>
-  new Set(
-    conversations
-      .map(conversation => conversation.getIdentifier())
-      .filter(Boolean),
-  ).size;
-
-const getLastActivity = (
-  conversations: Array<AssistantConversation>,
-): ReturnType<AssistantConversation['getCreateddate']> => {
-  return conversations.reduce<
-    ReturnType<AssistantConversation['getCreateddate']>
-  >((latest, conversation) => {
-    const createdDate = conversation.getCreateddate();
-    if (!createdDate) return latest;
-    if (!latest) return createdDate;
-    return toDate(createdDate).getTime() > toDate(latest).getTime()
-      ? createdDate
-      : latest;
-  }, undefined);
-};
-
-const formatInteger = (value: number): string =>
-  new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(value);
 
 export default React.memo(SingleAssistant);

@@ -64,20 +64,12 @@ jest.mock('@/app/components/carbon/button', () => ({
 }));
 
 jest.mock('@/utils/date', () => ({
-  toDate: (timestamp: any) => new Date(timestamp.getSeconds() * 1000),
-  toHumanReadableRelativeTime: (timestamp: any) =>
-    `relative:${timestamp.getSeconds()}`,
   toHumanReadableDateTime: (timestamp: any) => `date:${timestamp.getSeconds()}`,
 }));
 
 const makeTimestamp = (seconds: number) => ({
   getSeconds: () => seconds,
   getNanos: () => 0,
-});
-
-const makeConversation = (identifier: string, seconds: number) => ({
-  getIdentifier: () => identifier,
-  getCreateddate: () => makeTimestamp(seconds),
 });
 
 const makeAssistant = (overrides: Record<string, any> = {}) =>
@@ -94,11 +86,6 @@ const makeAssistant = (overrides: Record<string, any> = {}) =>
     getAssistanttag: () => ({
       getTagList: () => ['support', 'production', 'billing'],
     }),
-    getAssistantconversationsList: () => [
-      makeConversation('user-1', 100),
-      makeConversation('user-1', 200),
-      makeConversation('user-2', 300),
-    ],
     getApideployment: () => ({}),
     getDebuggerdeployment: () => ({}),
     getWebplugindeployment: () => null,
@@ -146,9 +133,6 @@ describe('assistant listing table UX', () => {
     expect(screen.getByText('production')).toBeInTheDocument();
     expect(screen.queryByText('billing')).not.toBeInTheDocument();
     expect(screen.getByText('+1')).toBeInTheDocument();
-    expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('2')).toBeInTheDocument();
-    expect(screen.getByText('relative:300')).toBeInTheDocument();
     expect(screen.getByText('date:400')).toBeInTheDocument();
     expect(screen.getByText('Prashant')).toBeInTheDocument();
   });
@@ -161,7 +145,6 @@ describe('assistant listing table UX', () => {
         getWebplugindeployment: () => null,
         getPhonedeployment: () => null,
         getAssistanttag: () => null,
-        getAssistantconversationsList: () => [],
         getStatus: () => '',
         getAssistantprovider: () => '',
         getAssistantprovidermodel: () => ({}),
@@ -171,7 +154,6 @@ describe('assistant listing table UX', () => {
     );
 
     expect(screen.getByText('Not configured')).toBeInTheDocument();
-    expect(screen.getByText('Not yet run')).toBeInTheDocument();
     expect(screen.getByText('prompt')).toBeInTheDocument();
     expect(screen.getAllByText('-')).toHaveLength(4);
 

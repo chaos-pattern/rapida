@@ -40,6 +40,7 @@ type AssistantServiceClient interface {
 		order *protos.Ordering, selectors []*protos.FieldSelector) (*protos.Paginated, []*protos.AssistantConversationMessage, error)
 	GetAllAssistantConversation(ctx context.Context, auth types.SimplePrinciple, assistantId uint64, criteria []*protos.Criteria, paginate *protos.Paginate, order *protos.Ordering) (*protos.Paginated, []*protos.AssistantConversation, error)
 	GetAllConversationMessage(ctx context.Context, auth types.SimplePrinciple, assistantId, assistantConversationId uint64, criteria []*protos.Criteria, paginate *protos.Paginate, order *protos.Ordering) (*protos.Paginated, []*protos.AssistantConversationMessage, error)
+	GetAssistantDashboard(ctx context.Context, auth types.SimplePrinciple, dashboardRequest *protos.GetAssistantDashboardRequest) (*protos.GetAssistantDashboardResponse, error)
 	GetAssistantConversation(
 		c context.Context,
 		auth types.SimplePrinciple,
@@ -340,6 +341,21 @@ func (client *assistantServiceClient) GetAllConversationMessage(ctx context.Cont
 	}
 	client.logger.Benchmark("Benchmarking: assistantServiceClient.GetAllConversationMessage", time.Since(start))
 	return res.GetPaginated(), res.GetData(), nil
+}
+
+func (client *assistantServiceClient) GetAssistantDashboard(ctx context.Context, auth types.SimplePrinciple, dashboardRequest *protos.GetAssistantDashboardRequest) (*protos.GetAssistantDashboardResponse, error) {
+	start := time.Now()
+	response, err := client.assistantClient.GetAssistantDashboard(client.WithAuth(ctx, auth), dashboardRequest)
+	if err != nil {
+		client.logger.Benchmark("Benchmarking: assistantServiceClient.GetAssistantDashboard", time.Since(start))
+		client.logger.Errorf("error while calling get assistant dashboard %v", err)
+		return nil, err
+	}
+	if !response.GetSuccess() {
+		client.logger.Errorf("error while calling get assistant dashboard %v", response.GetError())
+	}
+	client.logger.Benchmark("Benchmarking: assistantServiceClient.GetAssistantDashboard", time.Since(start))
+	return response, nil
 }
 
 func (client *assistantServiceClient) CreateAssistantApiDeployment(c context.Context, auth types.SimplePrinciple, assistantRequest *protos.CreateAssistantDeploymentRequest) (*protos.GetAssistantApiDeploymentResponse, error) {
