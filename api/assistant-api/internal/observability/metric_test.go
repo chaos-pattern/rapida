@@ -49,6 +49,7 @@ func TestMetricNames_MirrorCurrentImplementation(t *testing.T) {
 		{MetricEOSConfidence, "eos_confidence"},
 		{MetricDenoiseInitLatencyMs, "denoise_init_ms"},
 		{MetricLLMInitLatencyMs, "llm_init_ms"},
+		{MetricLLMLatencyMs, "llm_latency_ms"},
 		{MetricKnowledgeLatencyMs, "knowledge_latency_ms"},
 		{MetricLLMError, "llm_error"},
 		{MetricSTTError, "stt_error"},

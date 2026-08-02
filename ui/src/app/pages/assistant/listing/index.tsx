@@ -50,9 +50,6 @@ const assistantColumnClassName: Record<string, string> = {
   deployments: 'min-w-48 whitespace-nowrap',
   actions: 'w-28 min-w-28 whitespace-nowrap',
   tags: 'min-w-40 whitespace-nowrap',
-  sessions: 'min-w-28 whitespace-nowrap',
-  users: 'min-w-28 whitespace-nowrap',
-  lastActivity: 'min-w-36 whitespace-nowrap',
   updated: 'min-w-36 whitespace-nowrap',
   owner: 'min-w-32 whitespace-nowrap',
 };
@@ -66,9 +63,6 @@ const assistantColumns = [
   { name: 'Deployments', key: 'deployments' },
   { name: 'Actions', key: 'actions' },
   { name: 'Tags', key: 'tags' },
-  { name: 'Sessions', key: 'sessions' },
-  { name: 'Users', key: 'users' },
-  { name: 'Last activity', key: 'lastActivity' },
   { name: 'Updated', key: 'updated' },
   { name: 'Owner', key: 'owner' },
 ];
@@ -82,9 +76,6 @@ const assistantSkeletonCellWidth: Record<string, string> = {
   deployments: '120px',
   actions: '96px',
   tags: '116px',
-  sessions: '44px',
-  users: '44px',
-  lastActivity: '112px',
   updated: '128px',
   owner: '84px',
 };

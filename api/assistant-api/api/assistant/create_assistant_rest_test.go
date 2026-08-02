@@ -20,6 +20,7 @@ import (
 	"github.com/rapidaai/protos"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type createAssistantRestAssistantServiceStub struct {
@@ -37,6 +38,10 @@ func (s *createAssistantRestAssistantServiceStub) Get(context.Context, types.Sim
 
 func (s *createAssistantRestAssistantServiceStub) GetAll(context.Context, types.SimplePrinciple, []*protos.Criteria, *protos.Paginate, *internal_services.GetAssistantOption) (int64, []*internal_assistant_entity.Assistant, error) {
 	return 0, nil, errors.New("not implemented")
+}
+
+func (s *createAssistantRestAssistantServiceStub) GetAssistantDashboard(context.Context, types.SimplePrinciple, uint64, *timestamppb.Timestamp, *timestamppb.Timestamp) (*protos.AssistantDashboard, error) {
+	return nil, errors.New("not implemented")
 }
 
 func (s *createAssistantRestAssistantServiceStub) GetAllAssistantProviderModel(context.Context, types.SimplePrinciple, uint64, []*protos.Criteria, *protos.Paginate) (int64, []*internal_assistant_entity.AssistantProviderModel, error) {

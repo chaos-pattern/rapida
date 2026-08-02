@@ -327,6 +327,118 @@ class GetAllMessageResponse(_message.Message):
     paginated: _common_pb2.Paginated
     def __init__(self, code: _Optional[int] = ..., success: bool = ..., data: _Optional[_Iterable[_Union[_common_pb2.AssistantConversationMessage, _Mapping]]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ..., paginated: _Optional[_Union[_common_pb2.Paginated, _Mapping]] = ...) -> None: ...
 
+class GetAssistantDashboardRequest(_message.Message):
+    __slots__ = ("assistantId", "fromDate", "toDate")
+    ASSISTANTID_FIELD_NUMBER: _ClassVar[int]
+    FROMDATE_FIELD_NUMBER: _ClassVar[int]
+    TODATE_FIELD_NUMBER: _ClassVar[int]
+    assistantId: int
+    fromDate: _timestamp_pb2.Timestamp
+    toDate: _timestamp_pb2.Timestamp
+    def __init__(self, assistantId: _Optional[int] = ..., fromDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., toDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ...) -> None: ...
+
+class GetAssistantDashboardResponse(_message.Message):
+    __slots__ = ("code", "success", "data", "error")
+    CODE_FIELD_NUMBER: _ClassVar[int]
+    SUCCESS_FIELD_NUMBER: _ClassVar[int]
+    DATA_FIELD_NUMBER: _ClassVar[int]
+    ERROR_FIELD_NUMBER: _ClassVar[int]
+    code: int
+    success: bool
+    data: AssistantDashboard
+    error: _common_pb2.Error
+    def __init__(self, code: _Optional[int] = ..., success: bool = ..., data: _Optional[_Union[AssistantDashboard, _Mapping]] = ..., error: _Optional[_Union[_common_pb2.Error, _Mapping]] = ...) -> None: ...
+
+class AssistantDashboard(_message.Message):
+    __slots__ = ("summary", "latency", "usage", "sources", "languages", "buckets")
+    SUMMARY_FIELD_NUMBER: _ClassVar[int]
+    LATENCY_FIELD_NUMBER: _ClassVar[int]
+    USAGE_FIELD_NUMBER: _ClassVar[int]
+    SOURCES_FIELD_NUMBER: _ClassVar[int]
+    LANGUAGES_FIELD_NUMBER: _ClassVar[int]
+    BUCKETS_FIELD_NUMBER: _ClassVar[int]
+    summary: AssistantDashboardSummary
+    latency: AssistantDashboardLatency
+    usage: AssistantDashboardUsage
+    sources: _containers.RepeatedCompositeFieldContainer[AssistantDashboardDistribution]
+    languages: _containers.RepeatedCompositeFieldContainer[AssistantDashboardDistribution]
+    buckets: _containers.RepeatedCompositeFieldContainer[AssistantDashboardBucket]
+    def __init__(self, summary: _Optional[_Union[AssistantDashboardSummary, _Mapping]] = ..., latency: _Optional[_Union[AssistantDashboardLatency, _Mapping]] = ..., usage: _Optional[_Union[AssistantDashboardUsage, _Mapping]] = ..., sources: _Optional[_Iterable[_Union[AssistantDashboardDistribution, _Mapping]]] = ..., languages: _Optional[_Iterable[_Union[AssistantDashboardDistribution, _Mapping]]] = ..., buckets: _Optional[_Iterable[_Union[AssistantDashboardBucket, _Mapping]]] = ...) -> None: ...
+
+class AssistantDashboardSummary(_message.Message):
+    __slots__ = ("totalSessions", "activeSessions", "completedSessions", "failedSessions", "totalMessages", "userMessages", "failureRate", "averageSessionDurationSeconds")
+    TOTALSESSIONS_FIELD_NUMBER: _ClassVar[int]
+    ACTIVESESSIONS_FIELD_NUMBER: _ClassVar[int]
+    COMPLETEDSESSIONS_FIELD_NUMBER: _ClassVar[int]
+    FAILEDSESSIONS_FIELD_NUMBER: _ClassVar[int]
+    TOTALMESSAGES_FIELD_NUMBER: _ClassVar[int]
+    USERMESSAGES_FIELD_NUMBER: _ClassVar[int]
+    FAILURERATE_FIELD_NUMBER: _ClassVar[int]
+    AVERAGESESSIONDURATIONSECONDS_FIELD_NUMBER: _ClassVar[int]
+    totalSessions: int
+    activeSessions: int
+    completedSessions: int
+    failedSessions: int
+    totalMessages: int
+    userMessages: int
+    failureRate: float
+    averageSessionDurationSeconds: float
+    def __init__(self, totalSessions: _Optional[int] = ..., activeSessions: _Optional[int] = ..., completedSessions: _Optional[int] = ..., failedSessions: _Optional[int] = ..., totalMessages: _Optional[int] = ..., userMessages: _Optional[int] = ..., failureRate: _Optional[float] = ..., averageSessionDurationSeconds: _Optional[float] = ...) -> None: ...
+
+class AssistantDashboardLatency(_message.Message):
+    __slots__ = ("averageMs", "sttMs", "eosMs", "ttsMs", "llmMs")
+    AVERAGEMS_FIELD_NUMBER: _ClassVar[int]
+    STTMS_FIELD_NUMBER: _ClassVar[int]
+    EOSMS_FIELD_NUMBER: _ClassVar[int]
+    TTSMS_FIELD_NUMBER: _ClassVar[int]
+    LLMMS_FIELD_NUMBER: _ClassVar[int]
+    averageMs: float
+    sttMs: float
+    eosMs: float
+    ttsMs: float
+    llmMs: float
+    def __init__(self, averageMs: _Optional[float] = ..., sttMs: _Optional[float] = ..., eosMs: _Optional[float] = ..., ttsMs: _Optional[float] = ..., llmMs: _Optional[float] = ...) -> None: ...
+
+class AssistantDashboardUsage(_message.Message):
+    __slots__ = ("totalTokens", "sttDurationSeconds", "ttsDurationSeconds", "totalDurationSeconds")
+    TOTALTOKENS_FIELD_NUMBER: _ClassVar[int]
+    STTDURATIONSECONDS_FIELD_NUMBER: _ClassVar[int]
+    TTSDURATIONSECONDS_FIELD_NUMBER: _ClassVar[int]
+    TOTALDURATIONSECONDS_FIELD_NUMBER: _ClassVar[int]
+    totalTokens: float
+    sttDurationSeconds: float
+    ttsDurationSeconds: float
+    totalDurationSeconds: float
+    def __init__(self, totalTokens: _Optional[float] = ..., sttDurationSeconds: _Optional[float] = ..., ttsDurationSeconds: _Optional[float] = ..., totalDurationSeconds: _Optional[float] = ...) -> None: ...
+
+class AssistantDashboardDistribution(_message.Message):
+    __slots__ = ("name", "count", "percentage")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    COUNT_FIELD_NUMBER: _ClassVar[int]
+    PERCENTAGE_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    count: int
+    percentage: float
+    def __init__(self, name: _Optional[str] = ..., count: _Optional[int] = ..., percentage: _Optional[float] = ...) -> None: ...
+
+class AssistantDashboardBucket(_message.Message):
+    __slots__ = ("startDate", "endDate", "messageCount", "sttLatencyMs", "eosLatencyMs", "ttsLatencyMs", "llmLatencyMs")
+    STARTDATE_FIELD_NUMBER: _ClassVar[int]
+    ENDDATE_FIELD_NUMBER: _ClassVar[int]
+    MESSAGECOUNT_FIELD_NUMBER: _ClassVar[int]
+    STTLATENCYMS_FIELD_NUMBER: _ClassVar[int]
+    EOSLATENCYMS_FIELD_NUMBER: _ClassVar[int]
+    TTSLATENCYMS_FIELD_NUMBER: _ClassVar[int]
+    LLMLATENCYMS_FIELD_NUMBER: _ClassVar[int]
+    startDate: _timestamp_pb2.Timestamp
+    endDate: _timestamp_pb2.Timestamp
+    messageCount: int
+    sttLatencyMs: float
+    eosLatencyMs: float
+    ttsLatencyMs: float
+    llmLatencyMs: float
+    def __init__(self, startDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., endDate: _Optional[_Union[datetime.datetime, _timestamp_pb2.Timestamp, _Mapping]] = ..., messageCount: _Optional[int] = ..., sttLatencyMs: _Optional[float] = ..., eosLatencyMs: _Optional[float] = ..., ttsLatencyMs: _Optional[float] = ..., llmLatencyMs: _Optional[float] = ...) -> None: ...
+
 class UpdateAssistantDetailRequest(_message.Message):
     __slots__ = ("assistantId", "name", "description")
     ASSISTANTID_FIELD_NUMBER: _ClassVar[int]

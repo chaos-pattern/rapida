@@ -99,6 +99,11 @@ class AssistantServiceStub(object):
                 request_serializer=assistant__api__pb2.GetAllMessageRequest.SerializeToString,
                 response_deserializer=assistant__api__pb2.GetAllMessageResponse.FromString,
                 _registered_method=True)
+        self.GetAssistantDashboard = channel.unary_unary(
+                '/assistant_api.AssistantService/GetAssistantDashboard',
+                request_serializer=assistant__api__pb2.GetAssistantDashboardRequest.SerializeToString,
+                response_deserializer=assistant__api__pb2.GetAssistantDashboardResponse.FromString,
+                _registered_method=True)
         self.GetAssistantConfiguration = channel.unary_unary(
                 '/assistant_api.AssistantService/GetAssistantConfiguration',
                 request_serializer=assistant__api__pb2.GetAssistantConfigurationRequest.SerializeToString,
@@ -281,6 +286,12 @@ class AssistantServiceServicer(object):
         raise NotImplementedError('Method not implemented!')
 
     def GetAllMessage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAssistantDashboard(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -484,6 +495,11 @@ def add_AssistantServiceServicer_to_server(servicer, server):
                     servicer.GetAllMessage,
                     request_deserializer=assistant__api__pb2.GetAllMessageRequest.FromString,
                     response_serializer=assistant__api__pb2.GetAllMessageResponse.SerializeToString,
+            ),
+            'GetAssistantDashboard': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAssistantDashboard,
+                    request_deserializer=assistant__api__pb2.GetAssistantDashboardRequest.FromString,
+                    response_serializer=assistant__api__pb2.GetAssistantDashboardResponse.SerializeToString,
             ),
             'GetAssistantConfiguration': grpc.unary_unary_rpc_method_handler(
                     servicer.GetAssistantConfiguration,
@@ -920,6 +936,33 @@ class AssistantService(object):
             '/assistant_api.AssistantService/GetAllMessage',
             assistant__api__pb2.GetAllMessageRequest.SerializeToString,
             assistant__api__pb2.GetAllMessageResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAssistantDashboard(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/assistant_api.AssistantService/GetAssistantDashboard',
+            assistant__api__pb2.GetAssistantDashboardRequest.SerializeToString,
+            assistant__api__pb2.GetAssistantDashboardResponse.FromString,
             options,
             channel_credentials,
             insecure,
